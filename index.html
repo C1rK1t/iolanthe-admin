@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Iolanthe Admin</title>
+  <link rel="icon" type="image/svg+xml" href="/admin/assets/icons/admin/favicon.svg?v=1">
+  <link rel="icon" type="image/png" sizes="96x96" href="/admin/assets/icons/admin/favicon-96x96.png?v=1">
+  <link rel="shortcut icon" href="/admin/assets/icons/admin/favicon.ico?v=1">
+  <link rel="apple-touch-icon" sizes="180x180" href="/admin/assets/icons/admin/apple-touch-icon.png?v=1">
+  <link rel="manifest" href="/admin/assets/icons/admin/site.webmanifest?v=1">
+  <meta name="theme-color" content="#c00000">
+  <link rel="stylesheet" href="/admin/admin.css?v=admin-interactions-v1">
+</head>
+<body>
+  <div class="admin-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Onboard Admin</p>
+        <h1>Iolanthe Control Panel</h1>
+      </div>
+      <div id="active-charter-summary" class="active-charter-summary hidden">
+        <span>Active Charter</span>
+        <strong></strong>
+      </div>
+      <div id="charter-days-label" class="charter-days-label hidden"></div>
+      <button id="settings-button" class="settings-button hidden" type="button" aria-label="Settings">Settings</button>
+      <button id="switch-department-button" class="switch-department-button hidden" type="button">Switch Department</button>
+    </header>
+
+    <main>
+      <section id="status-panel" class="status-panel"></section>
+
+      <section id="login-panel" class="login-panel hidden">
+        <div class="login-choices" aria-label="Choose department">
+          <button class="login-department bridge" type="button" data-department="charter" data-title="Charter Admin">
+            <img class="onboarding-icon" src="/admin/assets/icons/admin/charter.png" alt="Charter" width="140" height="140" decoding="async">
+            <span class="login-department-copy">
+              <strong>Charter Admin</strong>
+              <small>Bridge command and charter control</small>
+            </span>
+          </button>
+          <button class="login-department galley" type="button" data-department="galley" data-title="Galley">
+            <img class="onboarding-icon" src="/admin/assets/icons/admin/galley.png" alt="Galley" width="140" height="140" decoding="async">
+            <span class="login-department-copy">
+              <strong>Galley</strong>
+              <small>Menus, provisions, and service timing</small>
+            </span>
+          </button>
+          <button class="login-department service" type="button" data-department="hotel" data-title="Hotel">
+            <img class="onboarding-icon" src="/admin/assets/icons/admin/hotel.png" alt="Hotel" width="140" height="140" decoding="async">
+            <span class="login-department-copy">
+              <strong>Hotel</strong>
+              <small>Drinks, cellar, bar, and guest service</small>
+            </span>
+          </button>
+        </div>
+        <button id="reset-session-button" class="reset-session-button hidden" type="button">Reset Admin Console</button>
+      </section>
+
+      <div id="login-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="login-modal-title">
+        <form id="login-form" class="modal-card">
+          <h2 id="login-modal-title">Department Login</h2>
+          <input id="admin-department" type="hidden" value="">
+          <label for="admin-password">Password</label>
+          <input id="admin-password" type="password" autocomplete="current-password" required>
+          <p id="login-error" class="modal-error" role="alert"></p>
+          <div class="button-row">
+            <button type="submit">Login</button>
+            <button id="cancel-login-button" class="secondary" type="button">Cancel</button>
+          </div>
+        </form>
+      </div>
+
+      <section id="app-panel" class="hidden">
+        <nav id="department-buttons" class="department-buttons" aria-label="Departments">
+          <button type="button" data-section="charter">Charter</button>
+          <button type="button" data-section="galley">Galley</button>
+          <button type="button" data-section="hotel">Hotel</button>
+          <button type="button" data-section="settings">Settings</button>
+        </nav>
+
+        <section id="workspace" class="workspace"></section>
+      </section>
+    </main>
+
+    <footer class="site-footer" id="siteFooter">
+      <div>Zenith Solutions Limited</div>
+      <a href="https://www.zenithsuperyachts.com" target="_blank" rel="noopener noreferrer">www.zenithsuperyachts.com</a>
+      <div class="site-footer__version" id="siteFooterVersion" hidden></div>
+    </footer>
+  </div>
+
+  <template id="placeholder-template">
+    <div class="card">
+      <h3></h3>
+      <p>V1 editor coming next.</p>
+    </div>
+  </template>
+
+  <script src="/admin/admin.js?v=admin-obs-feed-toggle-v1" defer></script>
+</body>
+</html>

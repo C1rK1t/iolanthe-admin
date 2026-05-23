@@ -1,0 +1,21 @@
+{
+  "name": "Iolanthe Admin Console",
+  "short_name": "Admin",
+  "icons": [
+    {
+      "src": "/admin/assets/icons/admin/web-app-manifest-192x192.png?v=1",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/admin/assets/icons/admin/web-app-manifest-512x512.png?v=1",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "theme_color": "#c00000",
+  "background_color": "#ffffff",
+  "display": "standalone"
+}
