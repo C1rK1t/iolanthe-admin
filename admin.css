@@ -19,6 +19,11 @@
   box-sizing: border-box;
 }
 
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -200,6 +205,7 @@ label {
 .topbar h1 {
   margin: 0;
   font-size: clamp(1.25rem, 2vw, 1.8rem);
+  text-wrap: balance;
 }
 
 .eyebrow {
@@ -237,6 +243,7 @@ label {
   font-weight: 900;
   line-height: 1;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .settings-button,
@@ -346,7 +353,7 @@ body[data-admin-section] .status-panel {
   width: min(18vw, 140px);
   aspect-ratio: 1;
   border: 2px dashed rgba(255, 255, 255, 0.46);
-  border-radius: 8px;
+  border-radius: 4px;
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.04));
 }
@@ -365,7 +372,7 @@ body[data-admin-section] .status-panel {
   right: 1rem;
   bottom: 0.8rem;
   z-index: 5;
-  min-height: 0;
+  min-height: 40px;
   border: 0;
   background: transparent;
   color: rgba(23, 32, 38, 0.42);
@@ -428,6 +435,7 @@ body[data-admin-section] .status-panel {
 
 .modal-card h2 {
   margin: 0;
+  text-wrap: balance;
 }
 
 .modal-title-actions {
@@ -497,12 +505,14 @@ body[data-admin-section] .status-panel {
 
 .admin-decision-header h2 {
   margin: 0;
+  text-wrap: balance;
 }
 
 .admin-decision-message {
   margin: 0;
   color: var(--ink);
   line-height: 1.5;
+  text-wrap: pretty;
 }
 
 .admin-decision-backdrop--danger .admin-decision-message {
@@ -630,6 +640,7 @@ body[data-admin-section] .status-panel {
   color: rgba(238, 246, 247, 0.78);
   font-size: 0.9rem;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 .site-media-lightbox__actions {
@@ -654,6 +665,7 @@ body[data-admin-section] .status-panel {
 .form-card h2,
 .card h3 {
   margin: 0;
+  text-wrap: balance;
 }
 
 .department-buttons {
@@ -882,6 +894,7 @@ body[data-admin-section] .status-panel {
 .charter-notes-block p {
   white-space: pre-wrap;
   line-height: 1.6;
+  text-wrap: pretty;
 }
 
 .charter-notes-grid {
@@ -1987,7 +2000,7 @@ body[data-admin-section] .status-panel {
   align-items: center;
   gap: 0.45rem;
   width: auto;
-  min-height: 36px;
+  min-height: 40px;
   border: 1px solid rgba(23, 111, 122, 0.22);
   border-radius: 999px;
   padding: 0.35rem 0.75rem;
