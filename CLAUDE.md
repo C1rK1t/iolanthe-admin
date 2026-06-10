@@ -53,8 +53,8 @@ The admin console has no server of its own — it is served by `iolanthe-server`
 ```powershell
 # In the iolanthe-server repo:
 $env:DATA_DIR="$PWD\data-local"
-$env:GUEST_STATIC_DIR="..\iolanthe-guest"
-$env:ADMIN_STATIC_DIR="..\iolanthe-admin"
+$env:GUEST_STATIC_DIR="..\..\portal\iolanthe-guest"
+$env:ADMIN_STATIC_DIR="..\..\portal\iolanthe-admin"
 node server.js
 ```
 
