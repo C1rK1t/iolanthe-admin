@@ -124,6 +124,27 @@ the button styles, the type and the uppercase field labels. Do it after the Rout
 by turning the mockup's CSS (`:root` tokens, `.icon-btn`, `.stat`, `.banner`, `.field`, `.text-btn`, `.seg`,
 `.tabbox`, `.stop-item`, modal card) into shared `admin.css` classes.
 
+## Phase 1 progress
+
+- **Plan A (server) is done and merged** to `iolanthe-server` `main` at `2ac4b8d` (2026-10-07). The plan is
+  `iolanthe-server/docs/superpowers/plans/2026-10-07-route-library-server.md`.
+  - What it added:
+    - `lib/route-library.js`, with 22 unit tests (`npm test`)
+    - the endpoints `GET /api/admin/routes`, `POST routes/save` (`{route, base_revision}`, 409 on a clash, 404 if the
+      route was deleted), `POST routes/delete`, `GET /api/admin/anchorages` and `POST anchorages/save`
+    - migration v3, which imports the charter routes
+  - It was verified by unit tests, a smoke test on throwaway data, and a logged-in browser check of every endpoint.
+  - **Not yet live on the boat.** After the VM pulls, run
+    `cd /opt/projects/vessel && docker compose up -d --build iolanthe-server`. Confirm that the log shows
+    `Route library: imported N charter route(s).` and record N here.
+- **Next: Plan B (admin Routes panel).** It hasn't been written yet. Findings from planning it:
+  - admin.js exposes nothing on `window`. Plan B must add a small `window.IolantheAdmin` with `api`, `setStatus`,
+    `showAdminConfirm`, `setPageUnsavedGuard`, `loadLeaflet`, `iconButtonHtml`, the escape helpers and so on.
+  - Add a `routes` entry to the panels array in `renderCharter()`. It then hooks into `charterPanelContent` and
+    `bindCharterPanel`.
+  - There's no toast in the admin; use `setStatus`. Route Upload is only gated when it saves, not hidden.
+  - Pure logic (legs, distances, joining) can go in a `routes-core.js` that is unit-tested with `node --test`.
+
 ## Next step: phase 1
 
 From spec §5:
