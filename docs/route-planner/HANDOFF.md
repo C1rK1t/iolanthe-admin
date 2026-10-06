@@ -1,13 +1,32 @@
 # Route Planner — handoff
 
-Handoff from the Claude project thread to a desktop session, 2026-10-06. The work is at the end of brainstorming
-and spec. **No code has been written yet.**
+Last updated 2026-10-06, as of `main` at `076ed59`. The brainstorm and spec are done, and the mockup has been rebuilt
+and revised twice. **No product code has been written yet.**
 
 | File | What it is |
 |---|---|
 | [brainstorm.md](brainstorm.md) | Review of the existing code, risks, alternatives, and both rounds of David's answers |
-| [spec.md](spec.md) | Draft 1 spec: data files, server APIs, admin UI, phases. **Start here.** |
-| [planner-mockup.html](planner-mockup.html) | Self-contained clickable mockup with demo Coron data. Open it in a browser with internet (Leaflet from unpkg, Esri tiles). It includes a built-in sample KML (Import → "Use a sample KML"). |
+| [spec.md](spec.md) | Draft 1 spec: data files, server APIs, admin UI, phases. **Start here**, but read "Spec updates needed" below too. |
+| [planner-mockup.html](planner-mockup.html) | Self-contained clickable mockup with demo Coron data, kept in step with the review feedback below |
+
+## Mockup: where to see it
+
+- **Captain's link (boat LAN):** http://10.33.2.241/admin/docs/route-planner/planner-mockup.html
+  - The admin server serves `/admin/*` files without the URL key.
+  - It needs internet for Leaflet (unpkg) and the Esri satellite tiles.
+  - It updates when the docker VM's scheduled job pulls `main`. To update it now, run `git pull` in
+    `/opt/projects/vessel/iolanthe-admin`; no restart is needed. Claude has no SSH key for `dev@10.33.2.241`.
+- **Locally:** start `route-planner-mockup` from the workspace-root `.claude/launch.json` (a Python static server on
+  port 8766), or open the file in any browser that has internet access.
+- **Not a claude.ai artifact.** The artifact viewer blocks external map tiles and downloads, so the satellite map
+  and Export wouldn't work there.
+- **Demo helpers:**
+  - the yellow bar has "Simulate another user saving" (shows the 409 clash) and "Reset demo"
+  - Import → "Use a sample KML"
+  - Itinerary in the left menu shows the route assignment rows
+
+Commits: `06f12cf` (brainstorm, spec, first mockup), `831e8d7` (rebuild and review round 1), `076ed59` (captain's
+first look).
 
 ## Background
 
@@ -33,55 +52,65 @@ charters from the Itinerary page.
 8. Moving an anchorage leaves saved stops where they are and shows a "moved" warning.
 9. **No guest or crew app changes.** The guest app keeps reading `/api/planned-route` unchanged.
 
-## Open items
+## Mockup feedback, all applied
 
-- **Captain review** of the spec and mockup has not happened yet.
-- **The mockup was rebuilt on 2026-10-06** in the desktop session, because the Claude Projects version didn't work
-  there. It was tested with live Esri tiles at 1280 px and 390 px, with no console errors. To run it locally, use
-  the `route-planner-mockup` entry in the workspace `.claude/launch.json` (a Python static server on port 8766), or
-  open the file in any browser that has internet access.
-  - On phones it puts the map straight after the route picker, which differs from spec §4.1 ("side panel stacks
-    above the map").
-  - It shows a gap in the spec: a charter copy (§2.3) keeps coordinates only, so stops and names are lost when you
-    open a charter copy in the planner. Decide whether to add an additive `stops` field to the copy.
-- Small choices made by default, so confirm them:
-  - Anchorages added as stops auto-link sites within 2 nm.
-  - The "sites served" picker highlights sites within 5 nm.
-  - Planning speed is per browser and isn't saved.
-  - Settings → "Route Track" gets renamed to "Track Logging".
-- Optional extras for phase 5: OpenSeaMap seamark overlay, vendored Leaflet (the admin currently needs internet
-  for Leaflet and tiles).
-
-## Mockup review round 1 (David, 2026-10-06), now applied to the mockup
-
-1. Point counts and numbers aren't useful, so they're no longer shown: no "points" stat and no "Point 41 of 95" or
-   "WP41" labels. The stats are now nm, stops, and h:mm at the planning speed.
-2. The leg table runs **stop to stop** (nm and h:mm; no bearings). The first and last points count as Start / End
-   when they aren't stops.
+**David, review round 1** (`831e8d7`):
+1. Point counts and numbers aren't shown: no "points" stat and no "Point 41 of 95" or "WP41" labels. The stats are
+   nm, stops, and h:mm at the planning speed.
+2. Legs run **stop to stop** (nm and h:mm; no bearings). The first and last points count as Start / End when they
+   aren't stops.
 3. A waypoint becomes a stop at an anchorage in two ways:
    - the waypoint popup offers **Make stop at <anchorage>** for anchorages within 2 nm
    - **dragging** a point onto an anchorage marker (within 24 px) snaps it there as a stop
 4. **Undo / Redo** are square icon buttons in the header row, next to Save / Cancel. Ctrl+Z / Ctrl+Y still work.
 5. **Add another route** (the join icon in the header) appends or prepends a library route or a charter copy, with
    an option to reverse it. A duplicate point where the two routes meet is dropped. Then use Save As to keep the
-   originals. Spec §3/§4.1 need this added: it's browser-only, so there's no new API.
+   originals.
 
-Captain's first look (2026-10-06), applied:
-- **Stops and Legs share one tabbed box** (with counts on the tabs). On desktop it fills the side panel and ends
-  level with the bottom of the map, scrolling inside. On phones it's capped at 70% of the screen height.
+**Captain's first look** (`076ed59`):
+- **Stops and Legs share one tabbed box** with counts on the tabs. On desktop it fills the side panel, ends level
+  with the bottom of the map, and scrolls inside. On phones it's capped at 70% of the screen height.
 - **Legs are cards like the stops**: a blue numbered dot, "From → To", then nm and h:mm. A Total card sits at the
   end. Clicking a leg zooms the map to it.
 
-**Style rollout:** David wants the mockup's visual style used across the **whole Admin site**. That means the square
-icon buttons (green save / red cancel, grey secondary, separators), the shaded stat tiles and panels, the button
-styles, the type and the uppercase field labels. Plan it as its own piece of work after the Routes phases, or
-alongside them. Start by turning the mockup's CSS (`:root` tokens, `.icon-btn`, `.stat`, `.banner`, `.field`,
-`.text-btn`, `.seg`, modal card) into shared `admin.css` classes.
+## Spec updates needed (fold these into spec.md before phase 1)
+
+- §4.1 side panel: Stops / Legs as tabs in one box; legs are stop-to-stop cards (no bearing column); stats are nm,
+  stops and h:mm. Undo / Redo move to the header icon row.
+- §4.1 point popup: add "Make stop at <anchorage>" (within 2 nm) and drag-to-anchorage snapping.
+- §4.1 header actions: add **Add another route** (join). It runs in the browser only, so there's no new API.
+- §4.1 narrow screens: the mockup puts the map straight after the route picker, which differs from "side panel
+  stacks above the map". Confirm which one to build.
+- §2.3 gap: a charter copy keeps coordinates only, so stops and names are lost when a copy is opened in the planner
+  or joined. Decide whether to add an additive `stops` field to the copy (the guest app ignores unknown fields).
+- §5 phase 1: the leg table becomes stop-to-stop cards.
+
+## Open items
+
+- **The captain's full review** of the mockup is due 2026-10-07. Only a first look has happened so far.
+- Small choices made by default, so confirm them:
+  - anchorages added as stops auto-link sites within 2 nm
+  - "Make stop at" is offered within 2 nm
+  - the "sites served" picker highlights sites within 5 nm
+  - planning speed is per browser and isn't saved
+  - Settings → "Route Track" gets renamed to "Track Logging"
+- A point dropped onto an anchorage that is already the next or previous stop creates a duplicate stop. Decide
+  whether to merge or block it.
+- Optional extras for phase 5: OpenSeaMap seamark overlay, vendored Leaflet (the admin currently needs internet
+  for Leaflet and tiles).
+
+## Style rollout (separate piece of work)
+
+David wants the mockup's visual style used across the **whole Admin site**. That means the square icon buttons
+(green save / red cancel, grey secondary, separators), the shaded stat tiles and panels, the tabbed box and cards,
+the button styles, the type and the uppercase field labels. Do it after the Routes phases or alongside them. Start
+by turning the mockup's CSS (`:root` tokens, `.icon-btn`, `.stat`, `.banner`, `.field`, `.text-btn`, `.seg`,
+`.tabbox`, `.stop-item`, modal card) into shared `admin.css` classes.
 
 ## Next step: phase 1
 
-From spec §5:
-- **iolanthe-server**:
+First apply "Spec updates needed" above to spec.md. Then, from spec §5:
+- **iolanthe-server** (`iolanthe/iolanthe-server` in the workspace):
   - `library/routes.json` and `library/anchorages.json` storage
   - `GET/POST /api/admin/routes[/save|/delete]` and `GET/POST /api/admin/anchorages[/save]`, with bridge-only
     Charter Admin on writes and a revision check (409) on route save
@@ -89,8 +118,10 @@ From spec §5:
 - **iolanthe-admin**:
   - a new `routes.js` loaded after `admin.js`, with a hook in `admin.js` for a **Routes** panel
   - the panel: route list, map editing (add / insert via midpoint / move / delete, undo/redo), name, description,
-    live length and leg table, Save / Save As / Delete
+    stats, Stops / Legs tabs, Save / Save As / Delete
   - "Route Upload" stays alongside until phase 3
+- The mockup's JS is a working reference for the editing logic: undo history, midpoint insert, snapping,
+  stop-to-stop legs, Douglas-Peucker simplify, KML/GPX parsing and export, and joining.
 
 ## Release process and conventions
 
@@ -103,5 +134,6 @@ From spec §5:
   change, so browsers pick up the new code.
 - **Popups and forms**: green save and red cancel icon buttons top right. Clicking outside the popup cancels.
 - No build step, no npm, no dependencies. All API calls are relative URLs. Asset paths are prefixed `/admin/`.
-- David is fine merging straight to `main` for previews when no guests are onboard.
+- David is fine merging straight to `main` for previews when no guests are onboard. Docs-only changes have been
+  committed straight to `main`.
 - Live admin: `http://10.33.2.241/admin/?key=hotel` (boat LAN only).
