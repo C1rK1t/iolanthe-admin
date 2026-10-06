@@ -2,7 +2,7 @@
 
 Last updated 2026-10-07, as of `main` at `274633d`. The brainstorm and spec (draft 2) are done. The captain has
 reviewed the mockup and is positive, and his changes are applied. **No product code has been written yet.** Next:
-answers to spec §7 Q1 and Q4, then phase 1.
+**phase 1**. Nothing blocks it.
 
 | File | What it is |
 |---|---|
@@ -100,16 +100,18 @@ All the feedback above is folded into [spec.md](spec.md) **draft 2** (2026-10-07
 - per-leg speeds (§4.1) and the `speed_kn` / `leg_speed_kn` fields (§2.1)
 - a pointer from §6 to the backlog
 
-The questions still open are in spec §7 (Q5, the route speed, is closed):
-- Q1 narrow-screen layout
-- Q2 stops in charter copies
-- Q3 duplicate stop on snap
-- Q4 default distances
+Spec §7 lists the decided questions:
+- Q1: map after the picker on narrow screens
+- Q4: default distances stand
+- Q5: route speed saved with the route
+
+Two questions are still open, and neither blocks phase 1:
+- Q2: should charter copies keep their stops? Needed by phase 4.
+- Q3: duplicate stop on snap. Needed by phase 2.
 
 ## Open items
 
-- **Spec §7 questions** Q1–Q4 still need answers from the captain or David. Q5 (route speed) is decided and
-  closed.
+- **Spec §7 Q2 and Q3** still need answers, before phase 4 and phase 2 respectively.
 - Settings → "Route Track" gets renamed to "Track Logging" (phase 5). Confirm the name.
 - Optional extras for phase 5: OpenSeaMap seamark overlay, vendored Leaflet (the admin currently needs internet
   for Leaflet and tiles).
@@ -124,7 +126,7 @@ by turning the mockup's CSS (`:root` tokens, `.icon-btn`, `.stat`, `.banner`, `.
 
 ## Next step: phase 1
 
-Settle the spec §7 questions that affect phase 1 (Q1, Q4). Then, from spec §5:
+From spec §5:
 - **iolanthe-server** (`iolanthe/iolanthe-server` in the workspace):
   - `library/routes.json` and `library/anchorages.json` storage
   - `GET/POST /api/admin/routes[/save|/delete]` and `GET/POST /api/admin/anchorages[/save]`, with bridge-only

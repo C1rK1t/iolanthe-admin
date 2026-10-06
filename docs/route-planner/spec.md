@@ -2,7 +2,7 @@
 
 Status: draft 2, 2026-10-07. Draft 1 (2026-10-06) plus David's mockup review round 1 and the captain's first look,
 recorded in [HANDOFF.md](HANDOFF.md). Follows [brainstorm.md](brainstorm.md). The clickable mockup
-[planner-mockup.html](planner-mockup.html) matches this draft. Questions still open are in §7.
+[planner-mockup.html](planner-mockup.html) matches this draft. Open questions and the ones already decided are in §7.
 
 Repos: `iolanthe-admin` (UI), `iolanthe-server` (storage and APIs). **No guest or crew changes.**
 
@@ -145,7 +145,7 @@ The layout is the map on the right, about 70% of the width, with a side panel on
 panel is exactly as tall as the map, so its bottom edge lines up with the map's.
 
 On narrow screens everything stacks in one column: the route picker, then the map, then the rest of the side panel.
-This differs from draft 1, which put the whole side panel above the map; see §7, Q1.
+This replaces draft 1's "side panel above the map" (decided 2026-10-07, §7 Q1).
 
 **Header actions** (top right, house convention, all square icon buttons):
 - **Save** (green) and **Cancel** (red, which discards changes).
@@ -297,9 +297,17 @@ page, not the planner. See [../BACKLOG.md](../BACKLOG.md).
 
 ## 7. Open questions
 
-| # | Question | Mockup today |
-|---|---|---|
-| Q1 | On narrow screens, should the map come straight after the route picker (as in the mockup), or after the whole side panel (draft 1)? | Map after the picker |
-| Q2 | Should a charter copy (§2.3) keep its stops, as an additive `stops: [{name, latitude, longitude, anchorage_id, site_ids, leg_speed_kn}]` per route? The guest app ignores unknown fields. Without it, opening or joining a copy loses the stops and leg speeds. | Coordinates only |
-| Q3 | When a point is snapped onto an anchorage that is already the next or previous stop, should it merge, be blocked, or create a second stop? | Creates a second stop |
-| Q4 | Confirm the default distances: auto-link sites within 2 nm, "Make stop at" within 2 nm, the sites-served picker highlights within 5 nm, snapping within 24 px. | As listed |
+Still open:
+
+| # | Question | Mockup today | Needed by |
+|---|---|---|---|
+| Q2 | Should a charter copy (§2.3) keep its stops, as an additive `stops: [{name, latitude, longitude, anchorage_id, site_ids, leg_speed_kn}]` per route? The guest app ignores unknown fields. Without it, opening or joining a copy loses the stops and leg speeds. | Coordinates only | Phase 4 |
+| Q3 | When a point is snapped onto an anchorage that is already the next or previous stop, should it merge, be blocked, or create a second stop? | Creates a second stop | Phase 2 |
+
+Decided (David, 2026-10-07):
+
+| # | Decision |
+|---|---|
+| Q1 | On narrow screens the map comes straight after the route picker, then the rest of the side panel (§4.1). |
+| Q4 | The default distances stand: sites are auto-linked within 2 nm, "Make stop at" is offered within 2 nm, the sites-served picker highlights sites within 5 nm, and snapping works within 24 px. |
+| Q5 | The route speed is saved with the route (`speed_kn`, §2.1). New routes start at the last speed used in that browser. |
