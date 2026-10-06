@@ -3,993 +3,1485 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Route Planner mockup</title>
+<title>Route Planner Mockup</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
 :root {
+  color-scheme: light;
   --bg: #12333d;
   --panel: #ffffff;
   --ink: #172026;
   --muted: #5f6b73;
   --line: #d7dde1;
+  --soft: #eef2f4;
   --accent: #176f7a;
   --accent-dark: #0e4f58;
   --danger: #a93d35;
-  --ok: #2f9a61;
-  --warn: #b7791f;
-  --pin: #e8862a;
+  --ok: #28724c;
+  --warn: #9a6400;
+  --warn-bg: #fff4dc;
   --stop: #1f6fd1;
   --site: #c0392b;
+  --pin: #e8862a;
+  --route: #ffd23f;
   --shadow: 0 12px 30px rgba(16, 32, 40, 0.18);
 }
 * { box-sizing: border-box; }
 html { -webkit-font-smoothing: antialiased; }
-body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink); font-family: Arial, Helvetica, sans-serif; }
+body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink); font-family: Arial, Helvetica, sans-serif; font-size: 15px; }
 button, input, select, textarea { font: inherit; }
-.demo-banner { background: #f6e7b8; color: #4d3b06; padding: 8px 16px; font-size: 14px; text-align: center; }
-.top { display: flex; align-items: center; gap: 12px; padding: 12px 16px; color: #fff; }
-.top h1 { font-size: 20px; margin: 0; font-weight: 700; }
+[hidden] { display: none !important; }
+
+/* Demo banner and shell */
+.demo-banner { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: center; background: #f6e7b8; color: #4d3b06; padding: 8px 16px; font-size: 13px; }
+.demo-banner button { border: 1px solid #c9b26a; background: #fff8de; color: #4d3b06; border-radius: 5px; padding: 3px 9px; cursor: pointer; font-size: 13px; }
+.top { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; padding: 12px 16px; color: #fff; }
+.top h1 { font-size: 20px; margin: 0; }
 .top .dept { opacity: .75; font-size: 14px; }
-.shell { display: grid; grid-template-columns: 190px 1fr; gap: 16px; padding: 0 16px 16px; }
+.shell { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 16px; padding: 0 16px 16px; }
 .section-nav { display: flex; flex-direction: column; gap: 8px; }
-.section-nav button { min-height: 44px; border: 0; border-radius: 6px; background: rgba(255,255,255,.12); color: #fff; font-weight: 700; text-align: left; padding: 0 14px; cursor: pointer; }
+.section-nav button { min-height: 44px; border: 0; border-radius: 6px; background: rgba(255,255,255,.12); color: #fff; font-weight: 700; text-align: left; padding: 0 14px; cursor: pointer; white-space: nowrap; }
 .section-nav button[aria-pressed="true"] { background: #fff; color: var(--ink); }
-.section-nav .new { font-size: 11px; background: var(--ok); color: #fff; border-radius: 999px; padding: 2px 7px; margin-left: 6px; vertical-align: 2px; }
+.badge-new { font-size: 11px; background: #2f9a61; color: #fff; border-radius: 999px; padding: 2px 7px; margin-left: 6px; vertical-align: 2px; }
 .card { background: var(--panel); border-radius: 10px; box-shadow: var(--shadow); padding: 16px; min-width: 0; }
 .card-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
 .card-header h2 { margin: 0; font-size: 20px; flex: 1; min-width: 120px; }
-.icon-row { display: flex; gap: 8px; flex-wrap: wrap; }
-.icon-btn { width: 40px; height: 40px; border: 0; border-radius: 6px; display: inline-grid; place-items: center; cursor: pointer; background: #e8eef0; color: var(--ink); }
+
+/* Icon buttons (house convention: green save + red cancel, top right) */
+.icon-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.icon-btn { width: 40px; height: 40px; border: 0; border-radius: 6px; display: inline-grid; place-items: center; cursor: pointer; background: #e8eef0; color: var(--ink); padding: 0; }
 .icon-btn:hover { background: #d8e2e5; }
-.icon-btn svg { width: 21px; height: 21px; }
+.icon-btn svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .icon-btn.success { background: var(--ok); color: #fff; }
-.icon-btn.success:hover { background: #237347; }
+.icon-btn.success:hover { background: #1e5a3b; }
 .icon-btn.danger { background: var(--danger); color: #fff; }
-.icon-btn.danger:hover { background: #b93434; }
-.icon-btn:disabled { opacity: .4; cursor: not-allowed; }
-.icon-sep { width: 1px; background: var(--line); margin: 0 4px; }
-.planner { display: grid; grid-template-columns: 340px 1fr; gap: 16px; min-height: 640px; }
+.icon-btn.danger:hover { background: #8a312b; }
+.icon-btn:disabled { opacity: .35; cursor: not-allowed; }
+.icon-sep { width: 1px; height: 28px; background: var(--line); margin: 0 2px; }
+.text-btn { min-height: 36px; border: 0; border-radius: 6px; padding: 0 12px; background: var(--accent); color: #fff; font-weight: 700; cursor: pointer; }
+.text-btn:hover { background: var(--accent-dark); }
+.text-btn.secondary { background: #e8eef0; color: var(--ink); }
+.text-btn.secondary:hover { background: #d8e2e5; }
+.text-btn.danger-text { background: #f7e3e1; color: var(--danger); }
+.text-btn:disabled { opacity: .4; cursor: not-allowed; }
+.link-btn { border: 0; background: none; color: var(--accent); padding: 0; cursor: pointer; font-size: 13px; text-decoration: underline; }
+
+/* Planner layout: side panel left (~30%), map right (~70%) */
+.planner { display: grid; grid-template-columns: minmax(300px, 30%) minmax(0, 1fr); gap: 16px; }
 .side { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-.side label { display: block; font-size: 13px; font-weight: 700; color: var(--muted); margin-bottom: 4px; }
-.side input[type=text], .side input[type=number], .side textarea, .side select, .modal input[type=text], .modal input[type=number], .modal textarea {
-  width: 100%; min-height: 40px; border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; background: #fff; color: var(--ink);
-}
-textarea { resize: vertical; }
+.field label, .side-label { display: block; font-size: 12px; font-weight: 700; color: var(--muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.field input, .field select, .field textarea { width: 100%; border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; background: #fff; color: var(--ink); }
+.field textarea { min-height: 64px; resize: vertical; }
+.field input[type=checkbox], .field input[type=radio] { width: auto; padding: 0; margin: 0; flex: none; }
+.field input[type=range] { width: auto; padding: 0; border: 0; }
+.field input:focus, .field select:focus, .field textarea:focus { outline: 2px solid rgba(23,111,122,.35); border-color: var(--accent); }
 .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.stat { background: #f1f5f6; border-radius: 8px; padding: 8px 10px; }
-.stat b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
+.stat { background: var(--soft); border-radius: 8px; padding: 8px 10px; }
+.stat b { display: block; font-size: 20px; }
 .stat span { font-size: 12px; color: var(--muted); }
-.readonly-note { background: #eef3fb; color: #1d3f6e; border-radius: 6px; padding: 8px 10px; font-size: 13px; }
-.section-title { font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 0 0 6px; }
-.stops { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.stops li { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 14px; }
-.stops .num { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--stop); color: #fff; font-size: 12px; font-weight: 700; margin-right: 6px; }
-.stops .served { margin: 6px 0 0 28px; font-size: 13px; color: var(--muted); }
-.stops .served span { display: inline-block; background: #fbeaea; color: #8a2a20; border-radius: 999px; padding: 1px 8px; margin: 2px 4px 0 0; }
-.stops .warnbadge { color: var(--warn); font-size: 12px; margin-left: 6px; }
-.stops button.link { background: none; border: 0; color: var(--accent); cursor: pointer; padding: 0; font-size: 13px; margin-left: 28px; margin-top: 4px; }
-table.legs { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
-table.legs th, table.legs td { padding: 5px 4px; border-bottom: 1px solid var(--line); text-align: left; }
-table.legs td.n, table.legs th.n { text-align: right; }
-.muted { color: var(--muted); font-size: 13px; }
-.mapwrap { position: relative; border-radius: 10px; overflow: hidden; min-height: 640px; }
-#map { position: absolute; inset: 0; background: #0b2730; }
-.toolbar { position: absolute; top: 10px; left: 10px; z-index: 500; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
-.toolgroup { display: flex; background: #fff; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,.3); overflow: hidden; }
-.toolgroup button { border: 0; background: #fff; padding: 0 12px; height: 40px; cursor: pointer; font-weight: 700; font-size: 13px; color: var(--ink); display: flex; align-items: center; gap: 6px; }
-.toolgroup button + button { border-left: 1px solid var(--line); }
-.toolgroup button[aria-pressed="true"] { background: var(--accent); color: #fff; }
-.toolgroup button:disabled { opacity: .4; cursor: not-allowed; }
-.toolgroup svg { width: 18px; height: 18px; }
-.hint { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 500; background: rgba(16,32,40,.85); color: #fff; padding: 7px 14px; border-radius: 999px; font-size: 13px; pointer-events: none; text-align: center; max-width: 90%; }
-.layers { position: absolute; top: 10px; right: 10px; z-index: 500; background: #fff; border-radius: 8px; padding: 8px 12px; box-shadow: 0 2px 10px rgba(0,0,0,.3); font-size: 13px; }
-.layers label { display: flex; align-items: center; gap: 6px; padding: 3px 0; cursor: pointer; }
-.layers i { display: inline-block; width: 12px; height: 12px; border-radius: 50%; }
-/* markers */
-.pt { width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 3px solid var(--accent-dark); box-shadow: 0 1px 4px rgba(0,0,0,.5); }
-.pt.first { border-color: var(--ok); }
-.pt.sel { outline: 3px solid #ffd54a; }
-.mid { width: 12px; height: 12px; border-radius: 50%; background: rgba(255,255,255,.55); border: 2px dashed #fff; cursor: grab; }
-.stopm { width: 28px; height: 28px; border-radius: 50%; background: var(--stop); color: #fff; font-weight: 700; font-size: 13px; display: grid; place-items: center; border: 2px solid #fff; box-shadow: 0 1px 6px rgba(0,0,0,.6); }
-.anch { width: 26px; height: 26px; border-radius: 50%; background: rgba(31,111,209,.55); border: 2px solid rgba(255,255,255,.85); display: grid; place-items: center; color: #fff; }
-.anch svg, .stopm svg { width: 16px; height: 16px; }
-.sitem { width: 18px; height: 18px; background: var(--site); border: 2px solid #fff; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); box-shadow: 0 1px 4px rgba(0,0,0,.5); }
-.pinm { width: 18px; height: 18px; background: var(--pin); border: 2px solid #fff; border-radius: 4px; transform: rotate(45deg); box-shadow: 0 1px 4px rgba(0,0,0,.5); }
-.leaflet-tooltip.lbl { background: rgba(16,32,40,.85); color: #fff; border: 0; box-shadow: none; font-size: 12px; font-weight: 700; }
-.leaflet-tooltip.lbl::before { display: none; }
-.popup { min-width: 210px; display: flex; flex-direction: column; gap: 6px; }
-.popup h4 { margin: 0 0 2px; font-size: 14px; }
-.popup input { width: 100%; padding: 5px 7px; border: 1px solid var(--line); border-radius: 5px; }
-.popup button { border: 0; border-radius: 5px; padding: 7px 10px; background: #e8eef0; cursor: pointer; text-align: left; font-weight: 700; font-size: 13px; }
-.popup button:hover { background: #d8e2e5; }
-.popup button.del { background: #f7e2e0; color: var(--danger); }
-.popup .meta { font-size: 12px; color: var(--muted); }
-/* modals */
-.backdrop { position: fixed; inset: 0; background: rgba(8,20,26,.55); z-index: 2000; display: grid; place-items: center; padding: 16px; }
-.modal { background: #fff; border-radius: 10px; box-shadow: var(--shadow); width: min(520px, 100%); max-height: calc(100vh - 32px); overflow: auto; padding: 16px; }
-.modal .card-header h2 { font-size: 18px; }
-.modal .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.modal .full { grid-column: 1 / -1; }
-.modal label { display: block; font-size: 13px; font-weight: 700; color: var(--muted); }
-.modal label > input, .modal label > textarea { margin-top: 4px; }
-.checklist { display: flex; flex-direction: column; gap: 4px; max-height: 320px; overflow: auto; }
-.checklist label { display: flex; gap: 8px; align-items: center; font-weight: 400; color: var(--ink); padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); }
-.checklist label.near { border-color: #e4b7b2; background: #fdf4f3; }
-.checklist .d { margin-left: auto; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
-.radios { display: flex; flex-direction: column; gap: 4px; }
-.radios label { display: flex; gap: 8px; align-items: center; font-weight: 400; color: var(--ink); }
-.modal .err { color: var(--danger); font-size: 13px; min-height: 1em; }
-.modal p { margin: 0 0 10px; }
-.btn { border: 0; border-radius: 6px; padding: 9px 14px; font-weight: 700; cursor: pointer; background: #e8eef0; }
-.btn.primary { background: var(--accent); color: #fff; }
-.toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: #173b45; color: #fff; padding: 10px 16px; border-radius: 8px; z-index: 3000; font-size: 14px; box-shadow: var(--shadow); }
-/* itinerary mock */
-.itin-plan { border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin-bottom: 14px; }
-.itin-plan h3 { margin: 0 0 10px; font-size: 16px; }
-.route-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-.route-row select { min-height: 40px; border: 1px solid var(--line); border-radius: 6px; padding: 0 8px; min-width: 220px; }
-.banner { margin-top: 10px; background: #fff4de; border: 1px solid #f0d49a; border-radius: 8px; padding: 8px 12px; font-size: 14px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-@media (max-width: 1100px) { .planner { grid-template-columns: 1fr; } .mapwrap { min-height: 520px; order: -1; } }
-@media (max-width: 760px) {
-  .shell { grid-template-columns: 1fr; }
+.meta { font-size: 12px; color: var(--muted); }
+.banner { border-radius: 8px; padding: 10px 12px; font-size: 13px; line-height: 1.4; }
+.banner.info { background: #e4f1f3; color: #0e4f58; }
+.banner.warn { background: var(--warn-bg); color: #5c3c00; }
+.stops { display: flex; flex-direction: column; gap: 6px; }
+.stop-item { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; cursor: pointer; }
+.stop-item:hover { border-color: var(--accent); }
+.stop-item .title { display: flex; gap: 8px; align-items: center; font-weight: 700; }
+.stop-num { width: 22px; height: 22px; border-radius: 50%; background: var(--stop); color: #fff; display: inline-grid; place-items: center; font-size: 12px; flex: none; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.chip { font-size: 12px; background: #fbe9e7; color: #8e2a1f; border-radius: 999px; padding: 2px 8px; }
+.warn-text { color: var(--warn); font-size: 12px; font-weight: 700; }
+.empty { color: var(--muted); font-size: 13px; }
+table.legs { width: 100%; border-collapse: collapse; font-size: 13px; }
+.legs th, .legs td { padding: 5px 4px; border-bottom: 1px solid #edf0f2; text-align: left; }
+.legs th { color: var(--muted); font-weight: 700; font-size: 12px; }
+.legs .num { text-align: right; font-variant-numeric: tabular-nums; }
+.legs tfoot td { font-weight: 700; border-bottom: 0; }
+.speed-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+.speed-row input { width: 64px; border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; }
+
+/* Map */
+.map-wrap { position: sticky; top: 16px; align-self: start; height: min(calc(100vh - 32px), 820px); min-height: 520px; border-radius: 8px; overflow: hidden; background: #1d3540; }
+#map { position: absolute; inset: 0; }
+#map.mode-add, #map.mode-anchorage { cursor: crosshair; }
+.map-fallback { position: absolute; inset: 0; display: grid; place-items: center; color: #fff; text-align: center; padding: 24px; }
+.map-toolbar { position: absolute; top: 10px; left: 10px; z-index: 500; display: flex; flex-direction: column; gap: 6px; }
+.seg { display: inline-flex; background: #fff; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,.25); overflow: hidden; }
+.seg button { border: 0; background: #fff; color: var(--ink); padding: 0 11px; height: 36px; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; cursor: pointer; border-right: 1px solid var(--line); }
+.seg button:last-child { border-right: 0; }
+.seg button svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.seg button:disabled { opacity: .4; cursor: not-allowed; }
+.layers { position: absolute; top: 10px; right: 10px; z-index: 500; background: #fff; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,.25); padding: 8px 10px; font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
+.layers label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.map-hint { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 500; background: rgba(18,51,61,.88); color: #fff; font-size: 13px; padding: 6px 12px; border-radius: 6px; max-width: calc(100% - 120px); text-align: center; pointer-events: none; }
+
+/* Leaflet markers */
+.mk { background: none; border: 0; }
+.mk-hit { width: 32px; height: 32px; display: grid; place-items: center; position: relative; }
+.mk-wp { width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 2px solid #1d3540; box-shadow: 0 1px 4px rgba(0,0,0,.5); }
+.mk-wp.named { border-color: var(--site); }
+.mk-stop { width: 28px; height: 28px; border-radius: 50%; background: var(--stop); color: #fff; border: 2px solid #fff; display: grid; place-items: center; font-size: 13px; font-weight: 700; box-shadow: 0 1px 5px rgba(0,0,0,.5); }
+.mk-badge { position: absolute; top: -2px; right: -2px; width: 15px; height: 15px; border-radius: 50%; background: #f0b429; color: #3d2800; font-size: 11px; font-weight: 700; display: grid; place-items: center; border: 1px solid #fff; }
+.mk-anch { width: 26px; height: 26px; border-radius: 50%; background: #fff; color: var(--stop); display: grid; place-items: center; box-shadow: 0 1px 5px rgba(0,0,0,.5); }
+.mk-anch svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+.mk-anch.dim { opacity: .6; }
+.mk-site { width: 20px; height: 20px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg) translate(2px, -2px); background: var(--site); border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.5); }
+.mk-pin { width: 16px; height: 16px; transform: rotate(45deg); background: var(--pin); border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.5); }
+.mk-mid { width: 11px; height: 11px; border-radius: 50%; background: rgba(255,255,255,.55); border: 1px solid rgba(29,53,64,.7); }
+.mk-label { position: absolute; top: 30px; left: 50%; transform: translateX(-50%); white-space: nowrap; font-size: 11px; font-weight: 700; color: #fff; text-shadow: 0 0 3px #000, 0 0 3px #000; pointer-events: none; }
+
+/* Popups */
+.leaflet-popup-content { margin: 12px 14px; min-width: 230px; font-size: 13px; }
+.pop h3 { margin: 0 0 4px; font-size: 15px; }
+.pop .sub { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+.pop .field { margin-bottom: 8px; }
+.pop .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.pop .text-btn { min-height: 30px; font-size: 12px; padding: 0 9px; }
+.pop .nearby { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.pop .nearby .text-btn { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 34px; text-align: left; }
+.pop .nearby .d { font-weight: 400; opacity: .85; }
+.site-pick { max-height: 160px; overflow: auto; border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; }
+.site-pick label { display: flex; gap: 6px; align-items: center; padding: 3px 0; font-size: 12px; text-transform: none; letter-spacing: 0; color: var(--ink); font-weight: 400; margin: 0; cursor: pointer; }
+.site-pick label.near { font-weight: 700; }
+.site-pick label span.d { margin-left: auto; color: var(--muted); font-weight: 400; }
+.site-pick .grp { font-size: 11px; color: var(--muted); text-transform: uppercase; margin: 4px 0 2px; }
+
+/* Modals */
+.modal-backdrop { position: fixed; inset: 0; background: rgba(10,25,30,.55); z-index: 2000; display: grid; place-items: center; padding: 16px; }
+.modal-card { background: #fff; border-radius: 10px; box-shadow: var(--shadow); width: min(520px, 100%); max-height: calc(100vh - 32px); overflow: auto; padding: 16px; }
+.modal-card .card-header h2 { font-size: 18px; }
+.modal-body { display: flex; flex-direction: column; gap: 12px; }
+.modal-body p { margin: 0; line-height: 1.45; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.radio-list { display: flex; flex-direction: column; gap: 6px; }
+.radio-list label { display: flex; gap: 8px; align-items: center; cursor: pointer; font-size: 14px; text-transform: none; letter-spacing: 0; color: var(--ink); font-weight: 400; margin: 0; }
+.slider-row { display: flex; align-items: center; gap: 10px; }
+.slider-row input[type=range] { flex: 1; }
+.file-drop { border: 2px dashed var(--line); border-radius: 8px; padding: 16px; text-align: center; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: #172026; color: #fff; padding: 10px 16px; border-radius: 8px; z-index: 3000; font-size: 14px; box-shadow: var(--shadow); max-width: calc(100% - 32px); }
+
+/* Itinerary */
+.plan-card { border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin-top: 12px; }
+.plan-card h3 { margin: 0 0 10px; font-size: 16px; display: flex; align-items: center; gap: 10px; }
+.plan-route { display: flex; flex-direction: column; gap: 10px; }
+.plan-route .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.plan-route select { border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; min-width: 200px; max-width: 100%; }
+.route-summary { font-size: 14px; }
+.route-summary b { font-size: 15px; }
+.tag { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--soft); color: var(--muted); }
+.tag.past { background: #f1e4e2; color: var(--danger); }
+.tag.active { background: #dff1e7; color: var(--ok); }
+
+@media (max-width: 900px) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
   .section-nav { flex-direction: row; overflow-x: auto; }
-  .section-nav button { white-space: nowrap; }
-  .toolgroup button span.lbl { display: none; }
-  .layers { top: auto; right: auto; bottom: 34px; left: 10px; padding: 6px 10px; }
-  .hint { display: none; }
+  .section-nav button { min-height: 40px; }
+  .planner { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  /* Phone: route picker, then the map, then the rest of the side panel */
+  .side { display: contents; }
+  .side > * { order: 3; min-width: 0; }
+  .side > .field:first-child { order: 1; }
+  .map-wrap { order: 2; }
+  .map-wrap { position: relative; top: 0; height: 65vh; min-height: 380px; }
+  .map-hint { max-width: calc(100% - 24px); bottom: 34px; }
+  .seg button .lbl { display: none; }
 }
 </style>
 </head>
 <body>
-<div class="demo-banner">Mockup of the proposed Routes panel. Demo data only and nothing is saved. The map needs an internet connection.</div>
-<div class="top"><h1>Princess Iolanthe Admin</h1><span class="dept">Charter Admin · Bridge</span></div>
-<div class="shell">
-  <nav class="section-nav" id="nav">
-    <button data-tab="info" aria-pressed="false">Charter Info</button>
-    <button data-tab="itinerary" aria-pressed="false">Itinerary</button>
-    <button data-tab="crew" aria-pressed="false">Crew</button>
-    <button data-tab="routes" aria-pressed="true">Routes<span class="new">new</span></button>
-    <button data-tab="sites" aria-pressed="false">Site Editor</button>
-  </nav>
-  <main id="workspace"></main>
+<div class="demo-banner">
+  <span><b>Mockup</b> of the proposed Routes panel. Demo data only; nothing leaves this page.</span>
+  <button type="button" id="demo-clash">Simulate another user saving</button>
+  <button type="button" id="demo-reset">Reset demo</button>
 </div>
+<header class="top"><h1>Princess Iolanthe Admin</h1><span class="dept">Charter Admin · Bridge</span></header>
+<div class="shell">
+  <nav class="section-nav" aria-label="Charter sections">
+    <button type="button" data-view="stub" data-stub="Charter Info">Charter Info</button>
+    <button type="button" data-view="itinerary">Itinerary</button>
+    <button type="button" data-view="routes" aria-pressed="true">Routes<span class="badge-new">new</span></button>
+    <button type="button" data-view="stub" data-stub="Site Editor">Site Editor</button>
+  </nav>
+  <main>
+    <section class="card" id="view-routes">
+      <div class="card-header">
+        <h2>Routes</h2>
+        <div class="icon-row" id="route-actions"></div>
+      </div>
+      <div id="copy-banner" class="banner info" hidden style="margin-bottom:12px"></div>
+      <div class="planner">
+        <aside class="side">
+          <div class="field">
+            <label for="route-picker">Route</label>
+            <select id="route-picker"></select>
+          </div>
+          <div class="field">
+            <label for="route-name">Name</label>
+            <input id="route-name" type="text" autocomplete="off" placeholder="Route name">
+          </div>
+          <div class="field">
+            <label for="route-desc">Description</label>
+            <textarea id="route-desc" placeholder="Optional"></textarea>
+          </div>
+          <div class="stats" id="stats"></div>
+          <div>
+            <span class="side-label">Stops</span>
+            <div class="stops" id="stops"></div>
+          </div>
+          <div>
+            <span class="side-label">Legs</span>
+            <div class="speed-row">Planning speed <input id="speed" type="number" min="0" max="30" step="0.5"> kn <span class="meta">(this browser only)</span></div>
+            <div id="legs"></div>
+          </div>
+          <div class="meta" id="route-meta"></div>
+        </aside>
+        <div class="map-wrap">
+          <div id="map"></div>
+          <div class="map-toolbar">
+            <div class="seg" id="modes"></div>
+          </div>
+          <div class="layers" id="layers"></div>
+          <div class="map-hint" id="map-hint"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" id="view-itinerary" hidden>
+      <div class="card-header"><h2>Itinerary</h2>
+        <div class="field" style="min-width:220px"><select id="itin-charter" aria-label="Charter"></select></div>
+      </div>
+      <p class="meta" style="margin:0">Only the route assignment rows are mocked here. The rest of the Itinerary page is unchanged.</p>
+      <div id="itin-plans"></div>
+    </section>
+
+    <section class="card" id="view-stub" hidden>
+      <div class="card-header"><h2 id="stub-title"></h2></div>
+      <p class="empty">Not part of this mockup.</p>
+    </section>
+  </main>
+</div>
+<div id="modal-root"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-(() => {
-  "use strict";
+(function () {
+  'use strict';
 
-  // ---------- icons ----------
-  const ICON = {
-    save: '<path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>',
-    cancel: '<path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>',
-    add: '<path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>',
-    saveas: '<rect x="8" y="8" width="11" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="2.1"/><path d="M5 15V6a1 1 0 0 1 1-1h9" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/>',
-    import: '<path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
-    export: '<path d="M12 15V4M7.5 8.5L12 4l4.5 4.5M5 19h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
-    trash: '<path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>',
-    pointer: '<path d="M6 4l12 7-5.5 1.5L10 18z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
-    pen: '<circle cx="6" cy="18" r="2" fill="currentColor"/><circle cx="18" cy="6" r="2" fill="currentColor"/><path d="M7.5 16.5l9-9" stroke="currentColor" stroke-width="2"/>',
-    eraser: '<path d="M4 16l8-8 6 6-5 5H8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M13 19h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
-    anchor: '<circle cx="12" cy="5" r="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 7v13M8 11h8M5 14a7 6 0 0 0 14 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
-    undo: '<path d="M9 7L5 11l4 4M5 11h9a5 5 0 0 1 0 10h-2" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>',
-    redo: '<path d="M15 7l4 4-4 4M19 11h-9a5 5 0 0 0 0 10h2" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>'
+  // ---------- constants ----------
+  const METRES_PER_NM = 1852;
+  const AUTO_LINK_NM = 2;        // anchorage added as stop auto-links sites within this range
+  const SITES_NEAR_NM = 5;       // "sites served" picker highlights sites within this range
+  const PIN_MATCH_NM = 2;        // imported pin flagged "near X" within this range
+  const MOVED_WARN_M = 50;       // stop differs from its anchorage by more than this → warning
+  const NEARBY_ANCHORAGE_NM = 2; // waypoint popup offers "Make stop at X" within this range
+  const SNAP_PX = 24;            // a point dropped this close to an anchorage marker becomes a stop there
+  const IMPORT_TARGET_POINTS = 60;
+  const DEFAULT_SPEED_KN = 8;
+  const TODAY = '2026-10-06';
+  const SPEED_KEY = 'routePlanner.speed';
+
+  const ICONS = {
+    check: '<path d="M5 12l5 5 9-10"/>',
+    cancel: '<path d="M6 6l12 12M18 6L6 18"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    saveAs: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
+    import: '<path d="M12 16V4M7 9l5-5 5 5M4 20h16"/>',
+    export: '<path d="M12 4v12M7 11l5 5 5-5M4 20h16"/>',
+    trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
+    undo: '<path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/>',
+    redo: '<path d="M15 14l5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/>',
+    select: '<path d="M5 3l14 7-6 2-2 6z"/>',
+    add: '<path d="M4 20l4-1L19 8l-3-3L5 16z"/><path d="M14 7l3 3"/>',
+    erase: '<path d="M7 21h10M5 15l9-9 5 5-9 9H8z"/>',
+    anchor: '<circle cx="12" cy="5" r="2"/><path d="M12 7v14M5 13a7 7 0 0 0 14 0M8 10h8"/>',
+    join: '<circle cx="5" cy="6" r="2"/><circle cx="5" cy="18" r="2"/><path d="M7 6h3a4 4 0 0 1 4 4v0a4 4 0 0 0 4 4h3M7 18h3a4 4 0 0 0 4-4"/><path d="M18 11l3 3-3 3"/>'
   };
-  const svg = name => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICON[name]}</svg>`;
-  const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-  const clone = v => JSON.parse(JSON.stringify(v));
-  const slug = v => String(v || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "route";
+  const svg = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
 
-  // ---------- geo ----------
-  const R_NM = 3440.065;
-  const rad = d => d * Math.PI / 180;
-  function distNm(a, b) {
-    const dLat = rad(b.latitude - a.latitude), dLon = rad(b.longitude - a.longitude);
-    const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.latitude)) * Math.cos(rad(b.latitude)) * Math.sin(dLon / 2) ** 2;
-    return 2 * R_NM * Math.asin(Math.min(1, Math.sqrt(h)));
-  }
-  function bearing(a, b) {
-    const y = Math.sin(rad(b.longitude - a.longitude)) * Math.cos(rad(b.latitude));
-    const x = Math.cos(rad(a.latitude)) * Math.sin(rad(b.latitude)) - Math.sin(rad(a.latitude)) * Math.cos(rad(b.latitude)) * Math.cos(rad(b.longitude - a.longitude));
-    return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
-  }
-  const routeLength = pts => pts.slice(1).reduce((t, p, i) => t + distNm(pts[i], p), 0);
-  const fmtNm = n => n < 10 ? n.toFixed(1) : Math.round(n).toString();
-  const fmtPos = p => `${Math.abs(p.latitude).toFixed(4)}°${p.latitude >= 0 ? "N" : "S"} ${Math.abs(p.longitude).toFixed(4)}°${p.longitude >= 0 ? "E" : "W"}`;
+  const MODES = [
+    { id: 'select', label: 'Select', icon: 'select', hint: 'Tap a point, anchorage or site to inspect it. Drag a point to move it, or onto an anchorage to make it a stop. Drag a faint midpoint to insert one.' },
+    { id: 'add', label: 'Add', icon: 'add', hint: 'Tap the map to add a point at the end. Tap an anchorage to add a stop, or a site to add a waypoint.' },
+    { id: 'delete', label: 'Delete', icon: 'erase', hint: 'Tap a route point to delete it.' },
+    { id: 'anchorage', label: 'Anchorage', icon: 'anchor', hint: 'Tap the map to create an anchorage. Tap one to edit it, or drag it to move it.' }
+  ];
 
-  // Douglas-Peucker in metres (local equirectangular projection)
-  function simplify(pts, tolM) {
-    if (tolM <= 0 || pts.length < 3) return pts.slice();
-    const lat0 = rad(pts[0].latitude);
-    const xy = pts.map(p => [rad(p.longitude) * Math.cos(lat0) * 6371000, rad(p.latitude) * 6371000]);
-    const keep = new Array(pts.length).fill(false);
-    keep[0] = keep[pts.length - 1] = true;
-    const stack = [[0, pts.length - 1]];
+  // ---------- demo data ----------
+  function demoData() {
+    const sites = [
+      { id: 'kayangan-lake', title: 'Kayangan Lake', latitude: 11.9565, longitude: 120.2365 },
+      { id: 'siete-pecados', title: 'Siete Pecados', latitude: 12.0055, longitude: 120.1875 },
+      { id: 'skeleton-wreck', title: 'Skeleton Wreck', latitude: 12.0102, longitude: 120.1450 },
+      { id: 'lusong-gunboat', title: 'Lusong Gunboat', latitude: 12.0335, longitude: 120.0905 },
+      { id: 'banana-island', title: 'Banana Island', latitude: 12.1060, longitude: 119.9330 },
+      { id: 'black-island', title: 'Black Island', latitude: 12.2150, longitude: 119.8300 },
+      { id: 'dugong-sanctuary', title: 'Dugong Sanctuary', latitude: 12.3152, longitude: 119.9275 },
+      { id: 'calauit-safari', title: 'Calauit Safari Park', latitude: 12.3050, longitude: 119.8800 }
+    ];
+    const anchorages = [
+      { id: 'coron-town', name: 'Coron Town', latitude: 11.9975, longitude: 120.2010, depth_m: 12, notes: 'Good holding in mud. Busy with bancas by day.' },
+      { id: 'lusong', name: 'Lusong Island', latitude: 12.0360, longitude: 120.0960, depth_m: 15, notes: 'Sand. Exposed to the NE monsoon.' },
+      { id: 'black-island', name: 'Black Island', latitude: 12.2070, longitude: 119.8420, depth_m: 18, notes: 'Sand and coral patches. Sheltered from the east.' },
+      { id: 'dimakya', name: 'Dimakya', latitude: 12.3368, longitude: 119.9459, depth_m: 10, notes: 'Sheltered bay. Dugongs at dawn.' },
+      { id: 'culion', name: 'Culion', latitude: 11.8900, longitude: 120.0150, depth_m: 14, notes: 'Town anchorage off the church.' }
+    ];
+    const stop = (a, siteIds, at) => ({
+      latitude: at ? at[0] : a.latitude, longitude: at ? at[1] : a.longitude,
+      anchorage_id: a.id, name: a.name, site_ids: siteIds
+    });
+    const wp = (lat, lon) => ({ latitude: lat, longitude: lon });
+    const A = Object.fromEntries(anchorages.map((a) => [a.id, a]));
+    const routes = [
+      {
+        id: 'coron-loop', name: 'Coron loop', description: 'Coron Town, the wrecks, Black Island, then north to the dugongs.',
+        revision: 4, created_at: '2026-09-02T09:00:00Z', updated_at: '2026-10-05T16:20:00Z', source: { type: 'planner' },
+        points: [
+          stop(A['coron-town'], ['kayangan-lake', 'siete-pecados']),
+          wp(12.0040, 120.1650), wp(12.0180, 120.1250),
+          stop(A['lusong'], ['lusong-gunboat', 'skeleton-wreck']),
+          wp(12.0036, 120.0413), wp(12.0144, 119.9532), wp(12.0790, 119.9018), wp(12.1364, 119.8650),
+          // Placed before the anchorage was moved, so it shows the "moved" warning
+          stop(A['black-island'], ['black-island'], [12.2030, 119.8380]),
+          wp(12.2435, 119.8335), wp(12.2973, 119.8349), wp(12.3454, 119.8628), wp(12.3497, 119.9165),
+          stop(A['dimakya'], ['dugong-sanctuary', 'calauit-safari'])
+        ]
+      },
+      {
+        id: 'culion-run', name: 'Culion run', description: 'Short hop south to Culion.',
+        revision: 2, created_at: '2026-09-10T09:00:00Z', updated_at: '2026-09-11T08:00:00Z', source: { type: 'planner' },
+        points: [stop(A['coron-town'], []), wp(11.9600, 120.1300), wp(11.9100, 120.0600), stop(A['culion'], [])]
+      },
+      {
+        id: 'lim-charter-primary', name: 'Lim charter — Primary', description: 'Imported from the Lim charter KML.',
+        revision: 1, created_at: '2026-10-06T08:00:00Z', updated_at: '2026-10-06T08:00:00Z',
+        source: { type: 'charter', charter_id: 'lim-2026-09', plan: 'primary' },
+        points: [wp(11.9975, 120.2010), wp(12.0040, 120.1650), wp(12.0180, 120.1250), wp(12.0360, 120.0960), wp(12.0036, 120.0413), wp(12.0144, 119.9532), wp(12.0790, 119.9018)]
+      }
+    ];
+    const copyOf = (r, revision, assignedAt) => ({
+      route_id: r.id, route_name: r.name, revision, assigned_at: assignedAt,
+      coordinates: r.points.map((p) => ({ latitude: p.latitude, longitude: p.longitude }))
+    });
+    const charters = [
+      { id: 'harper-2026-10', name: 'Harper family', start: '2026-10-12', end: '2026-10-18', alternativeDays: ['Day 3', 'Day 4'],
+        plans: { primary: copyOf(routes[0], 3, '2026-10-01'), alternative: null } },
+      { id: 'lim-2026-09', name: 'Lim charter', start: '2026-09-20', end: '2026-09-26', alternativeDays: ['Day 5'],
+        plans: { primary: copyOf(routes[2], 1, '2026-09-15'), alternative: copyOf(routes[1], 1, '2026-09-15') } }
+    ];
+    return { sites, anchorages, routes, charters };
+  }
+
+  // ---------- state ----------
+  let db = demoData();
+  const ui = { view: 'routes', mode: 'select', layers: { sites: true, anchorages: true, pins: true }, itinCharter: 'harper-2026-10' };
+  let work = null;          // { route, savedJson, baseRevision, copyOf }
+  let history = { undo: [], redo: [] };
+  let pins = [];            // temporary imported pins: { id, name, latitude, longitude }
+  let pinSeq = 0;
+
+  // ---------- helpers ----------
+  function el(tag, attrs, ...children) {
+    const node = document.createElement(tag);
+    Object.entries(attrs || {}).forEach(([k, v]) => {
+      if (v === null || v === undefined || v === false) return;
+      if (k === 'class') node.className = v;
+      else if (k === 'html') node.innerHTML = v;
+      else if (k.startsWith('on')) node.addEventListener(k.slice(2), v);
+      else node.setAttribute(k, v === true ? '' : v);
+    });
+    children.flat().forEach((c) => { if (c !== null && c !== undefined && c !== false) node.append(c.nodeType ? c : String(c)); });
+    return node;
+  }
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const nowIso = () => new Date().toISOString().replace(/\.\d+Z$/, 'Z');
+  const fmtDate = (iso) => (iso || '').slice(0, 10);
+  const fmtPos = (p) => `${p.latitude.toFixed(4)}, ${p.longitude.toFixed(4)}`;
+
+  function distM(a, b) {
+    const R = 6371000, r = Math.PI / 180;
+    const dLat = (b.latitude - a.latitude) * r, dLon = (b.longitude - a.longitude) * r;
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.latitude * r) * Math.cos(b.latitude * r) * Math.sin(dLon / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(h));
+  }
+  const distNm = (a, b) => distM(a, b) / METRES_PER_NM;
+  const routeNm = (points) => points.reduce((sum, p, i) => (i ? sum + distNm(points[i - 1], p) : 0), 0);
+  const fmtHm = (hours) => { const m = Math.round(hours * 60); return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`; };
+
+  function slugify(name) { return name.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'route'; }
+  function uniqueId(name, taken) {
+    const base = slugify(name);
+    let id = base, n = 2;
+    while (taken.includes(id)) id = `${base}-${n++}`;
+    return id;
+  }
+
+  const findAnchorage = (id) => db.anchorages.find((a) => a.id === id);
+  const findSite = (id) => db.sites.find((s) => s.id === id);
+  const isStop = (p) => Boolean(p.anchorage_id);
+  function anchorageMovedBy(p) {
+    if (!isStop(p)) return 0;
+    const a = findAnchorage(p.anchorage_id);
+    if (!a) return 0;
+    const d = distM(p, a);
+    return d > MOVED_WARN_M ? d : 0;
+  }
+  function sitesWithin(pos, nm) { return db.sites.filter((s) => distNm(pos, s) <= nm).map((s) => s.id); }
+
+  function loadSpeed() {
+    try { const v = parseFloat(localStorage.getItem(SPEED_KEY)); return Number.isFinite(v) ? v : DEFAULT_SPEED_KN; } catch (e) { return DEFAULT_SPEED_KN; }
+  }
+  function storeSpeed(v) { try { localStorage.setItem(SPEED_KEY, String(v)); } catch (e) { /* per-browser convenience only */ } }
+
+  let toastTimer = null;
+  function toast(msg) {
+    document.querySelectorAll('.toast').forEach((t) => t.remove());
+    const t = el('div', { class: 'toast', role: 'status' }, msg);
+    document.body.append(t);
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.remove(), 3200);
+  }
+
+  // ---------- modals (house rules: green save + red cancel top right, outside click cancels) ----------
+  function openModal({ title, body, onSave, saveTitle, wide }) {
+    const root = $('modal-root');
+    const backdrop = el('div', { class: 'modal-backdrop' });
+    const close = () => { backdrop.remove(); document.removeEventListener('keydown', onKey); };
+    const save = () => { if (onSave() !== false) close(); };
+    const onKey = (e) => { if (e.key === 'Escape') close(); };
+    const card = el('div', { class: 'modal-card', role: 'dialog', 'aria-modal': 'true', style: wide ? 'width:min(640px,100%)' : null },
+      el('div', { class: 'card-header' },
+        el('h2', {}, title),
+        el('div', { class: 'icon-row' },
+          onSave ? el('button', { type: 'button', class: 'icon-btn success', title: saveTitle || 'Save', 'aria-label': saveTitle || 'Save', html: svg('check'), onclick: save }) : null,
+          el('button', { type: 'button', class: 'icon-btn danger', title: 'Cancel', 'aria-label': 'Cancel', html: svg('cancel'), onclick: close }))),
+      el('div', { class: 'modal-body' }, body));
+    backdrop.append(card);
+    backdrop.addEventListener('mousedown', (e) => { if (e.target === backdrop) close(); });
+    document.addEventListener('keydown', onKey);
+    root.append(backdrop);
+    setTimeout(() => { const f = card.querySelector('.modal-body input, .modal-body select, .modal-body textarea'); if (f) f.focus(); }, 0);
+    return { close, card };
+  }
+
+  function confirmDialog(title, message, saveTitle) {
+    return new Promise((resolve) => {
+      let answered = false;
+      const body = el('div', {}, ...[].concat(message).map((m) => (typeof m === 'string' ? el('p', {}, m) : m)));
+      const modal = openModal({ title, body, saveTitle: saveTitle || 'Confirm', onSave: () => { answered = true; resolve(true); } });
+      const observer = new MutationObserver(() => {
+        if (!modal.card.isConnected) { observer.disconnect(); if (!answered) resolve(false); }
+      });
+      observer.observe($('modal-root'), { childList: true });
+    });
+  }
+
+  // ---------- working route ----------
+  const snapshot = (r) => JSON.stringify({ name: r.name, description: r.description, points: r.points });
+  function setWork(route, copyOf) {
+    const clone = JSON.parse(JSON.stringify(route));
+    work = { route: clone, savedJson: snapshot(clone), baseRevision: clone.revision || 0, copyOf: copyOf || null };
+    history = { undo: [], redo: [] };
+    renderAll({ fit: true, inputs: true });
+  }
+  const isDirty = () => work && snapshot(work.route) !== work.savedJson;
+
+  function openLibraryRoute(id) {
+    const r = db.routes.find((x) => x.id === id);
+    if (r) setWork(r);
+  }
+  function blankRoute() {
+    return { id: '', name: '', description: '', revision: 0, created_at: null, updated_at: null, source: { type: 'planner' }, points: [] };
+  }
+  function openCharterCopy(charterId, plan) {
+    const c = db.charters.find((x) => x.id === charterId);
+    const copy = c && c.plans[plan];
+    if (!copy) return;
+    setWork({ ...blankRoute(), name: copy.route_name, revision: copy.revision, points: copy.coordinates.map((p) => ({ ...p })) },
+      { charterId, plan, charterName: c.name, revision: copy.revision, assignedAt: copy.assigned_at });
+  }
+
+  async function guardDiscard(actionText) {
+    const lines = [];
+    if (isDirty()) lines.push('This route has unsaved changes.');
+    if (pins.length) lines.push(`${pins.length} imported pin${pins.length === 1 ? '' : 's'} haven't been made into anchorages or sites and will be lost.`);
+    if (!lines.length) return true;
+    const ok = await confirmDialog('Discard changes?', [...lines, `${actionText} anyway?`], 'Discard');
+    if (ok) {
+      pins = [];
+      work.route = { ...work.route, ...JSON.parse(work.savedJson) };
+      history = { undo: [], redo: [] };
+      renderAll({ inputs: true });
+    }
+    return ok;
+  }
+
+  // Every route-geometry edit goes through here so undo/redo stays consistent.
+  function editPoints(fn, opts) {
+    history.undo.push(work.route.points);
+    history.redo = [];
+    work.route = { ...work.route, points: fn(work.route.points) };
+    renderAll(opts);
+  }
+  function undo() {
+    if (!history.undo.length) return;
+    history.redo.push(work.route.points);
+    work.route = { ...work.route, points: history.undo.pop() };
+    renderAll();
+  }
+  function redo() {
+    if (!history.redo.length) return;
+    history.undo.push(work.route.points);
+    work.route = { ...work.route, points: history.redo.pop() };
+    renderAll();
+  }
+  const replaceAt = (arr, i, value) => arr.map((x, j) => (j === i ? value : x));
+  const insertAt = (arr, i, value) => [...arr.slice(0, i), value, ...arr.slice(i)];
+  const removeAt = (arr, i) => arr.filter((_, j) => j !== i);
+
+  const stopAt = (anchorage) => ({
+    latitude: anchorage.latitude, longitude: anchorage.longitude, anchorage_id: anchorage.id,
+    name: anchorage.name, site_ids: sitesWithin(anchorage, AUTO_LINK_NM)
+  });
+  function addStopFor(anchorage) {
+    editPoints((pts) => [...pts, stopAt(anchorage)]);
+    toast(`Added stop: ${anchorage.name}`);
+  }
+  function makeStopAt(i, anchorage) {
+    if (map) map.closePopup();
+    editPoints((pts) => replaceAt(pts, i, stopAt(anchorage)));
+    toast(`${anchorage.name} is now a stop on this route.`);
+  }
+  function nearbyAnchorages(pos, nm) {
+    return db.anchorages.map((a) => ({ a, d: distNm(pos, a) })).filter((x) => x.d <= nm).sort((x, y) => x.d - y.d);
+  }
+  // Anchorage marker within SNAP_PX of a dropped point, if any (screen distance, so it works at any zoom).
+  function anchorageUnder(latlng) {
+    if (!map || !ui.layers.anchorages) return null;
+    const pt = map.latLngToContainerPoint(latlng);
+    const hits = db.anchorages.map((a) => ({ a, px: pt.distanceTo(map.latLngToContainerPoint(ll(a))) })).filter((x) => x.px <= SNAP_PX);
+    hits.sort((x, y) => x.px - y.px);
+    return hits.length ? hits[0].a : null;
+  }
+
+  // ---------- save / save as / delete / new / cancel ----------
+  function validateRoute() {
+    if (!work.route.name.trim()) return 'Give the route a name before saving.';
+    if (work.route.points.length < 2) return 'A route needs at least 2 points.';
+    return '';
+  }
+
+  async function saveRoute() {
+    if (work.copyOf || !work.route.id) return saveAs(!work.copyOf);
+    const problem = validateRoute();
+    if (problem) return toast(problem);
+    const stored = db.routes.find((r) => r.id === work.route.id);
+    if (stored && stored.revision !== work.baseRevision) {
+      // Mirrors the server's 409 on a revision clash
+      const reload = await confirmDialog('Route changed elsewhere',
+        [`Someone else saved this route (revision ${stored.revision}) while you were editing revision ${work.baseRevision}. Reload it?`,
+          'Reloading discards your changes. Cancel keeps your edits so you can Save As instead.'], 'Reload');
+      if (reload) openLibraryRoute(stored.id);
+      return;
+    }
+    const saved = { ...work.route, name: work.route.name.trim(), revision: (stored ? stored.revision : 0) + 1, updated_at: nowIso() };
+    db.routes = db.routes.map((r) => (r.id === saved.id ? saved : r));
+    setWork(saved);
+    toast(`Saved "${saved.name}" · revision ${saved.revision}`);
+  }
+
+  function saveAs(isFirstSave) {
+    const problemPoints = work.route.points.length < 2;
+    if (problemPoints) return toast('A route needs at least 2 points.');
+    const defaultName = isFirstSave ? work.route.name : `${work.route.name || 'Route'} (copy)`;
+    const nameInput = el('input', { type: 'text', value: defaultName });
+    const body = el('div', {},
+      work.copyOf ? el('p', { class: 'meta', style: 'margin-bottom:10px' }, 'A charter copy can only be saved as a new library route. The charter keeps its copy.') : null,
+      el('div', { class: 'field' }, el('label', {}, 'New route name'), nameInput));
+    openModal({
+      title: isFirstSave ? 'Save new route' : 'Save As', body, saveTitle: 'Save',
+      onSave: () => {
+        const name = nameInput.value.trim();
+        if (!name) { toast('Name is required.'); return false; }
+        const now = nowIso();
+        const source = work.copyOf ? { type: 'charter', charter_id: work.copyOf.charterId, plan: work.copyOf.plan } : (work.route.source || { type: 'planner' });
+        const saved = { ...work.route, id: uniqueId(name, db.routes.map((r) => r.id)), name, revision: 1, created_at: now, updated_at: now, source };
+        db.routes = [...db.routes, saved];
+        setWork(saved);
+        toast(`Saved "${name}" to the library`);
+        return true;
+      }
+    });
+  }
+
+  async function deleteRoute() {
+    if (!work.route.id || work.copyOf) return;
+    const ok = await confirmDialog('Delete route?', [`Delete "${work.route.name}" from the library?`, 'Charters it was assigned to keep their own copy.'], 'Delete');
+    if (!ok) return;
+    db.routes = db.routes.filter((r) => r.id !== work.route.id);
+    toast('Route deleted');
+    if (db.routes.length) openLibraryRoute(db.routes[0].id); else setWork(blankRoute());
+  }
+
+  async function newRoute() {
+    if (!(await guardDiscard('Start a new route'))) return;
+    setWork(blankRoute());
+    setMode('add');
+  }
+
+  async function cancelChanges() {
+    if (!isDirty()) return;
+    const ok = await confirmDialog('Discard changes?', 'Go back to the last saved version of this route?', 'Discard');
+    if (!ok) return;
+    const saved = JSON.parse(work.savedJson);
+    work.route = { ...work.route, ...saved };
+    history = { undo: [], redo: [] };
+    renderAll({ inputs: true });
+  }
+
+  // ---------- rendering: side panel ----------
+  function renderActions() {
+    const dirty = isDirty();
+    const hasId = Boolean(work.route.id) && !work.copyOf;
+    const b = (icon, title, onclick, cls, disabled) => el('button', { type: 'button', class: `icon-btn ${cls || ''}`, title, 'aria-label': title, html: svg(icon), onclick, disabled });
+    $('route-actions').replaceChildren(
+      b('check', work.copyOf ? 'Save (as a new library route)' : 'Save', saveRoute, 'success', !dirty && !work.copyOf && hasId),
+      b('cancel', 'Cancel (discard changes)', cancelChanges, 'danger', !dirty),
+      el('span', { class: 'icon-sep' }),
+      b('undo', 'Undo (Ctrl+Z)', undo, '', !history.undo.length),
+      b('redo', 'Redo (Ctrl+Y)', redo, '', !history.redo.length),
+      el('span', { class: 'icon-sep' }),
+      b('plus', 'New route', newRoute),
+      b('saveAs', 'Save As', () => saveAs(false), '', work.route.points.length < 2),
+      b('join', 'Add another route to this one', openJoin, '', !db.routes.length),
+      b('import', 'Import KML / GPX', openImport),
+      b('export', 'Export GPX / KML', openExport, '', work.route.points.length < 2),
+      b('trash', 'Delete route', deleteRoute, '', !hasId));
+  }
+
+  function renderPicker() {
+    const sel = $('route-picker');
+    const libGroup = el('optgroup', { label: 'Library' },
+      db.routes.map((r) => el('option', { value: `lib:${r.id}` }, `${r.name} · ${routeNm(r.points).toFixed(0)} nm · ${fmtDate(r.updated_at)}`)));
+    const copies = [];
+    db.charters.forEach((c) => ['primary', 'alternative'].forEach((plan) => {
+      const cp = c.plans[plan];
+      if (cp) copies.push(el('option', { value: `copy:${c.id}:${plan}` }, `${c.name} · ${plan === 'primary' ? 'Primary' : 'Alternative'} (rev ${cp.revision})`));
+    }));
+    const copyGroup = el('optgroup', { label: 'Charter copies (read-only)' }, copies);
+    const unsaved = !work.route.id && !work.copyOf ? el('option', { value: 'new' }, 'New route (unsaved)') : null;
+    sel.replaceChildren(...[unsaved, libGroup, copyGroup].filter(Boolean));
+    sel.value = work.copyOf ? `copy:${work.copyOf.charterId}:${work.copyOf.plan}` : (work.route.id ? `lib:${work.route.id}` : 'new');
+  }
+
+  function renderStats() {
+    const pts = work.route.points;
+    const stopCount = pts.filter(isStop).length;
+    $('stats').replaceChildren(
+      el('div', { class: 'stat' }, el('b', {}, routeNm(pts).toFixed(1)), el('span', {}, 'nm total')),
+      el('div', { class: 'stat' }, el('b', {}, stopCount), el('span', {}, 'stops')),
+      el('div', { class: 'stat' }, el('b', {}, speedKn() ? fmtHm(routeNm(pts) / speedKn()) : '—'), el('span', {}, speedKn() ? `h:mm at ${speedKn()} kn` : 'set a speed')));
+
+    let n = 0;
+    const stops = pts.map((p, i) => ({ p, i })).filter(({ p }) => isStop(p)).map(({ p, i }) => {
+      n += 1;
+      const a = findAnchorage(p.anchorage_id);
+      const moved = anchorageMovedBy(p);
+      const siteChips = (p.site_ids || []).map(findSite).filter(Boolean).map((s) => el('span', { class: 'chip' }, s.title));
+      return el('div', { class: 'stop-item', onclick: () => focusPoint(i) },
+        el('div', { class: 'title' }, el('span', { class: 'stop-num' }, n), p.name,
+          a && a.depth_m ? el('span', { class: 'meta', style: 'font-weight:400' }, `${a.depth_m} m`) : null),
+        moved ? el('div', { class: 'warn-text' }, `⚠ Anchorage moved ${Math.round(moved)} m since placed`) : null,
+        !a ? el('div', { class: 'warn-text' }, '⚠ Anchorage deleted. The stop keeps its position.') : null,
+        siteChips.length ? el('div', { class: 'chips' }, siteChips) : el('div', { class: 'empty', style: 'margin-top:4px' }, 'No sites linked'));
+    });
+    $('stops').replaceChildren(...(stops.length ? stops : [el('div', { class: 'empty' }, work.copyOf ? 'Charter copies hold coordinates only, so they have no stops.' : 'No stops yet. In Add mode, tap an anchorage to add one.')]));
+
+    renderLegs();
+
+    const r = work.route;
+    const src = r.source || {};
+    const srcText = src.type === 'charter' ? 'migrated from a charter' : src.type === 'kml' || src.type === 'gpx' ? `imported from ${src.filename}` : 'planner';
+    $('route-meta').textContent = work.copyOf ? '' : (r.id ? `Revision ${r.revision} · updated ${fmtDate(r.updated_at)} · source: ${srcText}${isDirty() ? ' · unsaved changes' : ''}` : (isDirty() ? 'Unsaved new route' : ''));
+
+    const banner = $('copy-banner');
+    banner.hidden = !work.copyOf;
+    if (work.copyOf) {
+      banner.innerHTML = `<b>Charter copy:</b> ${esc(work.copyOf.charterName)} · ${work.copyOf.plan === 'primary' ? 'Primary' : 'Alternative'} (revision ${work.copyOf.revision}, assigned ${esc(work.copyOf.assignedAt)}). The charter keeps this copy unchanged. Saving creates a new library route.`;
+    }
+  }
+
+  const speedKn = () => parseFloat($('speed').value) || 0;
+
+  // Legs run stop to stop. The route's first and last points count as ends even when they aren't stops.
+  function stopLegs(pts) {
+    const ends = pts.map((p, i) => ({ p, i })).filter(({ p, i }) => isStop(p) || i === 0 || i === pts.length - 1);
+    const label = ({ p, i }) => (isStop(p) ? p.name : (i === 0 ? 'Start' : 'End'));
+    return ends.slice(1).map((to, k) => {
+      const from = ends[k];
+      return { from: label(from), to: label(to), nm: routeNm(pts.slice(from.i, to.i + 1)) };
+    });
+  }
+
+  function renderLegs() {
+    const pts = work.route.points;
+    const speed = speedKn();
+    if (pts.length < 2) { $('legs').replaceChildren(el('div', { class: 'empty' }, 'Add at least two points to see legs.')); return; }
+    const legs = stopLegs(pts);
+    const total = legs.reduce((sum, l) => sum + l.nm, 0);
+    const rows = legs.map((l, k) => el('tr', {},
+      el('td', {}, k + 1), el('td', {}, `${l.from} → ${l.to}`),
+      el('td', { class: 'num' }, l.nm.toFixed(1)),
+      speed ? el('td', { class: 'num' }, fmtHm(l.nm / speed)) : null));
+    $('legs').replaceChildren(el('table', { class: 'legs' },
+      el('thead', {}, el('tr', {}, el('th', {}, '#'), el('th', {}, 'Stop to stop'), el('th', { class: 'num' }, 'nm'), speed ? el('th', { class: 'num' }, 'h:mm') : null)),
+      el('tbody', {}, rows),
+      el('tfoot', {}, el('tr', {}, el('td', {}), el('td', {}, 'Total'), el('td', { class: 'num' }, total.toFixed(1)), speed ? el('td', { class: 'num' }, fmtHm(total / speed)) : null))));
+  }
+
+  function renderModes() {
+    $('modes').replaceChildren(...MODES.map((m) => el('button', {
+      type: 'button', 'aria-pressed': String(ui.mode === m.id), title: m.label, onclick: () => setMode(m.id),
+      html: `${svg(m.icon)}<span class="lbl">${m.label}</span>`
+    })));
+    $('map-hint').textContent = MODES.find((m) => m.id === ui.mode).hint;
+  }
+
+  function renderLayers() {
+    const item = (key, color, label) => el('label', {},
+      el('input', { type: 'checkbox', checked: ui.layers[key], onchange: (e) => { ui.layers[key] = e.target.checked; renderMap(); } }),
+      el('span', { class: 'dot', style: `background:${color}` }), label);
+    $('layers').replaceChildren(item('sites', 'var(--site)', 'Sites'), item('anchorages', 'var(--stop)', 'Anchorages'),
+      item('pins', 'var(--pin)', `Imported pins${pins.length ? ` (${pins.length})` : ''}`));
+  }
+
+  function setMode(mode) {
+    ui.mode = mode;
+    if (map) { map.closePopup(); $('map').className = `mode-${mode}`; }
+    renderModes();
+    renderMap();
+  }
+
+  function renderAll(opts) {
+    const o = opts || {};
+    if (o.inputs) {
+      $('route-name').value = work.route.name;
+      $('route-desc').value = work.route.description || '';
+    }
+    renderPicker();
+    renderActions();
+    renderStats();
+    renderModes();
+    renderLayers();
+    renderMap(o);
+  }
+
+  // ---------- map ----------
+  let map = null;
+  const groups = {};
+  let routeLines = [];
+  const pointMarkers = [];
+
+  function initMap() {
+    if (!window.L) {
+      $('map').replaceChildren(el('div', { class: 'map-fallback' }, 'The map needs an internet connection (Leaflet and satellite tiles load online).'));
+      return;
+    }
+    map = L.map('map', { zoomControl: false }).setView([12.1, 120.0], 10);
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 18, attribution: 'Tiles © Esri'
+    }).addTo(map);
+    L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(map);
+    ['tender', 'route', 'sites', 'anchorages', 'pins', 'mids', 'points'].forEach((k) => { groups[k] = L.layerGroup().addTo(map); });
+    map.on('click', onMapClick);
+    $('map').className = `mode-${ui.mode}`;
+  }
+
+  const divIcon = (html, size) => L.divIcon({ className: 'mk', html: `<div class="mk-hit">${html}</div>`, iconSize: [size || 32, size || 32], iconAnchor: [(size || 32) / 2, (size || 32) / 2] });
+  const ll = (p) => [p.latitude, p.longitude];
+
+  function renderMap(opts) {
+    if (!map) return;
+    const o = opts || {};
+    Object.values(groups).forEach((g) => g.clearLayers());
+    pointMarkers.length = 0;
+    const pts = work.route.points;
+    const usedAnchorages = new Set(pts.filter(isStop).map((p) => p.anchorage_id));
+
+    if (ui.layers.sites) {
+      db.sites.forEach((s) => {
+        L.marker(ll(s), { icon: divIcon('<div class="mk-site"></div>'), title: s.title, zIndexOffset: 100 })
+          .on('click', () => onSiteClick(s)).addTo(groups.sites);
+      });
+    }
+    if (ui.layers.anchorages) {
+      db.anchorages.forEach((a) => {
+        const m = L.marker(ll(a), {
+          icon: divIcon(`<div class="mk-anch ${usedAnchorages.has(a.id) ? '' : 'dim'}">${svg('anchor')}</div><div class="mk-label">${esc(a.name)}</div>`),
+          title: `${a.name}${a.depth_m ? ` · ${a.depth_m} m` : ''}`, draggable: ui.mode === 'anchorage', zIndexOffset: 200
+        });
+        m.on('click', () => onAnchorageClick(a));
+        m.on('dragend', (e) => moveAnchorage(a.id, e.target.getLatLng()));
+        m.addTo(groups.anchorages);
+      });
+    }
+    if (ui.layers.pins) {
+      pins.forEach((pin) => {
+        L.marker(ll(pin), { icon: divIcon(`<div class="mk-pin"></div><div class="mk-label">${esc(pin.name)}</div>`), title: pin.name, zIndexOffset: 600 })
+          .bindPopup(() => pinPopup(pin), { minWidth: 240 }).addTo(groups.pins);
+      });
+    }
+
+    // tender lines: stop → each site it serves
+    pts.filter(isStop).forEach((p) => (p.site_ids || []).map(findSite).filter(Boolean).forEach((s) => {
+      L.polyline([ll(p), ll(s)], { color: '#fff', weight: 1.5, opacity: 0.75, dashArray: '4 6', interactive: false }).addTo(groups.tender);
+    }));
+
+    routeLines = [
+      L.polyline(pts.map(ll), { color: '#1d3540', weight: 6, opacity: 0.6, interactive: false }).addTo(groups.route),
+      L.polyline(pts.map(ll), { color: getComputedStyle(document.documentElement).getPropertyValue('--route').trim(), weight: 3, interactive: false }).addTo(groups.route)
+    ];
+
+    if (ui.mode !== 'delete') {
+      pts.slice(1).forEach((p, k) => {
+        const mid = { latitude: (pts[k].latitude + p.latitude) / 2, longitude: (pts[k].longitude + p.longitude) / 2 };
+        L.marker(ll(mid), { icon: divIcon('<div class="mk-mid"></div>', 24), draggable: true, title: 'Drag to insert a point', zIndexOffset: 400 })
+          .on('click', () => editPoints((arr) => insertAt(arr, k + 1, mid)))
+          .on('dragend', (e) => { const q = e.target.getLatLng(); editPoints((arr) => insertAt(arr, k + 1, { latitude: q.lat, longitude: q.lng })); })
+          .addTo(groups.mids);
+      });
+    }
+
+    let stopNo = 0;
+    pts.forEach((p, i) => {
+      let html;
+      if (isStop(p)) {
+        stopNo += 1;
+        html = `<div class="mk-stop">${stopNo}</div>${anchorageMovedBy(p) || !findAnchorage(p.anchorage_id) ? '<div class="mk-badge">!</div>' : ''}`;
+      } else {
+        html = `<div class="mk-wp ${p.site_id || p.name ? 'named' : ''}"></div>`;
+      }
+      const m = L.marker(ll(p), { icon: divIcon(html), draggable: ui.mode !== 'delete', title: p.name || 'Waypoint', zIndexOffset: isStop(p) ? 1100 : 1000 });
+      m.on('click', () => onPointClick(i));
+      m.on('drag', (e) => {
+        const q = e.target.getLatLng();
+        const live = pts.map((x, j) => (j === i ? [q.lat, q.lng] : ll(x)));
+        routeLines.forEach((line) => line.setLatLngs(live));
+      });
+      m.on('dragend', (e) => {
+        const q = e.target.getLatLng();
+        const target = anchorageUnder(q);
+        if (target) { makeStopAt(i, target); return; }
+        // Dragging a stop away keeps its anchorage link; the "moved" warning shows the difference.
+        editPoints((arr) => replaceAt(arr, i, { ...arr[i], latitude: q.lat, longitude: q.lng }));
+      });
+      m.addTo(groups.points);
+      pointMarkers[i] = m;
+    });
+
+    if (o.fit && pts.length) map.fitBounds(L.latLngBounds(pts.map(ll)).pad(0.15));
+    if (o.fit && !pts.length) map.setView([12.1, 120.0], 10);
+    if (Number.isInteger(o.popup) && pointMarkers[o.popup]) openPointPopup(o.popup);
+  }
+
+  function focusPoint(i) {
+    if (!map || !pointMarkers[i]) return;
+    map.panTo(pointMarkers[i].getLatLng());
+    openPointPopup(i);
+  }
+
+  // ---------- map interactions (spec §4.1 mode table) ----------
+  function onMapClick(e) {
+    const pos = { latitude: e.latlng.lat, longitude: e.latlng.lng };
+    if (ui.mode === 'add') editPoints((pts) => [...pts, pos]);
+    else if (ui.mode === 'anchorage') openAnchorageModal(null, pos);
+  }
+  function onPointClick(i) {
+    if (ui.mode === 'select') openPointPopup(i);
+    else if (ui.mode === 'delete') editPoints((pts) => removeAt(pts, i));
+  }
+  function onAnchorageClick(a) {
+    if (ui.mode === 'add') addStopFor(a);
+    else if (ui.mode === 'select' || ui.mode === 'anchorage') openAnchorageModal(a);
+  }
+  function onSiteClick(s) {
+    if (ui.mode === 'add') { editPoints((pts) => [...pts, { latitude: s.latitude, longitude: s.longitude, site_id: s.id, name: s.title }]); toast(`Added waypoint at ${s.title}`); }
+    else if (ui.mode === 'select') openSiteModal(s);
+  }
+
+  function moveAnchorage(id, latlng) {
+    db.anchorages = db.anchorages.map((a) => (a.id === id ? { ...a, latitude: latlng.lat, longitude: latlng.lng } : a));
+    const users = db.routes.filter((r) => r.points.some((p) => p.anchorage_id === id)).length;
+    toast(`Anchorage moved and saved.${users ? ` Stops on ${users} route${users === 1 ? '' : 's'} stay put and show a warning.` : ''}`);
+    renderAll();
+  }
+
+  // ---------- point popup ----------
+  function openPointPopup(i) {
+    const m = pointMarkers[i];
+    if (!m) return;
+    m.unbindPopup();
+    m.bindPopup(pointPopup(i), { minWidth: 250, maxWidth: 300, autoPanPadding: [20, 60] }).openPopup();
+  }
+
+  function pointPopup(i) {
+    const p = work.route.points[i];
+    const stopIndex = work.route.points.slice(0, i + 1).filter(isStop).length;
+    const moved = anchorageMovedBy(p);
+    const a = isStop(p) ? findAnchorage(p.anchorage_id) : null;
+    const nameInput = el('input', { type: 'text', value: p.name || '', placeholder: 'Optional label' });
+    const nearby = isStop(p) ? [] : nearbyAnchorages(p, NEARBY_ANCHORAGE_NM);
+    nameInput.addEventListener('change', () => {
+      const name = nameInput.value.trim();
+      editPoints((pts) => replaceAt(pts, i, { ...pts[i], name: name || undefined }), { popup: i });
+    });
+
+    const box = el('div', { class: 'pop' },
+      el('h3', {}, isStop(p) ? `Stop ${stopIndex} · ${p.name}` : (p.name ? `Waypoint · ${p.name}` : 'Waypoint')),
+      el('div', { class: 'sub' }, `${fmtPos(p)}${a && a.depth_m ? ` · ${a.depth_m} m` : ''}`),
+      nearby.length ? el('div', { class: 'nearby' },
+        nearby.slice(0, 3).map(({ a: na, d }) => el('button', { type: 'button', class: 'text-btn', onclick: () => makeStopAt(i, na) },
+          `Make stop at ${na.name}`, el('span', { class: 'd' }, `${d.toFixed(1)} nm`)))) : null,
+      moved ? el('div', { class: 'banner warn', style: 'margin-bottom:8px' }, `The anchorage has moved ${Math.round(moved)} m since this stop was placed. `,
+        el('button', { type: 'button', class: 'link-btn', onclick: () => editPoints((pts) => replaceAt(pts, i, { ...pts[i], latitude: a.latitude, longitude: a.longitude }), { popup: i }) }, 'Move stop to anchorage')) : null,
+      el('div', { class: 'field' }, el('label', {}, 'Name'), nameInput));
+
+    if (isStop(p)) box.append(sitesServedPicker(i));
+
+    box.append(el('div', { class: 'actions' },
+      !isStop(p) ? el('button', { type: 'button', class: 'text-btn secondary', onclick: () => openAnchorageModal(null, p, { pointIndex: i, name: p.name }) }, 'Make anchorage') : null,
+      el('button', { type: 'button', class: 'text-btn secondary', onclick: () => openSiteModal(null, p, { pointIndex: i, name: p.name }) }, 'Make site'),
+      el('button', { type: 'button', class: 'text-btn danger-text', onclick: () => { map.closePopup(); editPoints((pts) => removeAt(pts, i)); } }, 'Delete')));
+    return box;
+  }
+
+  function sitesServedPicker(i) {
+    const p = work.route.points[i];
+    const chosen = new Set(p.site_ids || []);
+    const sorted = db.sites.map((s) => ({ s, d: distNm(p, s) })).sort((x, y) => x.d - y.d);
+    const row = ({ s, d }) => el('label', { class: d <= SITES_NEAR_NM ? 'near' : '' },
+      el('input', {
+        type: 'checkbox', checked: chosen.has(s.id),
+        onchange: (e) => {
+          const ids = e.target.checked ? [...(p.site_ids || []), s.id] : (p.site_ids || []).filter((x) => x !== s.id);
+          editPoints((pts) => replaceAt(pts, i, { ...pts[i], site_ids: ids }), { popup: i });
+        }
+      }), s.title, el('span', { class: 'd' }, `${d.toFixed(1)} nm`));
+    const near = sorted.filter((x) => x.d <= SITES_NEAR_NM);
+    const far = sorted.filter((x) => x.d > SITES_NEAR_NM);
+    return el('div', { class: 'field' }, el('label', {}, 'Sites served'),
+      el('div', { class: 'site-pick' },
+        near.length ? el('div', { class: 'grp' }, `Within ${SITES_NEAR_NM} nm`) : null, near.map(row),
+        far.length ? el('div', { class: 'grp' }, 'Further away') : null, far.map(row)));
+  }
+
+  // ---------- anchorage modal ----------
+  function openAnchorageModal(anchorage, pos, from) {
+    if (map) map.closePopup();
+    const isNew = !anchorage;
+    const src = anchorage || { name: (from && from.name) || '', latitude: pos.latitude, longitude: pos.longitude, depth_m: '', notes: '' };
+    const f = {
+      name: el('input', { type: 'text', value: src.name }),
+      lat: el('input', { type: 'number', step: '0.0001', value: src.latitude.toFixed(5) }),
+      lon: el('input', { type: 'number', step: '0.0001', value: src.longitude.toFixed(5) }),
+      depth: el('input', { type: 'number', step: '0.5', min: '0', value: src.depth_m === '' || src.depth_m === undefined ? '' : src.depth_m }),
+      notes: el('textarea', { maxlength: '500' }, src.notes || '')
+    };
+    const users = anchorage ? db.routes.filter((r) => r.points.some((p) => p.anchorage_id === anchorage.id)) : [];
+    const body = el('div', { class: 'modal-body' },
+      el('div', { class: 'field' }, el('label', {}, 'Name'), f.name),
+      el('div', { class: 'grid2' }, el('div', { class: 'field' }, el('label', {}, 'Latitude'), f.lat), el('div', { class: 'field' }, el('label', {}, 'Longitude'), f.lon)),
+      el('p', { class: 'meta' }, 'The live admin reuses the Site Editor map picker for the position.'),
+      el('div', { class: 'field' }, el('label', {}, 'Depth (m, optional)'), f.depth),
+      el('div', { class: 'field' }, el('label', {}, 'Notes (max 500 characters)'), f.notes),
+      users.length ? el('p', { class: 'meta' }, `Used as a stop on: ${users.map((r) => r.name).join(', ')}.`) : null,
+      anchorage ? el('div', {}, el('button', { type: 'button', class: 'text-btn danger-text', onclick: () => deleteAnchorage(anchorage, users, modal) }, 'Delete anchorage')) : null);
+    const modal = openModal({
+      title: isNew ? 'New anchorage' : 'Edit anchorage', body, saveTitle: 'Save anchorage',
+      onSave: () => {
+        const name = f.name.value.trim();
+        const lat = parseFloat(f.lat.value), lon = parseFloat(f.lon.value);
+        if (!name) { toast('Name is required.'); return false; }
+        if (!(Math.abs(lat) <= 90 && Math.abs(lon) <= 180)) { toast('Enter a valid latitude and longitude.'); return false; }
+        const depth = f.depth.value === '' ? undefined : parseFloat(f.depth.value);
+        const saved = { id: anchorage ? anchorage.id : uniqueId(name, db.anchorages.map((a) => a.id)), name, latitude: lat, longitude: lon, depth_m: depth, notes: f.notes.value.slice(0, 500) };
+        db.anchorages = anchorage ? db.anchorages.map((a) => (a.id === saved.id ? saved : a)) : [...db.anchorages, saved];
+        if (from && Number.isInteger(from.pointIndex)) {
+          editPoints((pts) => replaceAt(pts, from.pointIndex, { latitude: lat, longitude: lon, anchorage_id: saved.id, name, site_ids: sitesWithin(saved, AUTO_LINK_NM) }));
+          toast(`Anchorage saved. Point ${from.pointIndex + 1} is now a stop.`);
+        } else if (from && from.pinId) {
+          pins = pins.filter((x) => x.id !== from.pinId);
+          renderAll();
+          toast('Anchorage saved from the imported pin.');
+        } else {
+          renderAll();
+          toast('Anchorage saved.');
+        }
+        return true;
+      }
+    });
+  }
+
+  async function deleteAnchorage(anchorage, users, modal) {
+    const msg = users.length
+      ? [`Delete "${anchorage.name}"? It is a stop on: ${users.map((r) => r.name).join(', ')}.`, 'Those stops keep their position and name.']
+      : `Delete "${anchorage.name}"?`;
+    modal.close();
+    if (!(await confirmDialog('Delete anchorage?', msg, 'Delete'))) return;
+    db.anchorages = db.anchorages.filter((a) => a.id !== anchorage.id);
+    renderAll();
+    toast('Anchorage deleted.');
+  }
+
+  // ---------- site modal (stand-in for the existing Site Editor modal) ----------
+  function openSiteModal(site, pos, from) {
+    if (map) map.closePopup();
+    const src = site || { title: (from && from.name) || '', latitude: pos.latitude, longitude: pos.longitude, description: '' };
+    const f = {
+      title: el('input', { type: 'text', value: src.title }),
+      lat: el('input', { type: 'number', step: '0.0001', value: src.latitude.toFixed(5) }),
+      lon: el('input', { type: 'number', step: '0.0001', value: src.longitude.toFixed(5) }),
+      desc: el('textarea', {}, src.description || '')
+    };
+    const body = el('div', { class: 'modal-body' },
+      el('p', { class: 'meta' }, 'Stand-in for the existing Site Editor modal, which the live admin reuses as it is (images, media and tags included).'),
+      el('div', { class: 'field' }, el('label', {}, 'Title'), f.title),
+      el('div', { class: 'grid2' }, el('div', { class: 'field' }, el('label', {}, 'Latitude'), f.lat), el('div', { class: 'field' }, el('label', {}, 'Longitude'), f.lon)),
+      el('div', { class: 'field' }, el('label', {}, 'Description'), f.desc));
+    openModal({
+      title: site ? 'Edit site' : 'Add site', body, saveTitle: 'Save site',
+      onSave: () => {
+        const title = f.title.value.trim();
+        const lat = parseFloat(f.lat.value), lon = parseFloat(f.lon.value);
+        if (!title) { toast('Title is required.'); return false; }
+        if (!(Math.abs(lat) <= 90 && Math.abs(lon) <= 180)) { toast('Enter a valid latitude and longitude.'); return false; }
+        const saved = { ...(site || {}), id: site ? site.id : uniqueId(title, db.sites.map((s) => s.id)), title, latitude: lat, longitude: lon, description: f.desc.value };
+        db.sites = site ? db.sites.map((s) => (s.id === saved.id ? saved : s)) : [...db.sites, saved];
+        if (from && Number.isInteger(from.pointIndex)) {
+          editPoints((pts) => replaceAt(pts, from.pointIndex, { ...pts[from.pointIndex], site_id: isStop(pts[from.pointIndex]) ? undefined : saved.id, name: pts[from.pointIndex].name || title }));
+        } else {
+          if (from && from.pinId) pins = pins.filter((x) => x.id !== from.pinId);
+          renderAll();
+        }
+        toast('Site saved.');
+        return true;
+      }
+    });
+  }
+
+  // ---------- imported pins ----------
+  function nearestMatch(pin) {
+    const cands = [
+      ...db.sites.map((s) => ({ name: s.title, kind: 'site', pos: s })),
+      ...db.anchorages.map((a) => ({ name: a.name, kind: 'anchorage', pos: a }))
+    ].map((c) => ({ ...c, d: distNm(pin, c.pos), same: c.name.toLowerCase() === pin.name.toLowerCase() }))
+      .filter((c) => c.same || c.d <= PIN_MATCH_NM)
+      .sort((x, y) => (y.same - x.same) || (x.d - y.d));
+    return cands[0] || null;
+  }
+
+  function pinPopup(pin) {
+    const match = nearestMatch(pin);
+    const drop = () => { pins = pins.filter((x) => x.id !== pin.id); renderAll(); };
+    return el('div', { class: 'pop' },
+      el('h3', {}, pin.name),
+      el('div', { class: 'sub' }, `Imported pin · ${fmtPos(pin)} · not saved`),
+      match ? el('div', { class: 'banner warn' }, `Near ${match.kind} "${match.name}" (${match.d.toFixed(1)} nm). It may be a duplicate.`) : null,
+      el('div', { class: 'actions' },
+        el('button', { type: 'button', class: 'text-btn secondary', onclick: () => { map.closePopup(); pins = pins.filter((x) => x.id !== pin.id); editPoints((pts) => [...pts, { latitude: pin.latitude, longitude: pin.longitude, name: pin.name }]); } }, 'Add to route'),
+        el('button', { type: 'button', class: 'text-btn secondary', onclick: () => openAnchorageModal(null, pin, { pinId: pin.id, name: pin.name }) }, 'Make anchorage'),
+        el('button', { type: 'button', class: 'text-btn secondary', onclick: () => openSiteModal(null, pin, { pinId: pin.id, name: pin.name }) }, 'Make site'),
+        el('button', { type: 'button', class: 'text-btn danger-text', onclick: () => { map.closePopup(); drop(); } }, 'Delete')));
+  }
+
+  // ---------- import (browser-side KML / GPX) ----------
+  function parseGeoFile(text, filename) {
+    const doc = new DOMParser().parseFromString(text, 'application/xml');
+    if (doc.querySelector('parsererror')) throw new Error('The file is not valid XML.');
+    const isGpx = /\.gpx$/i.test(filename) || doc.documentElement.localName === 'gpx';
+    const lines = [];
+    const found = [];
+    const text1 = (node, tag) => { const n = node.getElementsByTagName(tag)[0]; return n ? n.textContent.trim() : ''; };
+    if (isGpx) {
+      const toPt = (n) => ({ latitude: parseFloat(n.getAttribute('lat')), longitude: parseFloat(n.getAttribute('lon')) });
+      [...doc.getElementsByTagName('rte')].forEach((r, i) => lines.push({ name: text1(r, 'name') || `Route ${i + 1}`, points: [...r.getElementsByTagName('rtept')].map(toPt) }));
+      [...doc.getElementsByTagName('trk')].forEach((t, i) => lines.push({ name: text1(t, 'name') || `Track ${i + 1}`, points: [...t.getElementsByTagName('trkpt')].map(toPt) }));
+      [...doc.getElementsByTagName('wpt')].forEach((w, i) => found.push({ name: text1(w, 'name') || `Pin ${i + 1}`, ...toPt(w) }));
+    } else {
+      const coords = (s) => s.trim().split(/\s+/).map((c) => c.split(',').map(Number)).filter((c) => c.length >= 2).map(([lon, lat]) => ({ latitude: lat, longitude: lon }));
+      [...doc.getElementsByTagName('Placemark')].forEach((pm, i) => {
+        const name = text1(pm, 'name') || `Placemark ${i + 1}`;
+        [...pm.getElementsByTagName('LineString')].forEach((ls) => lines.push({ name, points: coords(text1(ls, 'coordinates')) }));
+        [...pm.getElementsByTagName('Point')].forEach((pt) => { const c = coords(text1(pt, 'coordinates'))[0]; if (c) found.push({ name, ...c }); });
+      });
+    }
+    const valid = (p) => Number.isFinite(p.latitude) && Number.isFinite(p.longitude) && Math.abs(p.latitude) <= 90 && Math.abs(p.longitude) <= 180;
+    return { type: isGpx ? 'gpx' : 'kml', lines: lines.map((l) => ({ ...l, points: l.points.filter(valid) })).filter((l) => l.points.length >= 2), pins: found.filter(valid) };
+  }
+
+  // Douglas-Peucker in metres on a local flat projection
+  function simplify(points, tolM) {
+    if (tolM <= 0 || points.length < 3) return points.slice();
+    const lat0 = points[0].latitude * Math.PI / 180;
+    const xy = points.map((p) => [p.longitude * 111320 * Math.cos(lat0), p.latitude * 110540]);
+    const segDist = (p, a, b) => {
+      const dx = b[0] - a[0], dy = b[1] - a[1];
+      const len2 = dx * dx + dy * dy;
+      const t = len2 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len2)) : 0;
+      return Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy);
+    };
+    const keep = points.map((_, i) => i === 0 || i === points.length - 1);
+    const stack = [[0, points.length - 1]];
     while (stack.length) {
       const [s, e] = stack.pop();
       let maxD = 0, idx = -1;
-      const [x1, y1] = xy[s], [x2, y2] = xy[e];
-      const dx = x2 - x1, dy = y2 - y1, len2 = dx * dx + dy * dy;
-      for (let i = s + 1; i < e; i++) {
-        const [x, y] = xy[i];
-        let t = len2 ? ((x - x1) * dx + (y - y1) * dy) / len2 : 0;
-        t = Math.max(0, Math.min(1, t));
-        const d = Math.hypot(x - (x1 + t * dx), y - (y1 + t * dy));
-        if (d > maxD) { maxD = d; idx = i; }
-      }
-      if (maxD > tolM && idx > 0) { keep[idx] = true; stack.push([s, idx], [idx, e]); }
+      for (let i = s + 1; i < e; i++) { const d = segDist(xy[i], xy[s], xy[e]); if (d > maxD) { maxD = d; idx = i; } }
+      if (maxD > tolM) { keep[idx] = true; stack.push([s, idx], [idx, e]); }
     }
-    return pts.filter((_, i) => keep[i]);
+    return points.filter((_, i) => keep[i]);
+  }
+  function defaultTolerance(points) {
+    for (let t = 0; t <= 200; t += 5) if (simplify(points, t).length <= IMPORT_TARGET_POINTS) return t;
+    return 200;
   }
 
-  // ---------- demo data ----------
-  const sites = [
-    { id: "coron-wrecks", title: "Coron Wrecks", latitude: 11.977719, longitude: 120.043203, description: "WWII Japanese wrecks, 10–40 m." },
-    { id: "coron-island", title: "Coron Island", latitude: 11.954372, longitude: 120.213719, description: "Kayangan and Barracuda lakes." },
-    { id: "dugong-sanctury", title: "Dugong Sanctury", latitude: 12.325233, longitude: 119.907272, description: "Snorkel with dugongs, early morning." },
-    { id: "black-island", title: "Black Island", latitude: 12.154694, longitude: 119.819419, description: "Limestone island, caves and beach." },
-    { id: "debotunay-island", title: "Debotunay Island", latitude: 12.106578, longitude: 119.852153, description: "Quiet beach and reef." },
-    { id: "port-caltom", title: "Port Caltom", latitude: 12.177978, longitude: 120.094689, description: "Sheltered bay, village visit." }
-  ];
-  let anchorages = [
-    { id: "coron-town", name: "Coron Town", latitude: 11.9985, longitude: 120.2003, depth_m: 12, notes: "Mud, good holding. Busy with bancas by day." },
-    { id: "lusong-gunboat", name: "Lusong Gunboat", latitude: 11.9620, longitude: 120.0570, depth_m: 15, notes: "Day anchorage for the wrecks." },
-    { id: "black-island-bay", name: "Black Island Bay", latitude: 12.1500, longitude: 119.8290, depth_m: 18, notes: "Open to the SW. Sand." },
-    { id: "port-caltom-anch", name: "Port Caltom", latitude: 12.1715, longitude: 120.0905, depth_m: 9, notes: "Well sheltered, all but N." },
-    { id: "dimakya", name: "Dimakya Island", latitude: 12.1550, longitude: 119.9710, depth_m: 20, notes: "Deep close in; tie off stern if calm." }
-  ];
-  const A = id => anchorages.find(a => a.id === id);
-  const stopFrom = (a, siteIds) => ({ latitude: a.latitude, longitude: a.longitude, anchorage_id: a.id, name: a.name, site_ids: siteIds || [] });
-  let library = [
-    {
-      id: "coron-loop", name: "Coron loop", description: "Coron Town, wrecks, Black Island, north to the dugongs and back via Port Caltom.",
-      revision: 4, updated_at: "2026-10-04T08:12:00Z", source: { type: "planner" },
-      points: [
-        stopFrom(A("coron-town"), ["coron-island"]),
-        { latitude: 11.985, longitude: 120.150 },
-        stopFrom(A("lusong-gunboat"), ["coron-wrecks"]),
-        { latitude: 12.020, longitude: 119.960 },
-        { latitude: 12.090, longitude: 119.880 },
-        stopFrom(A("black-island-bay"), ["black-island", "debotunay-island"]),
-        { latitude: 12.240, longitude: 119.880 },
-        { latitude: 12.300, longitude: 119.930, site_id: "dugong-sanctury", name: "Dugong Sanctury" },
-        { latitude: 12.230, longitude: 120.030 },
-        stopFrom({ ...A("port-caltom-anch") }, ["port-caltom"]),
-        { latitude: 12.080, longitude: 120.160 },
-        stopFrom(A("coron-town"), [])
-      ]
-    },
-    {
-      id: "wrecks-day-trip", name: "Wrecks day trip", description: "Short hop from Coron Town to the wrecks.",
-      revision: 1, updated_at: "2026-09-20T05:40:00Z", source: { type: "planner" },
-      points: [stopFrom(A("coron-town"), []), { latitude: 11.985, longitude: 120.150 }, stopFrom(A("lusong-gunboat"), ["coron-wrecks"])]
-    }
-  ];
-  // Port Caltom anchorage was moved after this route was saved, to show the "moved" warning.
-  A("port-caltom-anch").latitude = 12.1745;
-  const charterCopies = [
-    {
-      id: "copy-csaba-primary", name: "Csaba — Primary", readonly: true, description: "Assigned 2026-08-02. Charter ended 2026-08-09.",
-      revision: 1, updated_at: "2026-08-02T09:00:00Z", source: { type: "library", route_id: "coron-loop", charter_id: "csaba", plan: "primary" },
-      points: [stopFrom(A("coron-town"), ["coron-island"]), { latitude: 11.985, longitude: 120.150 }, stopFrom(A("lusong-gunboat"), ["coron-wrecks"]), { latitude: 12.06, longitude: 120.05 }, stopFrom(A("port-caltom-anch"), ["port-caltom"])]
-    }
-  ];
-
-  // ---------- state ----------
-  const state = {
-    tab: "routes",
-    current: null,       // working copy of the route
-    savedSnapshot: "",   // JSON of route at last save/load
-    readonly: false,
-    mode: "select",
-    undo: [], redo: [],
-    pins: [],            // temporary imported pins
-    layers: { sites: true, anchorages: true, pins: true },
-    speed: 8
-  };
-  let map = null, layers = {};
-
-  const routeKey = r => JSON.stringify({ n: r.name, d: r.description, p: r.points });
-  const isDirty = () => state.current && routeKey(state.current) !== state.savedSnapshot;
-
-  function loadRoute(route, readonly) {
-    state.current = clone(route);
-    state.current.points.forEach(p => { if (p.anchorage_id && !p.site_ids) p.site_ids = []; });
-    state.savedSnapshot = routeKey(state.current);
-    state.readonly = !!readonly;
-    state.undo = []; state.redo = [];
-    state.mode = "select";
-  }
-  loadRoute(library[0], false);
-
-  function pushHistory() {
-    state.undo.push(JSON.stringify(state.current.points));
-    if (state.undo.length > 200) state.undo.shift();
-    state.redo = [];
-  }
-  function undo() { if (!state.undo.length) return; state.redo.push(JSON.stringify(state.current.points)); state.current.points = JSON.parse(state.undo.pop()); refresh(); }
-  function redo() { if (!state.redo.length) return; state.undo.push(JSON.stringify(state.current.points)); state.current.points = JSON.parse(state.redo.pop()); refresh(); }
-
-  function toast(msg) {
-    const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.appendChild(t);
-    setTimeout(() => t.remove(), 2600);
-  }
-
-  // ---------- modals (green save + red cancel top right, click outside cancels) ----------
-  function openModal({ title, body, onSave, saveLabel = "Save", extraActions = "", noSave = false }) {
-    const bd = document.createElement("div");
-    bd.className = "backdrop";
-    bd.innerHTML = `<div class="modal" role="dialog" aria-label="${esc(title)}">
-      <div class="card-header"><h2>${esc(title)}</h2><div class="icon-row">
-        ${extraActions}
-        ${noSave ? "" : `<button class="icon-btn success" data-save title="${esc(saveLabel)}" aria-label="${esc(saveLabel)}">${svg("save")}</button>`}
-        <button class="icon-btn danger" data-cancel title="Cancel" aria-label="Cancel">${svg("cancel")}</button>
-      </div></div>
-      <div class="modal-body">${body}</div><p class="err" data-err></p></div>`;
-    document.body.appendChild(bd);
-    const close = () => { bd.remove(); document.removeEventListener("keydown", onKey); };
-    const onKey = e => { if (e.key === "Escape") close(); };
-    document.addEventListener("keydown", onKey);
-    bd.addEventListener("mousedown", e => { if (e.target === bd) close(); });
-    bd.querySelector("[data-cancel]").addEventListener("click", close);
-    const saveBtn = bd.querySelector("[data-save]");
-    if (saveBtn) saveBtn.addEventListener("click", () => {
-      try { if (onSave(bd) !== false) close(); } catch (err) { bd.querySelector("[data-err]").textContent = err.message; }
-    });
-    const first = bd.querySelector("input, textarea, select");
-    if (first) setTimeout(() => first.focus(), 30);
-    return { el: bd, close };
-  }
-  function confirmModal(title, message, onYes, yesLabel = "Continue") {
-    openModal({ title, body: `<p>${esc(message)}</p>`, onSave: () => { onYes(); }, saveLabel: yesLabel });
-  }
-  function guardDiscard(next) {
-    const pinsLeft = state.pins.length;
-    if (!isDirty() && !pinsLeft) return next();
-    const parts = [];
-    if (isDirty()) parts.push("this route has unsaved changes");
-    if (pinsLeft) parts.push(`${pinsLeft} imported pin${pinsLeft === 1 ? " hasn't" : "s haven't"} been promoted and will be lost`);
-    confirmModal("Discard changes?", `${parts.join(", and ").replace(/^./, c => c.toUpperCase())}. Discard and continue?`, () => { state.pins = []; next(); }, "Discard");
-  }
-
-  // ---------- anchorage + site modals ----------
-  function anchorageModal(existing, latlng, onSaved) {
-    const a = existing || { id: "", name: "", latitude: latlng.lat, longitude: latlng.lng, depth_m: "", notes: "" };
-    const usedBy = existing ? library.filter(r => r.points.some(p => p.anchorage_id === existing.id)).map(r => r.name) : [];
-    const m = openModal({
-      title: existing ? "Edit Anchorage" : "Add Anchorage",
-      extraActions: existing ? `<button class="icon-btn" data-del title="Delete anchorage" aria-label="Delete anchorage">${svg("trash")}</button>` : "",
-      body: `<div class="grid">
-        <label class="full">Name<input type="text" id="an-name" value="${esc(a.name)}"></label>
-        <label>Latitude<input type="number" step="0.0001" id="an-lat" value="${a.latitude.toFixed ? a.latitude.toFixed(5) : a.latitude}"></label>
-        <label>Longitude<input type="number" step="0.0001" id="an-lng" value="${a.longitude.toFixed ? a.longitude.toFixed(5) : a.longitude}"></label>
-        <label>Depth (m)<input type="number" step="0.5" min="0" id="an-depth" value="${esc(a.depth_m)}"></label>
-        <div class="muted" style="align-self:end">Tip: drag the anchorage on the map to move it.</div>
-        <label class="full">Notes<textarea id="an-notes" rows="3" maxlength="500">${esc(a.notes)}</textarea></label>
-        ${usedBy.length ? `<p class="muted full">Used in: ${esc(usedBy.join(", "))}</p>` : ""}
-      </div>`,
-      onSave: bd => {
-        const name = bd.querySelector("#an-name").value.trim();
-        const lat = Number(bd.querySelector("#an-lat").value), lng = Number(bd.querySelector("#an-lng").value);
-        if (!name) throw new Error("Give the anchorage a name.");
-        if (!(lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180)) throw new Error("Check the latitude and longitude.");
-        const depth = bd.querySelector("#an-depth").value;
-        const data = { name, latitude: lat, longitude: lng, depth_m: depth === "" ? "" : Number(depth), notes: bd.querySelector("#an-notes").value.trim() };
-        let saved;
-        if (existing) { Object.assign(existing, data); saved = existing; }
-        else {
-          let id = slug(name), n = 2; while (anchorages.some(x => x.id === id)) id = `${slug(name)}-${n++}`;
-          saved = { id, ...data }; anchorages.push(saved);
-        }
-        toast(`Anchorage “${name}” saved.`);
-        if (onSaved) onSaved(saved);
-        refresh();
+  function sampleKml() {
+    // A dense, slightly wobbly track like a Google Earth / Navionics export, plus some pins.
+    const ctrl = [[11.9975, 120.2010], [12.0060, 120.1600], [12.0300, 120.1000], [12.0036, 120.0413], [12.0144, 119.9532], [12.0790, 119.9018], [12.1364, 119.8650], [12.1950, 119.8450]];
+    const dense = [];
+    ctrl.slice(1).forEach(([la, lo], k) => {
+      const [pa, po] = ctrl[k];
+      for (let s = 0; s < 30; s++) {
+        const t = s / 30;
+        dense.push([pa + (la - pa) * t + Math.sin(dense.length * 1.7) * 0.00015, po + (lo - po) * t + Math.cos(dense.length * 1.3) * 0.00015]);
       }
     });
-    const del = m.el.querySelector("[data-del]");
-    if (del) del.addEventListener("click", () => {
-      m.close();
-      confirmModal("Delete Anchorage", usedBy.length
-        ? `“${existing.name}” is used by ${usedBy.join(", ")}. Those routes keep the stop's position and name. Delete it?`
-        : `Delete “${existing.name}”?`, () => { anchorages = anchorages.filter(x => x !== existing); toast("Anchorage deleted."); refresh(); }, "Delete");
-    });
+    dense.push(ctrl[ctrl.length - 1]);
+    const pm = (name, la, lo) => `<Placemark><name>${name}</name><Point><coordinates>${lo},${la},0</coordinates></Point></Placemark>`;
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>West Busuanga track</name>
+<Placemark><name>Track to Black Island</name><LineString><coordinates>${dense.map(([la, lo]) => `${lo.toFixed(5)},${la.toFixed(5)},0`).join(' ')}</coordinates></LineString></Placemark>
+<Placemark><name>Short spur</name><LineString><coordinates>120.0960,12.0360,0 120.0700,12.0150,0 120.0450,12.0050,0</coordinates></LineString></Placemark>
+${pm('Siete Pecados', 12.0061, 120.1868)}${pm('Quiet bay', 12.1290, 119.9060)}${pm('Reef shallows', 12.0500, 119.9300)}${pm('Lusong anchorage', 12.0372, 120.0975)}${pm('Turtle spot', 12.1850, 119.8660)}
+</Document></kml>`;
   }
 
-  function siteModal(existing, latlng, onSaved) {
-    const s = existing || { title: "", latitude: latlng.lat, longitude: latlng.lng, description: "" };
-    openModal({
-      title: existing ? "Edit Site" : "Add Site",
-      body: `<p class="muted">This stands in for the existing Site Editor modal, with images, media and tags.</p>
-      <div class="grid">
-        <label class="full">Title<input type="text" id="si-title" value="${esc(s.title)}"></label>
-        <label>Latitude<input type="number" step="0.0001" id="si-lat" value="${Number(s.latitude).toFixed(5)}"></label>
-        <label>Longitude<input type="number" step="0.0001" id="si-lng" value="${Number(s.longitude).toFixed(5)}"></label>
-        <label class="full">Description<textarea id="si-desc" rows="4">${esc(s.description)}</textarea></label>
-      </div>`,
-      onSave: bd => {
-        const title = bd.querySelector("#si-title").value.trim();
-        if (!title) throw new Error("Give the site a title.");
-        const data = { title, latitude: Number(bd.querySelector("#si-lat").value), longitude: Number(bd.querySelector("#si-lng").value), description: bd.querySelector("#si-desc").value };
-        let saved;
-        if (existing) { Object.assign(existing, data); saved = existing; }
-        else { saved = { id: slug(title), ...data }; sites.push(saved); }
-        toast(`Site “${title}” saved.`);
-        if (onSaved) onSaved(saved);
-        refresh();
-      }
-    });
-  }
+  function openImport() {
+    const fileInput = el('input', { type: 'file', accept: '.kml,.gpx' });
+    const stage = el('div', { class: 'modal-body' });
+    let parsed = null, filename = '';
+    const pick = { line: 0, join: false, tol: 0, mode: 'replace' };
 
-  function sitesServedModal(index) {
-    const p = state.current.points[index];
-    const list = sites.map(s => ({ s, d: distNm(p, s) })).sort((a, b) => a.d - b.d);
-    openModal({
-      title: `Sites served from ${p.name || "this stop"}`,
-      body: `<p class="muted">Tick the sites guests reach from this stop, for example by tender. Sites within 5 nm are highlighted.</p>
-      <div class="checklist">${list.map(({ s, d }) => `
-        <label class="${d <= 5 ? "near" : ""}"><input type="checkbox" value="${esc(s.id)}" ${p.site_ids.includes(s.id) ? "checked" : ""}>
-        ${esc(s.title)}<span class="d">${fmtNm(d)} nm</span></label>`).join("")}</div>`,
-      onSave: bd => {
-        pushHistory();
-        p.site_ids = Array.from(bd.querySelectorAll("input:checked")).map(i => i.value);
-        refresh();
-      }
-    });
-  }
-
-  // ---------- route actions ----------
-  function addPoint(pt) { pushHistory(); state.current.points.push(pt); refresh(); }
-  function removePoint(i) { pushHistory(); state.current.points.splice(i, 1); refresh(); }
-
-  function saveRoute(asNew) {
-    const r = state.current;
-    if (!r.name.trim()) { toast("Give the route a name first."); document.getElementById("rt-name")?.focus(); return; }
-    if (r.points.length < 2) { toast("A route needs at least two points."); return; }
-    if (state.readonly || asNew) {
-      openModal({
-        title: "Save As New Route",
-        body: `<label>Name<input type="text" id="sa-name" value="${esc(state.readonly ? r.name.replace(/ — (Primary|Alternative)$/, "") + " (copy)" : r.name + " (copy)")}"></label>`,
-        onSave: bd => {
-          const name = bd.querySelector("#sa-name").value.trim();
-          if (!name) throw new Error("Name required.");
-          let id = slug(name), n = 2; while (library.some(x => x.id === id)) id = `${slug(name)}-${n++}`;
-          const route = { ...clone(r), id, name, readonly: false, revision: 1, updated_at: new Date().toISOString(), source: { type: "planner" } };
-          library.push(route);
-          loadRoute(route, false);
-          toast(`Saved as “${name}”.`);
-          refresh(true);
-        }
-      });
-      return;
-    }
-    const idx = library.findIndex(x => x.id === r.id);
-    r.revision = (r.revision || 0) + 1; r.updated_at = new Date().toISOString();
-    if (idx >= 0) library[idx] = clone(r); else { r.id = r.id || slug(r.name); library.push(clone(r)); }
-    state.savedSnapshot = routeKey(r);
-    toast(`Route saved (revision ${r.revision}).`);
-    refresh(true);
-  }
-
-  function newRoute() {
-    guardDiscard(() => {
-      loadRoute({ id: "", name: "", description: "", revision: 0, points: [], source: { type: "planner" } }, false);
-      state.mode = "add";
-      refresh(true);
-    });
-  }
-
-  function deleteRoute() {
-    const r = state.current;
-    if (state.readonly || !library.some(x => x.id === r.id)) return;
-    confirmModal("Delete Route", `Delete “${r.name}” from the library? Charters it was assigned to keep their own copy.`, () => {
-      library = library.filter(x => x.id !== r.id);
-      loadRoute(library[0] || { id: "", name: "", description: "", points: [] }, false);
-      toast("Route deleted.");
-      refresh(true);
-    }, "Delete");
-  }
-
-  // ---------- import / export ----------
-  const SAMPLE_KML = (() => {
-    // A dense track like a Google Earth / Navionics export, plus a couple of pins.
-    const pts = [];
-    const ctrl = [[120.2003, 11.9985], [120.15, 11.985], [120.06, 11.965], [119.97, 12.03], [119.86, 12.12], [119.83, 12.15]];
-    for (let s = 0; s < ctrl.length - 1; s++) {
-      for (let k = 0; k < 40; k++) {
-        const t = k / 40;
-        const lng = ctrl[s][0] + (ctrl[s + 1][0] - ctrl[s][0]) * t + Math.sin((s * 40 + k) / 3) * 0.0012;
-        const lat = ctrl[s][1] + (ctrl[s + 1][1] - ctrl[s][1]) * t + Math.cos((s * 40 + k) / 4) * 0.0010;
-        pts.push(`${lng.toFixed(5)},${lat.toFixed(5)},0`);
-      }
-    }
-    pts.push(ctrl[ctrl.length - 1].join(",") + ",0");
-    return `<?xml version="1.0"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document>
-      <Placemark><name>Coron to Black Island</name><LineString><coordinates>${pts.join(" ")}</coordinates></LineString></Placemark>
-      <Placemark><name>Skeleton Wreck</name><description>Shallow wreck, good snorkel.</description><Point><coordinates>120.0950,11.9830,0</coordinates></Point></Placemark>
-      <Placemark><name>Black Island</name><description>Caves.</description><Point><coordinates>119.8200,12.1540,0</coordinates></Point></Placemark>
-      <Placemark><name>Calm cove</name><Point><coordinates>119.9300,12.0700,0</coordinates></Point></Placemark>
-    </Document></kml>`;
-  })();
-
-  function parseGeoFile(text, filename) {
-    const doc = new DOMParser().parseFromString(text, "application/xml");
-    if (doc.querySelector("parsererror")) throw new Error("That file isn't valid KML or GPX.");
-    const byTag = (el, tag) => Array.from(el.getElementsByTagNameNS("*", tag));
-    const childText = (el, tag) => { const c = byTag(el, tag)[0]; return c ? c.textContent.trim() : ""; };
-    const lines = [], pins = [];
-    if (/\.gpx$/i.test(filename) || doc.documentElement.localName === "gpx") {
-      const toPt = el => ({ latitude: Number(el.getAttribute("lat")), longitude: Number(el.getAttribute("lon")), name: childText(el, "name") });
-      byTag(doc, "rte").forEach((r, i) => lines.push({ name: childText(r, "name") || `Route ${i + 1}`, points: byTag(r, "rtept").map(toPt) }));
-      byTag(doc, "trk").forEach((t, i) => lines.push({ name: childText(t, "name") || `Track ${i + 1}`, points: byTag(t, "trkpt").map(toPt) }));
-      byTag(doc, "wpt").forEach(w => pins.push({ ...toPt(w), description: childText(w, "desc") }));
-    } else {
-      byTag(doc, "Placemark").forEach((pm, i) => {
-        const name = Array.from(pm.children).find(c => c.localName === "name")?.textContent.trim() || "";
-        const ls = byTag(pm, "LineString")[0];
-        const pt = byTag(pm, "Point")[0];
-        const coords = el => childText(el, "coordinates").split(/\s+/).filter(Boolean).map(t => { const [lng, lat] = t.split(",").map(Number); return { latitude: lat, longitude: lng }; });
-        if (ls) lines.push({ name: name || `Line ${i + 1}`, points: coords(ls) });
-        else if (pt) { const [c] = coords(pt); if (c) pins.push({ ...c, name: name || `Pin ${pins.length + 1}`, description: childText(pm, "description") }); }
-      });
-    }
-    lines.forEach(l => { l.points = l.points.filter(p => Number.isFinite(p.latitude) && Number.isFinite(p.longitude)); });
-    return { lines: lines.filter(l => l.points.length >= 2), pins: pins.filter(p => Number.isFinite(p.latitude)) };
-  }
-
-  function importModal() {
-    if (state.readonly) { toast("Charter copies are read-only. Use Save As first."); return; }
-    const m = openModal({
-      title: "Import KML or GPX",
-      saveLabel: "Import",
-      body: `<p>Lines become route points and pins become temporary markers you can promote. Pins that aren't promoted aren't saved.</p>
-        <div class="grid">
-          <label class="full">File<input type="file" id="im-file" accept=".kml,.gpx,application/vnd.google-earth.kml+xml,application/gpx+xml,text/xml"></label>
-          <div class="full"><button class="btn" id="im-sample" type="button">Use a sample KML (dense line plus 3 pins)</button></div>
-          <div class="full" id="im-detail"></div>
-        </div>`,
-      onSave: bd => {
-        if (!m.parsed) throw new Error("Choose a file first.");
-        const { lines, pins } = m.parsed;
-        const choice = bd.querySelector("input[name=im-line]:checked")?.value ?? "0";
-        const tol = Number(bd.querySelector("#im-tol")?.value || 0);
-        const mode = bd.querySelector("input[name=im-mode]:checked")?.value || "replace";
-        let pts = [];
-        if (lines.length) {
-          const raw = choice === "join" ? lines.flatMap(l => l.points) : lines[Number(choice)].points;
-          pts = simplify(raw, tol).map(p => ({ latitude: p.latitude, longitude: p.longitude, ...(p.name ? { name: p.name } : {}) }));
-        }
-        pushHistory();
-        if (pts.length) state.current.points = mode === "append" ? state.current.points.concat(pts) : pts;
-        if (!state.current.name && lines.length) state.current.name = lines[choice === "join" ? 0 : Number(choice)].name;
-        state.pins = state.pins.concat(pins.map(p => ({ ...p, near: nearestLabel(p) })));
-        toast(`Imported ${pts.length} points and ${pins.length} pin${pins.length === 1 ? "" : "s"}.`);
-        refresh(true);
-      }
-    });
-    const detail = m.el.querySelector("#im-detail");
-    const show = (text, filename) => {
-      try { m.parsed = parseGeoFile(text, filename); } catch (err) { detail.innerHTML = `<p class="err">${esc(err.message)}</p>`; m.parsed = null; return; }
-      const { lines, pins } = m.parsed;
-      const autoTol = raw => { for (const t of [0, 5, 10, 20, 30, 50, 75, 100, 150, 200]) if (simplify(raw, t).length <= 60) return t; return 200; };
-      const rawFor = c => c === "join" ? lines.flatMap(l => l.points) : (lines[Number(c)] || { points: [] }).points;
-      detail.innerHTML = `
-        <p><b>${esc(filename)}</b>: ${lines.length} line${lines.length === 1 ? "" : "s"}, ${pins.length} pin${pins.length === 1 ? "" : "s"}.</p>
-        ${lines.length > 1 ? `<div class="radios">${lines.map((l, i) => `<label><input type="radio" name="im-line" value="${i}" ${i === 0 ? "checked" : ""}>${esc(l.name)} (${l.points.length} pts)</label>`).join("")}
-          <label><input type="radio" name="im-line" value="join">Join all lines in file order</label></div>` : ""}
-        ${lines.length ? `<label style="margin-top:10px">Simplify: <span id="im-tolv"></span>
-          <input type="range" id="im-tol" min="0" max="200" step="5" value="${autoTol(rawFor("0"))}" style="width:100%"></label>` : ""}
-        ${state.current.points.length && lines.length ? `<div class="radios" style="margin-top:8px">
-          <label><input type="radio" name="im-mode" value="replace" checked>Replace the current route's points</label>
-          <label><input type="radio" name="im-mode" value="append">Append to the end of the current route</label></div>` : ""}`;
-      const tolEl = detail.querySelector("#im-tol");
-      const upd = () => {
-        if (!tolEl) return;
-        const c = detail.querySelector("input[name=im-line]:checked")?.value ?? "0";
-        const raw = rawFor(c);
-        detail.querySelector("#im-tolv").textContent = `${tolEl.value} m tolerance → ${simplify(raw, Number(tolEl.value)).length} of ${raw.length} points`;
-      };
-      tolEl?.addEventListener("input", upd);
-      detail.querySelectorAll("input[name=im-line]").forEach(r => r.addEventListener("change", () => { tolEl.value = autoTol(rawFor(r.value)); upd(); }));
-      upd();
+    const chosenPoints = () => {
+      if (!parsed) return [];
+      const raw = pick.join ? parsed.lines.flatMap((l) => l.points) : (parsed.lines[pick.line] || { points: [] }).points;
+      return raw;
     };
-    m.el.querySelector("#im-file").addEventListener("change", async e => { const f = e.target.files[0]; if (f) show(await f.text(), f.name); });
-    m.el.querySelector("#im-sample").addEventListener("click", () => show(SAMPLE_KML, "sample-coron.kml"));
-  }
 
-  function nearestLabel(p) {
-    const cands = sites.map(s => ({ n: s.title, d: distNm(p, s), same: s.title.toLowerCase() === (p.name || "").toLowerCase() }))
-      .concat(anchorages.map(a => ({ n: a.name, d: distNm(p, a), same: a.name.toLowerCase() === (p.name || "").toLowerCase() })))
-      .filter(c => c.same || c.d <= 2).sort((a, b) => (b.same - a.same) || a.d - b.d);
-    return cands[0] ? `${cands[0].same ? "Same name as" : "Near"} ${cands[0].n} (${fmtNm(cands[0].d)} nm)` : "";
-  }
+    function renderStage() {
+      if (!parsed) {
+        stage.replaceChildren(el('div', { class: 'file-drop' },
+          el('div', {}, 'Choose a .kml or .gpx file. Lines become route points; pins appear as temporary orange markers.'),
+          fileInput,
+          el('button', { type: 'button', class: 'text-btn secondary', onclick: () => load(sampleKml(), 'west-busuanga.kml') }, 'Use a sample KML')));
+        return;
+      }
+      const raw = chosenPoints();
+      const simplified = simplify(raw, pick.tol);
+      const lineChoice = parsed.lines.length > 1 ? el('div', { class: 'field' }, el('label', {}, 'Line'),
+        el('div', { class: 'radio-list' },
+          parsed.lines.map((l, i) => el('label', {}, el('input', { type: 'radio', name: 'line', checked: !pick.join && pick.line === i, onchange: () => { pick.join = false; pick.line = i; pick.tol = defaultTolerance(chosenPoints()); renderStage(); } }), `${l.name} (${l.points.length} points)`)),
+          el('label', {}, el('input', { type: 'radio', name: 'line', checked: pick.join, onchange: () => { pick.join = true; pick.tol = defaultTolerance(chosenPoints()); renderStage(); } }), 'Join all lines in file order'))) : null;
+      const slider = el('input', { type: 'range', min: '0', max: '200', step: '5', value: String(pick.tol) });
+      const count = el('b', {}, `${simplified.length} points`);
+      const tolLabel = el('span', { class: 'meta' }, `${pick.tol} m`);
+      slider.addEventListener('input', () => { pick.tol = Number(slider.value); count.textContent = `${simplify(raw, pick.tol).length} points`; tolLabel.textContent = `${pick.tol} m`; });
+      stage.replaceChildren(...[
+        el('p', {}, el('b', {}, filename), ` · ${parsed.lines.length} line${parsed.lines.length === 1 ? '' : 's'}, ${parsed.pins.length} pin${parsed.pins.length === 1 ? '' : 's'}`),
+        lineChoice,
+        parsed.lines.length ? el('div', { class: 'field' }, el('label', {}, 'Simplify'),
+          el('div', { class: 'slider-row' }, slider, tolLabel), el('div', { class: 'meta' }, count, ` from ${raw.length}. The default keeps it under about ${IMPORT_TARGET_POINTS}.`)) : el('p', { class: 'empty' }, 'No lines found. Only pins will be imported.'),
+        work.route.points.length && parsed.lines.length ? el('div', { class: 'field' }, el('label', {}, 'The open route already has points'),
+          el('div', { class: 'radio-list' },
+            el('label', {}, el('input', { type: 'radio', name: 'mode', checked: pick.mode === 'replace', onchange: () => { pick.mode = 'replace'; } }), 'Replace them'),
+            el('label', {}, el('input', { type: 'radio', name: 'mode', checked: pick.mode === 'append', onchange: () => { pick.mode = 'append'; } }), 'Append to the end'))) : null,
+        parsed.pins.length ? el('p', { class: 'meta' }, `${parsed.pins.length} pin${parsed.pins.length === 1 ? '' : 's'} will show as temporary orange markers. They are not saved until you make them an anchorage or a site.`) : null].filter(Boolean));
+    }
 
-  function download(name, text, type) {
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([text], { type }));
-    a.download = name; document.body.appendChild(a); a.click();
-    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
-  }
-  function exportModal() {
-    const r = state.current;
-    if (r.points.length < 2) { toast("Nothing to export yet."); return; }
+    function load(text, name) {
+      try {
+        parsed = parseGeoFile(text, name);
+        filename = name;
+        if (!parsed.lines.length && !parsed.pins.length) { parsed = null; toast('No lines or pins found in that file.'); return; }
+        pick.tol = parsed.lines.length ? defaultTolerance(chosenPoints()) : 0;
+        renderStage();
+      } catch (err) { toast(`Couldn't read the file: ${err.message}`); }
+    }
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+      file.text().then((t) => load(t, file.name)).catch(() => toast("Couldn't read the file."));
+    });
+
+    renderStage();
     openModal({
-      title: "Export Route",
-      saveLabel: "Download",
-      body: `<div class="radios">
-        <label><input type="radio" name="ex" value="gpx" checked>GPX 1.1 (chartplotters: route with named stops as waypoints)</label>
-        <label><input type="radio" name="ex" value="kml">KML (Google Earth: line plus stop placemarks)</label></div>`,
-      onSave: bd => {
-        const fmt = bd.querySelector("input[name=ex]:checked").value;
-        const id = r.id || slug(r.name);
-        const stops = r.points.filter(p => p.anchorage_id);
-        if (fmt === "gpx") {
-          const pt = (tag, p, i) => `<${tag} lat="${p.latitude.toFixed(6)}" lon="${p.longitude.toFixed(6)}"><name>${esc(p.name || `WP${String(i + 1).padStart(2, "0")}`)}</name></${tag}>`;
-          download(`${id}.gpx`, `<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="Princess Iolanthe Admin" xmlns="http://www.topografix.com/GPX/1/1">
-${stops.map((p, i) => "  " + pt("wpt", p, i)).join("\n")}
-  <rte><name>${esc(r.name)}</name><desc>${esc(r.description)}</desc>
-${r.points.map((p, i) => "    " + pt("rtept", p, i)).join("\n")}
+      title: 'Import KML / GPX', body: stage, wide: true, saveTitle: 'Import',
+      onSave: () => {
+        if (!parsed) { toast('Choose a file first.'); return false; }
+        const newPts = simplify(chosenPoints(), pick.tol).map((p) => ({ latitude: p.latitude, longitude: p.longitude }));
+        pins = [...pins, ...parsed.pins.map((p) => ({ ...p, id: `pin-${++pinSeq}` }))];
+        if (newPts.length) {
+          const wasEmpty = !work.route.points.length;
+          editPoints((pts) => (pick.mode === 'append' ? [...pts, ...newPts] : newPts), { fit: true });
+          if (wasEmpty || !work.route.id) work.route = { ...work.route, source: { type: parsed.type, filename } };
+        } else {
+          renderAll();
+        }
+        toast(`Imported ${newPts.length} points and ${parsed.pins.length} pins.`);
+        return true;
+      }
+    });
+  }
+
+  // ---------- export ----------
+  function exportGpx(r) {
+    const x = (s) => esc(s);
+    const stops = r.points.filter(isStop);
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Iolanthe Admin" xmlns="http://www.topografix.com/GPX/1/1">
+  <metadata><name>${x(r.name)}</name></metadata>
+${stops.map((p) => `  <wpt lat="${p.latitude.toFixed(6)}" lon="${p.longitude.toFixed(6)}"><name>${x(p.name)}</name></wpt>`).join('\n')}
+  <rte>
+    <name>${x(r.name)}</name>
+${r.points.map((p) => `    <rtept lat="${p.latitude.toFixed(6)}" lon="${p.longitude.toFixed(6)}">${p.name ? `<name>${x(p.name)}</name>` : ''}</rtept>`).join('\n')}
   </rte>
 </gpx>
-`, "application/gpx+xml");
-        } else {
-          download(`${id}.kml`, `<?xml version="1.0" encoding="UTF-8"?>
-<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>${esc(r.name)}</name>
-  <Placemark><name>${esc(r.name)}</name><description>${esc(r.description)}</description><LineString><coordinates>
-${r.points.map(p => `    ${p.longitude.toFixed(6)},${p.latitude.toFixed(6)},0`).join("\n")}
-  </coordinates></LineString></Placemark>
-${stops.map(p => `  <Placemark><name>${esc(p.name)}</name><Point><coordinates>${p.longitude.toFixed(6)},${p.latitude.toFixed(6)},0</coordinates></Point></Placemark>`).join("\n")}
+`;
+  }
+  function exportKml(r) {
+    const x = (s) => esc(s);
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>${x(r.name)}</name>
+  <Placemark><name>${x(r.name)}</name><LineString><coordinates>${r.points.map((p) => `${p.longitude.toFixed(6)},${p.latitude.toFixed(6)},0`).join(' ')}</coordinates></LineString></Placemark>
+${r.points.filter(isStop).map((p) => `  <Placemark><name>${x(p.name)}</name><Point><coordinates>${p.longitude.toFixed(6)},${p.latitude.toFixed(6)},0</coordinates></Point></Placemark>`).join('\n')}
 </Document></kml>
-`, "application/vnd.google-earth.kml+xml");
-        }
-        toast(`Downloaded ${id}.${fmt}`);
+`;
+  }
+  function download(filename, text, type) {
+    const url = URL.createObjectURL(new Blob([text], { type }));
+    const a = el('a', { href: url, download: filename });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  function openExport() {
+    const r = work.route;
+    const base = r.id || slugify(r.name || 'route');
+    const stops = r.points.filter(isStop).length;
+    const body = el('div', { class: 'modal-body' },
+      el('p', {}, `${r.points.length} points, ${stops} stops. Stops and named points carry their names, so a chartplotter shows them as named waypoints.`),
+      el('div', { class: 'icon-row' },
+        el('button', { type: 'button', class: 'text-btn', onclick: () => { download(`${base}.gpx`, exportGpx(r), 'application/gpx+xml'); modal.close(); } }, `Download ${base}.gpx`),
+        el('button', { type: 'button', class: 'text-btn secondary', onclick: () => { download(`${base}.kml`, exportKml(r), 'application/vnd.google-earth.kml+xml'); modal.close(); } }, `Download ${base}.kml`)),
+      el('p', { class: 'meta' }, 'GPX 1.1: one route with every point, plus stops as waypoints. KML: one line plus a pin per stop.'));
+    const modal = openModal({ title: 'Export route', body });
+  }
+
+  // ---------- join another route onto this one ----------
+  function joinSources() {
+    const lib = db.routes.filter((r) => r.id !== work.route.id).map((r) => ({ key: `lib:${r.id}`, label: `${r.name} · ${routeNm(r.points).toFixed(0)} nm`, points: r.points }));
+    const copies = [];
+    db.charters.forEach((c) => ['primary', 'alternative'].forEach((plan) => {
+      const cp = c.plans[plan];
+      if (cp) copies.push({ key: `copy:${c.id}:${plan}`, label: `${c.name} · ${plan === 'primary' ? 'Primary' : 'Alternative'} (charter copy)`, points: cp.coordinates });
+    }));
+    return { lib, copies };
+  }
+
+  function joinPoints(current, other, opts) {
+    const extra = opts.reverse ? [...other].reverse() : other;
+    const [first, second] = opts.atStart ? [extra, current] : [current, extra];
+    if (!first.length || !second.length) return [...first, ...second];
+    // Joining at the same anchorage (or the same spot) shouldn't leave a duplicate point.
+    const a = first[first.length - 1], b = second[0];
+    const same = (a.anchorage_id && a.anchorage_id === b.anchorage_id) || distM(a, b) < MOVED_WARN_M;
+    return same ? [...first, ...second.slice(1)] : [...first, ...second];
+  }
+
+  function openJoin() {
+    const { lib, copies } = joinSources();
+    const all = [...lib, ...copies];
+    if (!all.length) return toast('There are no other routes to add.');
+    const sel = el('select', {},
+      el('optgroup', { label: 'Library' }, lib.map((o) => el('option', { value: o.key }, o.label))),
+      copies.length ? el('optgroup', { label: 'Charter copies' }, copies.map((o) => el('option', { value: o.key }, o.label))) : null);
+    const opts = { atStart: false, reverse: false };
+    const preview = el('div', { class: 'banner info' });
+    const update = () => {
+      const other = all.find((o) => o.key === sel.value).points;
+      const cur = work.route.points;
+      const joined = joinPoints(cur, other, opts);
+      const extra = opts.reverse ? [...other].reverse() : other;
+      const gapFrom = opts.atStart ? extra[extra.length - 1] : cur[cur.length - 1];
+      const gapTo = opts.atStart ? cur[0] : extra[0];
+      const gap = cur.length && extra.length ? distNm(gapFrom, gapTo) : 0;
+      preview.textContent = `${work.route.name || 'This route'} becomes ${routeNm(joined).toFixed(1)} nm with ${joined.filter(isStop).length} stops.`
+        + (gap > 0.05 ? ` The ${gap.toFixed(1)} nm gap between them becomes a straight leg; check it on the map.` : ' They meet at the same spot, so the join is seamless.');
+    };
+    sel.addEventListener('change', update);
+    const radio = (name, checked, label, on) => el('label', {}, el('input', { type: 'radio', name, checked, onchange: () => { on(); update(); } }), label);
+    const body = el('div', { class: 'modal-body' },
+      el('p', {}, 'Add a whole route to the one that is open, to build a longer route from ones you already have. The routes you add from are not changed.'),
+      el('div', { class: 'field' }, el('label', {}, 'Route to add'), sel),
+      el('div', { class: 'field' }, el('label', {}, 'Where'), el('div', { class: 'radio-list' },
+        radio('where', true, 'After the end of this route', () => { opts.atStart = false; }),
+        radio('where', false, 'Before the start of this route', () => { opts.atStart = true; }))),
+      el('div', { class: 'field' }, el('label', {}, 'Direction'), el('div', { class: 'radio-list' },
+        radio('dir', true, 'As saved', () => { opts.reverse = false; }),
+        radio('dir', false, 'Reversed', () => { opts.reverse = true; }))),
+      preview,
+      work.route.id && !work.copyOf ? el('p', { class: 'meta' }, `Tip: use Save As afterwards to keep "${work.route.name}" as it is and save the joined route under a new name.`) : null);
+    update();
+    openModal({
+      title: 'Add another route', body, wide: true, saveTitle: 'Add route',
+      onSave: () => {
+        const other = all.find((o) => o.key === sel.value);
+        editPoints((pts) => joinPoints(pts, other.points.map((p) => ({ ...p })), opts), { fit: true });
+        toast(`Added ${other.label.split(' · ')[0]}.`);
+        return true;
       }
     });
   }
 
-  // ---------- rendering ----------
-  function render() {
-    document.querySelectorAll("#nav button").forEach(b => b.setAttribute("aria-pressed", b.dataset.tab === state.tab ? "true" : "false"));
-    const ws = document.getElementById("workspace");
-    if (map) { map.remove(); map = null; }
-    if (state.tab === "itinerary") { ws.innerHTML = itineraryHtml(); bindItinerary(); return; }
-    if (state.tab !== "routes") {
-      ws.innerHTML = `<section class="card"><div class="card-header"><h2>${esc(document.querySelector(`#nav [data-tab=${state.tab}]`).textContent)}</h2></div><p class="muted">Not part of this mockup. Try <b>Routes</b> or <b>Itinerary</b>.</p></section>`;
-      return;
+  // ---------- itinerary: route assignment rows (spec §4.4) ----------
+  const isPast = (c) => c.end < TODAY;
+  function renderItinerary() {
+    const sel = $('itin-charter');
+    sel.replaceChildren(...db.charters.map((c) => el('option', { value: c.id }, `${c.name} · ${c.start} → ${c.end}`)));
+    sel.value = ui.itinCharter;
+    const c = db.charters.find((x) => x.id === ui.itinCharter);
+    const past = isPast(c);
+    const cards = ['primary', 'alternative'].map((plan) => planCard(c, plan, past));
+    const notice = !c.plans.alternative && c.alternativeDays.length
+      ? el('div', { class: 'banner warn', style: 'margin-top:12px' }, `Guests are using the Alternative itinerary on ${c.alternativeDays.join(', ')}, but no Alternative route is assigned. They'll see the Primary route on those days.`)
+      : null;
+    $('itin-plans').replaceChildren(...[
+      el('div', { style: 'margin-top:10px' }, el('span', { class: `tag ${past ? 'past' : 'active'}` }, past ? `Ended ${c.end} · read-only` : `Upcoming · ${c.start} → ${c.end}`)),
+      notice, ...cards].filter(Boolean));
+  }
+
+  function planCard(c, plan, past) {
+    const copy = c.plans[plan];
+    const label = plan === 'primary' ? 'Primary' : 'Alternative';
+    const lib = copy ? db.routes.find((r) => r.id === copy.route_id) : null;
+    const routeSelect = el('select', { 'aria-label': `${label} route` },
+      el('option', { value: '' }, copy ? 'Change route…' : 'Choose a library route…'),
+      db.routes.map((r) => el('option', { value: r.id }, `${r.name} · ${routeNm(r.points).toFixed(0)} nm`)));
+    const assignBtn = el('button', { type: 'button', class: 'text-btn', onclick: () => { if (routeSelect.value) assignRoute(c, plan, routeSelect.value); } }, 'Assign');
+
+    const summary = copy
+      ? el('div', { class: 'route-summary' }, el('b', {}, copy.route_name), ` · ${routeNm(copy.coordinates).toFixed(1)} nm · revision ${copy.revision} · assigned ${copy.assigned_at}`)
+      : el('div', { class: 'empty' }, 'No route assigned.');
+
+    let status = null;
+    if (copy && !lib) status = el('div', { class: 'banner info' }, 'The library route has been deleted. This charter keeps its copy.');
+    else if (copy && lib.revision > copy.revision && copy.kept_revision !== lib.revision) {
+      status = el('div', { class: 'banner warn' }, `Edited since assigned: the library route is at revision ${lib.revision}, this charter has revision ${copy.revision}. `,
+        past ? 'This charter has ended, so its copy stays as it is.' : el('span', {},
+          el('button', { type: 'button', class: 'text-btn', style: 'min-height:30px;margin:6px 6px 0 0', onclick: () => assignRoute(c, plan, lib.id, 'Updated') }, 'Update'),
+          el('button', { type: 'button', class: 'text-btn secondary', style: 'min-height:30px;margin-top:6px', onclick: () => { setPlan(c, plan, { ...copy, kept_revision: lib.revision }); toast('Kept the assigned copy.'); } }, 'Keep')));
     }
-    ws.innerHTML = `
-      <section class="card">
-        <div class="card-header">
-          <h2>Routes</h2>
-          <div class="icon-row">
-            <button class="icon-btn success" id="act-save" title="Save route" aria-label="Save route">${svg("save")}</button>
-            <button class="icon-btn danger" id="act-cancel" title="Discard changes" aria-label="Discard changes">${svg("cancel")}</button>
-            <span class="icon-sep"></span>
-            <button class="icon-btn" id="act-new" title="New route" aria-label="New route">${svg("add")}</button>
-            <button class="icon-btn" id="act-saveas" title="Save as new route" aria-label="Save as new route">${svg("saveas")}</button>
-            <button class="icon-btn" id="act-import" title="Import KML or GPX" aria-label="Import KML or GPX">${svg("import")}</button>
-            <button class="icon-btn" id="act-export" title="Export GPX or KML" aria-label="Export GPX or KML">${svg("export")}</button>
-            <button class="icon-btn" id="act-delete" title="Delete route" aria-label="Delete route">${svg("trash")}</button>
-          </div>
-        </div>
-        <div class="planner">
-          <div class="side" id="side"></div>
-          <div class="mapwrap">
-            <div id="map"></div>
-            <div class="toolbar">
-              <div class="toolgroup" id="modes">
-                <button data-mode="select" title="Select: tap to inspect, drag points to move">${svg("pointer")}<span class="lbl">Select</span></button>
-                <button data-mode="add" title="Add points to the end">${svg("pen")}<span class="lbl">Add</span></button>
-                <button data-mode="delete" title="Tap points to delete">${svg("eraser")}<span class="lbl">Delete</span></button>
-                <button data-mode="anchorage" title="Tap the map to add an anchorage">${svg("anchor")}<span class="lbl">Anchorage</span></button>
-              </div>
-              <div class="toolgroup">
-                <button id="undo" title="Undo (Ctrl+Z)">${svg("undo")}<span class="lbl">Undo</span></button>
-                <button id="redo" title="Redo (Ctrl+Y)">${svg("redo")}<span class="lbl">Redo</span></button>
-              </div>
-            </div>
-            <div class="layers" id="layers">
-              <label><input type="checkbox" data-layer="sites" ${state.layers.sites ? "checked" : ""}><i style="background:var(--site)"></i>Sites</label>
-              <label><input type="checkbox" data-layer="anchorages" ${state.layers.anchorages ? "checked" : ""}><i style="background:var(--stop)"></i>Anchorages</label>
-              <label><input type="checkbox" data-layer="pins" ${state.layers.pins ? "checked" : ""}><i style="background:var(--pin);border-radius:2px"></i>Imported pins</label>
-            </div>
-            <div class="hint" id="hint"></div>
-          </div>
-        </div>
-      </section>`;
-    document.getElementById("act-save").onclick = () => saveRoute(false);
-    document.getElementById("act-cancel").onclick = () => {
-      if (!isDirty()) { toast("No changes to discard."); return; }
-      confirmModal("Discard Changes", "Revert this route to its last saved version?", () => {
-        const src = library.find(x => x.id === state.current.id) || charterCopies.find(x => x.id === state.current.id);
-        if (src) loadRoute(src, state.readonly); else loadRoute({ id: "", name: "", description: "", points: [] }, false);
-        refresh(true);
-      }, "Discard");
-    };
-    document.getElementById("act-new").onclick = newRoute;
-    document.getElementById("act-saveas").onclick = () => saveRoute(true);
-    document.getElementById("act-import").onclick = importModal;
-    document.getElementById("act-export").onclick = exportModal;
-    document.getElementById("act-delete").onclick = deleteRoute;
-    document.querySelectorAll("#modes [data-mode]").forEach(b => b.onclick = () => {
-      if (state.readonly && b.dataset.mode !== "select" && b.dataset.mode !== "anchorage") { toast("Charter copies are read-only. Use Save As to edit."); return; }
-      state.mode = b.dataset.mode; refresh();
-    });
-    document.getElementById("undo").onclick = undo;
-    document.getElementById("redo").onclick = redo;
-    document.querySelectorAll("#layers [data-layer]").forEach(c => c.onchange = () => { state.layers[c.dataset.layer] = c.checked; drawMap(); });
-    initMap();
-    refresh(true);
+
+    return el('div', { class: 'plan-card' },
+      el('h3', {}, `${label} plan`, el('span', { class: 'tag' }, 'Route')),
+      el('div', { class: 'plan-route' },
+        summary, status,
+        el('div', { class: 'row' },
+          past ? null : routeSelect, past ? null : assignBtn,
+          copy ? el('button', { type: 'button', class: 'text-btn secondary', onclick: () => openInPlanner(c, plan) }, 'Open in planner') : null,
+          copy && !past ? el('button', { type: 'button', class: 'text-btn danger-text', onclick: () => unassignRoute(c, plan) }, 'Unassign') : null)));
   }
 
-  function initMap() {
-    map = L.map("map", { zoomControl: false }).setView([12.08, 120.0], 10);
-    L.control.zoom({ position: "bottomright" }).addTo(map);
-    L.control.scale({ position: "bottomleft", metric: true, imperial: false }).addTo(map);
-    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
-      maxZoom: 18, attribution: "Tiles &copy; Esri"
-    }).addTo(map);
-    ["route", "tender", "anch", "sites", "pins", "points", "mids"].forEach(k => layers[k] = L.layerGroup().addTo(map));
-    map.on("click", e => {
-      if (state.mode === "add" && !state.readonly) addPoint({ latitude: e.latlng.lat, longitude: e.latlng.lng });
-      else if (state.mode === "anchorage") anchorageModal(null, e.latlng);
-    });
+  function setPlan(c, plan, value) {
+    db.charters = db.charters.map((x) => (x.id === c.id ? { ...x, plans: { ...x.plans, [plan]: value } } : x));
+    renderItinerary();
+  }
+  function assignRoute(c, plan, routeId, verb) {
+    const r = db.routes.find((x) => x.id === routeId);
+    if (!r) return;
+    setPlan(c, plan, { route_id: r.id, route_name: r.name, revision: r.revision, assigned_at: TODAY, coordinates: r.points.map((p) => ({ latitude: p.latitude, longitude: p.longitude })) });
+    toast(`${verb || 'Assigned'} "${r.name}" (revision ${r.revision}) to ${plan === 'primary' ? 'Primary' : 'Alternative'}. A copy was written to the charter.`);
+  }
+  async function unassignRoute(c, plan) {
+    if (!(await confirmDialog('Unassign route?', `Remove the ${plan === 'primary' ? 'Primary' : 'Alternative'} route from ${c.name}? Guests will see no planned route for that plan.`, 'Unassign'))) return;
+    setPlan(c, plan, null);
+  }
+  async function openInPlanner(c, plan) {
+    if (!(await guardDiscard('Open another route'))) return;
+    const copy = c.plans[plan];
+    const lib = db.routes.find((r) => r.id === copy.route_id);
+    showView('routes');
+    // Open the library route when the copy still matches it; otherwise the frozen charter copy.
+    if (lib && lib.revision === copy.revision) openLibraryRoute(lib.id); else openCharterCopy(c.id, plan);
   }
 
-  function refresh(fit) {
-    if (state.tab !== "routes" || !map) return;
-    renderSide();
-    drawMap();
-    document.querySelectorAll("#modes [data-mode]").forEach(b => b.setAttribute("aria-pressed", b.dataset.mode === state.mode ? "true" : "false"));
-    document.getElementById("undo").disabled = !state.undo.length;
-    document.getElementById("redo").disabled = !state.redo.length;
-    document.getElementById("act-delete").disabled = state.readonly || !library.some(x => x.id === state.current.id);
-    document.getElementById("act-save").title = state.readonly ? "Charter copy: Save As a new route" : "Save route";
-    const hints = {
-      select: "Drag a point to move it. Drag a faint midpoint to insert one. Tap anything to inspect it.",
-      add: "Tap the map to add a point. Tap an anchorage to add a stop, or a site to add a waypoint.",
-      delete: "Tap a route point to delete it.",
-      anchorage: "Tap the map to add an anchorage. Tap an anchorage to edit it, or drag to move it."
-    };
-    document.getElementById("hint").textContent = state.readonly ? "Read-only charter copy. Use Save As to make an editable route." : hints[state.mode];
-    if (fit) {
-      const pts = state.current.points.concat(state.pins);
-      if (pts.length >= 2) map.fitBounds(L.latLngBounds(pts.map(p => [p.latitude, p.longitude])).pad(0.15));
-      else map.setView([12.08, 120.0], 10);
-    }
-  }
-
-  function renderSide() {
-    const r = state.current, pts = r.points;
-    const stops = pts.map((p, i) => ({ p, i })).filter(x => x.p.anchorage_id);
-    const len = routeLength(pts);
-    const side = document.getElementById("side");
-    const option = (x, ro) => `<option value="${ro ? "c:" : "l:"}${esc(x.id)}" ${x.id === r.id ? "selected" : ""}>${esc(x.name)} · ${fmtNm(routeLength(x.points))} nm</option>`;
-    side.innerHTML = `
-      <div><label for="rt-pick">Route</label>
-        <select id="rt-pick">
-          ${r.id ? "" : `<option selected>New route (unsaved)</option>`}
-          <optgroup label="Library">${library.map(x => option(x, false)).join("")}</optgroup>
-          <optgroup label="Charter copies (read-only)">${charterCopies.map(x => option(x, true)).join("")}</optgroup>
-        </select></div>
-      ${state.readonly ? `<div class="readonly-note">This is the frozen copy assigned to a completed charter. You can view and export it. To change it, use <b>Save As</b> to make a new library route.</div>` : ""}
-      <div><label for="rt-name">Name</label><input type="text" id="rt-name" value="${esc(r.name)}" ${state.readonly ? "disabled" : ""} placeholder="e.g. Coron loop"></div>
-      <div><label for="rt-desc">Description</label><textarea id="rt-desc" rows="2" ${state.readonly ? "disabled" : ""}>${esc(r.description)}</textarea></div>
-      <div class="stats">
-        <div class="stat"><b>${fmtNm(len)}</b><span>nm total</span></div>
-        <div class="stat"><b>${pts.length}</b><span>points</span></div>
-        <div class="stat"><b>${stops.length}</b><span>stops</span></div>
-      </div>
-      <div>
-        <p class="section-title">Stops</p>
-        ${stops.length ? `<ol class="stops">${stops.map(({ p, i }, n) => {
-          const a = A(p.anchorage_id);
-          const moved = a && distNm(a, p) > 0.03;
-          return `<li><span class="num">${n + 1}</span><b>${esc(p.name)}</b>
-            ${!a ? `<span class="warnbadge">⚠ anchorage deleted</span>` : moved ? `<span class="warnbadge" title="The anchorage is now ${fmtNm(distNm(a, p))} nm from this stop">⚠ anchorage moved</span>` : ""}
-            ${a && a.depth_m !== "" ? `<span class="muted"> · ${esc(a.depth_m)} m</span>` : ""}
-            <div class="served">${p.site_ids.length ? p.site_ids.map(id => sites.find(s => s.id === id)).filter(Boolean).map(s => `<span>${esc(s.title)}</span>`).join("") : "No sites linked"}</div>
-            ${state.readonly ? "" : `<button class="link" data-served="${i}">Edit sites served</button>`}</li>`;
-        }).join("")}</ol>` : `<p class="muted">No stops yet. In <b>Add</b> mode, tap an anchorage to make it a stop.</p>`}
-      </div>
-      <div>
-        <p class="section-title">Legs</p>
-        <label for="rt-speed" style="display:flex;gap:8px;align-items:center;font-weight:400">Planning speed <input type="number" id="rt-speed" min="1" max="30" step="0.5" value="${state.speed}" style="width:80px;min-height:32px"> kn</label>
-        ${pts.length >= 2 ? `<table class="legs"><thead><tr><th>#</th><th>To</th><th class="n">nm</th><th class="n">°T</th><th class="n">h:mm</th></tr></thead><tbody>
-          ${pts.slice(1).map((p, i) => {
-            const d = distNm(pts[i], p), h = d / state.speed;
-            return `<tr><td>${i + 1}</td><td>${esc(p.name || `WP${String(i + 2).padStart(2, "0")}`)}</td><td class="n">${d.toFixed(1)}</td><td class="n">${String(Math.round(bearing(pts[i], p)) % 360).padStart(3, "0")}</td><td class="n">${Math.floor(h)}:${String(Math.round((h % 1) * 60)).padStart(2, "0")}</td></tr>`;
-          }).join("")}
-          </tbody><tfoot><tr><th></th><th>Total</th><th class="n">${len.toFixed(1)}</th><th></th><th class="n">${(() => { const h = len / state.speed; return `${Math.floor(h)}:${String(Math.round((h % 1) * 60)).padStart(2, "0")}`; })()}</th></tr></tfoot></table>`
-          : `<p class="muted">Add at least two points.</p>`}
-      </div>
-      ${state.pins.length ? `<div><p class="section-title">Imported pins (not saved)</p><p class="muted">${state.pins.length} pin${state.pins.length === 1 ? "" : "s"} on the map. Tap one to add it to the route, or make it an anchorage or a site.</p></div>` : ""}
-      <p class="muted">${r.id ? `Revision ${r.revision || 0}` : "Not saved yet"}${isDirty() ? " · <b style=\"color:var(--warn)\">unsaved changes</b>" : ""}</p>`;
-    side.querySelector("#rt-pick").onchange = e => {
-      const [kind, id] = e.target.value.split(/:(.*)/s);
-      const target = kind === "c" ? charterCopies.find(x => x.id === id) : library.find(x => x.id === id);
-      e.target.value = `${state.readonly ? "c" : "l"}:${r.id}`;
-      guardDiscard(() => { loadRoute(target, kind === "c"); refresh(true); });
-    };
-    const nameEl = side.querySelector("#rt-name"), descEl = side.querySelector("#rt-desc");
-    nameEl.oninput = () => { r.name = nameEl.value; };
-    descEl.oninput = () => { r.description = descEl.value; };
-    nameEl.onchange = descEl.onchange = () => renderSide();
-    side.querySelector("#rt-speed").onchange = e => { const v = Number(e.target.value); if (v > 0) { state.speed = v; renderSide(); } };
-    side.querySelectorAll("[data-served]").forEach(b => b.onclick = () => sitesServedModal(Number(b.dataset.served)));
-  }
-
-  function divIcon(cls, html = "", size = [14, 14]) {
-    return L.divIcon({ className: "", html: `<div class="${cls}">${html}</div>`, iconSize: size, iconAnchor: [size[0] / 2, size[1] / 2] });
-  }
-
-  function popupEl(html, handlers) {
-    const el = document.createElement("div");
-    el.className = "popup"; el.innerHTML = html;
-    Object.entries(handlers).forEach(([sel, fn]) => el.querySelectorAll(sel).forEach(b => b.addEventListener("click", ev => { ev.stopPropagation(); map.closePopup(); fn(ev); })));
-    return el;
-  }
-
-  function drawMap() {
-    Object.values(layers).forEach(l => l.clearLayers());
-    const r = state.current, pts = r.points;
-    const ll = p => [p.latitude, p.longitude];
-    const routeLine = L.polyline(pts.map(ll), { color: "#ffd54a", weight: 4, opacity: 0.95 }).addTo(layers.route);
-    L.polyline(pts.map(ll), { color: "#0b2730", weight: 8, opacity: 0.35 }).addTo(layers.route).bringToBack();
-    const usedAnch = new Set(pts.filter(p => p.anchorage_id).map(p => p.anchorage_id));
-
-    // tender lines from stops to their sites
-    pts.forEach(p => (p.site_ids || []).forEach(id => {
-      const s = sites.find(x => x.id === id);
-      if (s && state.layers.sites) L.polyline([ll(p), ll(s)], { color: "#fff", weight: 2, dashArray: "4 6", opacity: 0.8, interactive: false }).addTo(layers.tender);
-    }));
-
-    // sites
-    if (state.layers.sites) sites.forEach(s => {
-      const m = L.marker(ll(s), { icon: L.divIcon({ className: "", html: '<div class="sitem"></div>', iconSize: [18, 18], iconAnchor: [9, 18] }) })
-        .bindTooltip(s.title, { className: "lbl", direction: "top", offset: [0, -16] }).addTo(layers.sites);
-      m.on("click", () => {
-        if (state.mode === "add" && !state.readonly) addPoint({ latitude: s.latitude, longitude: s.longitude, site_id: s.id, name: s.title });
-        else siteModal(s);
-      });
-    });
-
-    // anchorages (unused ones dimmed; draggable in Anchorage mode)
-    if (state.layers.anchorages) anchorages.forEach(a => {
-      const m = L.marker(ll(a), { icon: divIcon("anch", svg("anchor"), [26, 26]), opacity: usedAnch.has(a.id) ? 0.55 : 0.9, draggable: state.mode === "anchorage" })
-        .bindTooltip(`${a.name}${a.depth_m !== "" ? ` · ${a.depth_m} m` : ""}`, { className: "lbl", direction: "top", offset: [0, -14] }).addTo(layers.anch);
-      m.on("click", () => {
-        if (state.mode === "add" && !state.readonly) addPoint(stopFrom(a, sites.filter(s => distNm(a, s) <= 2).map(s => s.id)));
-        else anchorageModal(a);
-      });
-      m.on("dragend", () => { const p = m.getLatLng(); a.latitude = p.lat; a.longitude = p.lng; toast(`Moved “${a.name}”. Routes using it keep their stop position.`); refresh(); });
-    });
-
-    // imported pins
-    if (state.layers.pins) state.pins.forEach((p, idx) => {
-      const m = L.marker(ll(p), { icon: divIcon("pinm", "", [18, 18]), draggable: true })
-        .bindTooltip(p.name, { className: "lbl", direction: "top", offset: [0, -12] }).addTo(layers.pins);
-      m.on("dragend", () => { const q = m.getLatLng(); p.latitude = q.lat; p.longitude = q.lng; p.near = nearestLabel(p); });
-      m.on("click", () => {
-        const promote = () => { state.pins.splice(state.pins.indexOf(p), 1); };
-        L.popup().setLatLng(ll(p)).setContent(popupEl(`
-          <h4>${esc(p.name)}</h4><div class="meta">Imported pin · ${fmtPos(p)}${p.near ? `<br>⚠ ${esc(p.near)}` : ""}${p.description ? `<br>${esc(p.description)}` : ""}</div>
-          ${state.readonly ? "" : `<button data-a="route">Add to end of route</button>`}
-          <button data-a="anch">Make anchorage…</button>
-          <button data-a="site">Make site…</button>
-          <button class="del" data-a="del">Delete pin</button>`, {
-          "[data-a=route]": () => { promote(); addPoint({ latitude: p.latitude, longitude: p.longitude, name: p.name }); },
-          "[data-a=anch]": () => anchorageModal(null, { lat: p.latitude, lng: p.longitude }, a => { promote(); a.notes = a.notes || p.description || ""; refresh(); }),
-          "[data-a=site]": () => siteModal(null, { lat: p.latitude, lng: p.longitude }, () => { promote(); refresh(); }),
-          "[data-a=del]": () => { promote(); refresh(); }
-        })).openOn(map);
-      });
-    });
-
-    // route points
-    let stopNo = 0;
-    const editable = !state.readonly && state.mode !== "delete" && state.mode !== "anchorage";
-    pts.forEach((p, i) => {
-      const isStop = !!p.anchorage_id;
-      const icon = isStop ? divIcon("stopm", String(++stopNo), [28, 28]) : divIcon(`pt${i === 0 ? " first" : ""}`, "", [14, 14]);
-      const m = L.marker(ll(p), { icon, draggable: editable, zIndexOffset: isStop ? 900 : 800 }).addTo(layers.points);
-      if (p.name) m.bindTooltip(p.name, { className: "lbl", direction: "right", offset: [12, 0] });
-      m.on("dragstart", () => pushHistory());
-      m.on("drag", () => { const q = m.getLatLng(); p.latitude = q.lat; p.longitude = q.lng; routeLine.setLatLngs(pts.map(ll)); });
-      m.on("dragend", () => {
-        if (isStop) { delete p.anchorage_id; p.site_ids = []; toast("Stop moved off its anchorage, so it's now a plain waypoint."); }
-        refresh();
-      });
-      m.on("click", () => {
-        if (state.mode === "delete" && !state.readonly) { removePoint(i); return; }
-        const html = `
-          <h4>${isStop ? `Stop ${pts.slice(0, i + 1).filter(x => x.anchorage_id).length}` : `Point ${i + 1}`}${p.name ? `: ${esc(p.name)}` : ""}</h4>
-          <div class="meta">${fmtPos(p)}${i > 0 ? ` · ${distNm(pts[i - 1], p).toFixed(1)} nm from previous` : ""}</div>
-          ${state.readonly ? "" : `
-            <input type="text" data-name placeholder="Label (optional)" value="${esc(p.name || "")}">
-            ${isStop ? `<button data-a="served">Sites served (${p.site_ids.length})…</button>` : `<button data-a="anch">Make anchorage (stop)…</button>`}
-            <button data-a="site">Make site…</button>
-            <button class="del" data-a="del">Delete point</button>`}`;
-        const el = popupEl(html, {
-          "[data-a=served]": () => sitesServedModal(i),
-          "[data-a=anch]": () => anchorageModal(null, { lat: p.latitude, lng: p.longitude }, a => { pushHistory(); Object.assign(p, stopFrom(a, sites.filter(s => distNm(a, s) <= 2).map(s => s.id))); refresh(); }),
-          "[data-a=site]": () => siteModal(null, { lat: p.latitude, lng: p.longitude }, s => { if (!isStop) { pushHistory(); p.site_id = s.id; p.name = p.name || s.title; refresh(); } }),
-          "[data-a=del]": () => removePoint(i)
-        });
-        const nameIn = el.querySelector("[data-name]");
-        if (nameIn) nameIn.addEventListener("change", () => { pushHistory(); p.name = nameIn.value.trim(); if (!p.name) delete p.name; refresh(); });
-        L.popup({ offset: [0, -6] }).setLatLng(ll(p)).setContent(el).openOn(map);
-      });
-    });
-
-    // midpoint handles (drag to insert)
-    if (editable) pts.slice(1).forEach((p, j) => {
-      const a = pts[j];
-      const mid = L.marker([(a.latitude + p.latitude) / 2, (a.longitude + p.longitude) / 2], { icon: divIcon("mid", "", [12, 12]), draggable: true, zIndexOffset: 700, title: "Drag to insert a point" }).addTo(layers.mids);
-      let idx = -1;
-      mid.on("dragstart", () => { pushHistory(); const q = mid.getLatLng(); idx = j + 1; pts.splice(idx, 0, { latitude: q.lat, longitude: q.lng }); });
-      mid.on("drag", () => { const q = mid.getLatLng(); pts[idx].latitude = q.lat; pts[idx].longitude = q.lng; routeLine.setLatLngs(pts.map(ll)); });
-      mid.on("dragend", () => refresh());
-      mid.on("click", () => { pushHistory(); pts.splice(j + 1, 0, { latitude: mid.getLatLng().lat, longitude: mid.getLatLng().lng }); refresh(); });
-    });
-  }
-
-  // ---------- itinerary mock ----------
-  const assignments = {
-    primary: { route_id: "coron-loop", revision: 3, assigned_at: "2026-10-01" },
-    alternative: { route_id: "", revision: 0, assigned_at: "" }
-  };
-  function itineraryHtml() {
-    const row = (planId, label) => {
-      const asg = assignments[planId];
-      const route = library.find(x => x.id === asg.route_id);
-      return `<div class="itin-plan"><h3>${label}</h3>
-        <div class="route-row">
-          <label for="as-${planId}" class="muted">Route</label>
-          <select id="as-${planId}" data-plan="${planId}">
-            <option value="">None assigned</option>
-            ${library.map(x => `<option value="${esc(x.id)}" ${x.id === asg.route_id ? "selected" : ""}>${esc(x.name)} · ${fmtNm(routeLength(x.points))} nm</option>`).join("")}
-          </select>
-          ${route ? `<span class="muted">Assigned ${esc(asg.assigned_at)} · rev ${asg.revision}</span>
-            <button class="btn" data-open="${esc(route.id)}">Open in planner</button>` : ""}
-        </div>
-        ${route && route.revision > asg.revision ? `<div class="banner">⚠ <b>${esc(route.name)}</b> has been edited since it was assigned (rev ${asg.revision} → ${route.revision}).
-          <button class="btn primary" data-update="${planId}">Update this charter's copy</button><button class="btn" data-keep="${planId}">Keep</button></div>` : ""}
-        ${planId === "alternative" && !route ? `<p class="muted" style="margin:10px 0 0">Guests fall back to the Primary route on days that use the Alternative itinerary until an Alternative route is assigned.</p>` : ""}
-      </div>`;
-    };
-    return `<section class="card"><div class="card-header"><h2>Itinerary · route assignment</h2></div>
-      <p class="muted">Only the new route rows are mocked here. The day-by-day itinerary editor stays as it is. Assigning copies the route into this charter, so later library edits never change it silently. After the charter's end date these rows become read-only.</p>
-      ${row("primary", "Primary Itinerary")}${row("alternative", "Alternative Itinerary")}</section>`;
-  }
-  function bindItinerary() {
-    document.querySelectorAll("[data-plan]").forEach(s => s.onchange = () => {
-      const r = library.find(x => x.id === s.value);
-      assignments[s.dataset.plan] = r ? { route_id: r.id, revision: r.revision, assigned_at: new Date().toISOString().slice(0, 10) } : { route_id: "", revision: 0, assigned_at: "" };
-      toast(r ? `Copied “${r.name}” into this charter's ${s.dataset.plan} route.` : "Route unassigned.");
-      render();
-    });
-    document.querySelectorAll("[data-update]").forEach(b => b.onclick = () => { const a = assignments[b.dataset.update]; a.revision = library.find(x => x.id === a.route_id).revision; toast("Charter copy updated."); render(); });
-    document.querySelectorAll("[data-keep]").forEach(b => b.onclick = () => { const a = assignments[b.dataset.keep]; a.revision = library.find(x => x.id === a.route_id).revision; toast("Kept the assigned copy."); render(); });
-    document.querySelectorAll("[data-open]").forEach(b => b.onclick = () => { loadRoute(library.find(x => x.id === b.dataset.open), false); state.tab = "routes"; render(); });
+  // ---------- views ----------
+  async function showView(view, stubTitle) {
+    if (ui.view === 'routes' && view !== 'routes' && !(await guardDiscard('Leave Routes'))) return;
+    ui.view = view;
+    document.querySelectorAll('.section-nav button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.view === view && (view !== 'stub' || b.dataset.stub === stubTitle))));
+    $('view-routes').hidden = view !== 'routes';
+    $('view-itinerary').hidden = view !== 'itinerary';
+    $('view-stub').hidden = view !== 'stub';
+    if (view === 'stub') $('stub-title').textContent = stubTitle;
+    if (view === 'itinerary') renderItinerary();
+    if (view === 'routes' && map) setTimeout(() => map.invalidateSize(), 0);
   }
 
   // ---------- wiring ----------
-  document.querySelectorAll("#nav button").forEach(b => b.onclick = () => {
-    if (b.dataset.tab === state.tab) return;
-    const go = () => { state.tab = b.dataset.tab; render(); };
-    if (state.tab === "routes") guardDiscard(go); else go();
-  });
-  document.addEventListener("keydown", e => {
-    if (state.tab !== "routes" || document.querySelector(".backdrop") || /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
-    else if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === "y" || (e.key.toLowerCase() === "z" && e.shiftKey))) { e.preventDefault(); redo(); }
-  });
-  if (!window.L) {
-    document.getElementById("workspace").innerHTML = `<section class="card"><p>Leaflet couldn't load. This mockup needs an internet connection for the map library and satellite tiles.</p></section>`;
-    return;
+  function bind() {
+    document.querySelectorAll('.section-nav button').forEach((b) => b.addEventListener('click', () => showView(b.dataset.view, b.dataset.stub)));
+    $('route-picker').addEventListener('change', async (e) => {
+      const value = e.target.value;
+      if (!(await guardDiscard('Open another route'))) { renderPicker(); return; }
+      if (value.startsWith('lib:')) openLibraryRoute(value.slice(4));
+      else if (value.startsWith('copy:')) { const [, cid, plan] = value.split(':'); openCharterCopy(cid, plan); }
+    });
+    $('route-name').addEventListener('input', (e) => { work.route = { ...work.route, name: e.target.value }; renderActions(); renderStats(); });
+    $('route-desc').addEventListener('input', (e) => { work.route = { ...work.route, description: e.target.value }; renderActions(); renderStats(); });
+    $('speed').value = loadSpeed();
+    $('speed').addEventListener('input', () => { storeSpeed($('speed').value); renderStats(); });
+    $('itin-charter').addEventListener('change', (e) => { ui.itinCharter = e.target.value; renderItinerary(); });
+    document.addEventListener('keydown', (e) => {
+      if (ui.view !== 'routes' || $('modal-root').children.length) return;
+      if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;
+      const key = e.key.toLowerCase();
+      if ((e.ctrlKey || e.metaKey) && key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+      if ((e.ctrlKey || e.metaKey) && (key === 'y' || (key === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
+    });
+    window.addEventListener('beforeunload', (e) => { if (isDirty() || pins.length) { e.preventDefault(); e.returnValue = ''; } });
+
+    $('demo-clash').addEventListener('click', () => {
+      const stored = work.route.id && db.routes.find((r) => r.id === work.route.id);
+      if (!stored) return toast('Open a saved library route first.');
+      db.routes = db.routes.map((r) => (r.id === stored.id ? { ...r, revision: r.revision + 1, updated_at: nowIso() } : r));
+      renderPicker();
+      toast(`Another user saved "${stored.name}" (now revision ${stored.revision + 1}). Edit something and press Save to see the clash.`);
+    });
+    $('demo-reset').addEventListener('click', () => {
+      db = demoData(); pins = []; ui.mode = 'select';
+      openLibraryRoute('coron-loop');
+      if (ui.view === 'itinerary') renderItinerary();
+      toast('Demo data reset.');
+    });
   }
-  render();
+
+  bind();
+  initMap();
+  openLibraryRoute('coron-loop');
 })();
 </script>
 </body>
