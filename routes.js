@@ -1,5 +1,5 @@
 // Routes panel (Charter → Routes). Uses window.IolantheAdmin (admin.js) and window.IolantheRoutesCore.
-// Ported from docs/route-planner/planner-mockup.html. The map, saving and modals are added in later tasks.
+// Ported from docs/route-planner/planner-mockup.html. Saving and modals are added in a later task.
 (function () {
   "use strict";
 
@@ -14,12 +14,37 @@
   let history = { undo: [], redo: [] };
   let guard = null;      // page unsaved-changes guard
 
-  // Hooks the map (Task 5) fills in. Until then they do nothing.
-  const mapHooks = {
-    render: (opts) => {},
-    focusPoint: (index) => {},
-    focusLeg: (leg) => {}
+  const MAP_CENTER = [12.1, 120.0];
+  let map = null;        // Leaflet map for the current panel
+  const groups = {};     // Leaflet layer groups
+  let routeLines = [];
+  let pointMarkers = [];
+  let keyHandler = null; // document keydown listener (undo/redo), removed on the next bind
+  const ui = { mode: "select" };
+
+  const ICONS = {
+    check: '<path d="M5 12l5 5 9-10"/>',
+    cancel: '<path d="M6 6l12 12M18 6L6 18"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    saveAs: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
+    trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
+    undo: '<path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/>',
+    redo: '<path d="M15 14l5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/>',
+    select: '<path d="M5 3l14 7-6 2-2 6z"/>',
+    add: '<path d="M4 20l4-1L19 8l-3-3L5 16z"/><path d="M14 7l3 3"/>',
+    erase: '<path d="M7 21h10M5 15l9-9 5 5-9 9H8z"/>',
+    join: '<circle cx="5" cy="6" r="2"/><circle cx="5" cy="18" r="2"/><path d="M7 6h3a4 4 0 0 1 4 4v0a4 4 0 0 0 4 4h3M7 18h3a4 4 0 0 0 4-4"/><path d="M18 11l3 3-3 3"/>'
   };
+  const svg = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
+
+  const MODES = [
+    { id: "select", label: "Select", icon: "select", hint: "Tap a point to inspect it. Drag a point to move it, or drag a faint midpoint to insert one." },
+    { id: "add", label: "Add", icon: "add", hint: "Tap the map to add a point at the end." },
+    { id: "delete", label: "Delete", icon: "erase", hint: "Tap a route point to delete it." }
+  ];
+
+  // Task 6 wires the header actions that use this.
+  const noop = () => {};
 
   // ---------- helpers ----------
   function el(tag, attrs, ...children) {
@@ -35,6 +60,7 @@
   }
   const $ = (id) => panel.querySelector(`#routes-${id}`);
   const fmtDate = (iso) => (iso || "").slice(0, 10);
+  const fmtPos = (p) => `${p.latitude.toFixed(4)}, ${p.longitude.toFixed(4)}`;
   const speedKn = () => (work && work.route.speed_kn) || 0;
 
   function loadSpeed() {
@@ -164,7 +190,7 @@
     let n = 0;
     const stops = pts.map((p, i) => ({ p, i })).filter(({ p }) => core().isStop(p)).map(({ p, i }) => {
       n += 1;
-      return el("div", { class: "stop-item", onclick: () => mapHooks.focusPoint(i) },
+      return el("div", { class: "stop-item", onclick: () => focusPoint(i) },
         el("div", { class: "title" }, el("span", { class: "stop-num" }, n), p.name || "Stop"));
     });
     $("count-stops").textContent = stops.length || "";
@@ -174,7 +200,7 @@
 
     const r = work.route;
     const src = r.source || {};
-    const srcText = src.type === "charter" ? "migrated from a charter" : src.type === "kml" || src.type === "gpx" ? `imported from ${src.filename}` : "planner";
+    const srcText = src.type === "charter" ? "migrated from a charter" : src.type === "kml" || src.type === "gpx" ? `imported from ${src.filename || src.type}` : "planner";
     $("meta").textContent = r.id
       ? `Revision ${r.revision} · updated ${fmtDate(r.updated_at)} · source: ${srcText}${isDirty() ? " · unsaved changes" : ""}`
       : (isDirty() ? "Unsaved new route" : "");
@@ -223,7 +249,7 @@
     const total = legs.reduce((sum, l) => sum + l.nm, 0);
     const hours = core().totalHours(legs);
     $("legs").replaceChildren(
-      ...legs.map((l, k) => el("div", { class: `stop-item leg-item${l.own ? " custom" : ""}`, title: "Show this leg on the map", onclick: () => mapHooks.focusLeg(l) },
+      ...legs.map((l, k) => el("div", { class: `stop-item leg-item${l.own ? " custom" : ""}`, title: "Show this leg on the map", onclick: () => focusLeg(l) },
         el("div", { class: "title" }, el("span", { class: "stop-num" }, k + 1), `${l.from} → ${l.to}`),
         el("div", { class: "leg-meta" }, `${l.nm.toFixed(1)} nm`,
           l.hours !== null ? el("span", {}, " · ", el("b", {}, core().fmtHm(l.hours)), ` at ${l.speed} kn`) : null),
@@ -246,27 +272,218 @@
       $("speed").value = work.route.speed_kn || "";
     }
     renderPicker();
+    renderActions();
     renderStats();
-    mapHooks.render(o);
+    renderModes();
+    renderMap(o);
+  }
+
+  // ---------- header actions ----------
+  function renderActions() {
+    const dirty = isDirty();
+    const hasId = Boolean(work.route.id);
+    const b = (icon, title, onclick, cls, disabled) => {
+      const btn = el("button", { type: "button", class: `icon-btn ${cls || ""}`.trim(), title, "aria-label": title, onclick, disabled });
+      btn.innerHTML = svg(icon);
+      return btn;
+    };
+    $("actions").replaceChildren(
+      b("check", "Save", noop, "success", !dirty && hasId),
+      b("cancel", "Cancel (discard changes)", noop, "danger", !dirty),
+      el("span", { class: "icon-sep" }),
+      b("undo", "Undo (Ctrl+Z)", undo, "", !history.undo.length),
+      b("redo", "Redo (Ctrl+Y)", redo, "", !history.redo.length),
+      el("span", { class: "icon-sep" }),
+      b("plus", "New route", noop),
+      b("saveAs", "Save As", noop, "", work.route.points.length < 2),
+      b("join", "Add another route to this one", noop),
+      b("trash", "Delete route", noop, "", !hasId));
+  }
+
+  // ---------- map ----------
+  function renderModes() {
+    $("modes").replaceChildren(...MODES.map((m) => {
+      const btn = el("button", { type: "button", "aria-pressed": String(ui.mode === m.id), title: m.label, onclick: () => setMode(m.id) });
+      btn.innerHTML = `${svg(m.icon)}<span class="lbl">${m.label}</span>`;
+      return btn;
+    }));
+    $("map-hint").textContent = MODES.find((m) => m.id === ui.mode).hint;
+  }
+
+  function applyModeClass() {
+    if (!map) return;
+    const box = $("map");
+    MODES.forEach((m) => box.classList.toggle(`mode-${m.id}`, m.id === ui.mode));
+  }
+
+  function setMode(mode) {
+    ui.mode = mode;
+    if (map) { map.closePopup(); applyModeClass(); }
+    renderModes();
+    renderMap();
+  }
+
+  function destroyMap() {
+    if (map) { map.remove(); map = null; }
+    Object.keys(groups).forEach((k) => delete groups[k]);
+    routeLines = [];
+    pointMarkers = [];
+  }
+
+  async function initMap(mine) {
+    const container = $("map");
+    let L;
+    try {
+      L = await A().loadLeaflet();
+    } catch (error) {
+      if (panel !== mine || !mine.isConnected) return;
+      container.replaceChildren(el("div", { class: "map-fallback" }, "The map needs an internet connection (Leaflet and satellite tiles load online)."));
+      A().setStatus(error.message || "The map could not be loaded.", "error");
+      return;
+    }
+    if (panel !== mine || !mine.isConnected) return;
+    destroyMap();
+    map = L.map(container, { zoomControl: false }).setView(MAP_CENTER, 10);
+    L.control.zoom({ position: "bottomright" }).addTo(map);
+    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+      maxZoom: 18, attribution: "Tiles &copy; Esri"
+    }).addTo(map);
+    L.control.scale({ imperial: false, position: "bottomleft" }).addTo(map);
+    ["route", "mids", "points"].forEach((k) => { groups[k] = L.layerGroup().addTo(map); });
+    map.on("click", onMapClick);
+    applyModeClass();
+    const leafletMap = map;
+    setTimeout(() => { if (map === leafletMap) leafletMap.invalidateSize(); }, 0);
+    if (work) renderMap({ fit: true });
+  }
+
+  const divIcon = (html, size) => {
+    const n = size || 32;
+    return window.L.divIcon({ className: "mk", html: `<div class="mk-hit">${html}</div>`, iconSize: [n, n], iconAnchor: [n / 2, n / 2] });
+  };
+  const ll = (p) => [p.latitude, p.longitude];
+
+  function renderMap(opts) {
+    if (!map || !work) return;
+    const L = window.L;
+    const o = opts || {};
+    Object.values(groups).forEach((g) => g.clearLayers());
+    pointMarkers = [];
+    const pts = work.route.points;
+    const c = core();
+
+    routeLines = [
+      L.polyline(pts.map(ll), { color: "#1d3540", weight: 6, opacity: 0.6, interactive: false }).addTo(groups.route),
+      L.polyline(pts.map(ll), { color: getComputedStyle(panel).getPropertyValue("--route").trim() || "#ffd23f", weight: 3, interactive: false }).addTo(groups.route)
+    ];
+
+    if (ui.mode !== "delete") {
+      pts.slice(1).forEach((p, k) => {
+        const mid = { latitude: (pts[k].latitude + p.latitude) / 2, longitude: (pts[k].longitude + p.longitude) / 2 };
+        L.marker(ll(mid), { icon: divIcon('<div class="mk-mid"></div>', 24), draggable: true, title: "Drag to insert a point", zIndexOffset: 400 })
+          .on("click", () => editPoints((arr) => c.insertAt(arr, k + 1, mid)))
+          .on("dragend", (e) => { const q = e.target.getLatLng(); editPoints((arr) => c.insertAt(arr, k + 1, { latitude: q.lat, longitude: q.lng })); })
+          .addTo(groups.mids);
+      });
+    }
+
+    let stopNo = 0;
+    pts.forEach((p, i) => {
+      let html;
+      if (c.isStop(p)) { stopNo += 1; html = `<div class="mk-stop">${stopNo}</div>`; }
+      else html = `<div class="mk-wp ${p.name ? "named" : ""}"></div>`;
+      const m = L.marker(ll(p), { icon: divIcon(html), draggable: ui.mode !== "delete", title: p.name || "Waypoint", zIndexOffset: c.isStop(p) ? 1100 : 1000 });
+      m.on("click", () => onPointClick(i));
+      m.on("drag", (e) => {
+        const q = e.target.getLatLng();
+        const live = pts.map((x, j) => (j === i ? [q.lat, q.lng] : ll(x)));
+        routeLines.forEach((line) => line.setLatLngs(live));
+      });
+      m.on("dragend", (e) => {
+        const q = e.target.getLatLng();
+        editPoints((arr) => c.replaceAt(arr, i, { ...arr[i], latitude: q.lat, longitude: q.lng }));
+      });
+      m.addTo(groups.points);
+      pointMarkers[i] = m;
+    });
+
+    if (o.fit && pts.length) map.fitBounds(L.latLngBounds(pts.map(ll)).pad(0.15));
+    if (o.fit && !pts.length) map.setView(MAP_CENTER, 10);
+    if (Number.isInteger(o.popup) && pointMarkers[o.popup]) openPointPopup(o.popup);
+  }
+
+  function focusPoint(i) {
+    if (!map || !pointMarkers[i]) return;
+    map.panTo(pointMarkers[i].getLatLng());
+    openPointPopup(i);
+  }
+
+  function focusLeg(leg) {
+    if (!map || !work) return;
+    map.closePopup();
+    map.fitBounds(window.L.latLngBounds(work.route.points.slice(leg.fromIndex, leg.toIndex + 1).map(ll)).pad(0.25));
+  }
+
+  function onMapClick(e) {
+    if (!work || ui.mode !== "add") return;
+    const pos = { latitude: e.latlng.lat, longitude: e.latlng.lng };
+    editPoints((pts) => [...pts, pos]);
+  }
+
+  function onPointClick(i) {
+    if (ui.mode === "select") openPointPopup(i);
+    else if (ui.mode === "delete") editPoints((pts) => core().removeAt(pts, i));
+  }
+
+  function openPointPopup(i) {
+    const m = pointMarkers[i];
+    if (!m) return;
+    m.unbindPopup();
+    m.bindPopup(pointPopup(i), { minWidth: 250, maxWidth: 300, autoPanPadding: [20, 60] }).openPopup();
+  }
+
+  function pointPopup(i) {
+    const p = work.route.points[i];
+    const c = core();
+    const stopIndex = work.route.points.slice(0, i + 1).filter(c.isStop).length;
+    const nameInput = el("input", { type: "text", value: p.name || "", placeholder: "Optional label" });
+    nameInput.addEventListener("change", () => {
+      const name = nameInput.value.trim();
+      editPoints((pts) => c.replaceAt(pts, i, { ...pts[i], name: name || undefined }), { popup: i });
+    });
+    return el("div", { class: "pop" },
+      el("h3", {}, c.isStop(p) ? `Stop ${stopIndex} · ${p.name}` : (p.name ? `Waypoint · ${p.name}` : "Waypoint")),
+      el("div", { class: "sub" }, fmtPos(p)),
+      el("div", { class: "field" }, el("label", {}, "Name"), nameInput),
+      el("div", { class: "actions" },
+        el("button", { type: "button", class: "text-btn danger-text", onclick: () => { map.closePopup(); editPoints((pts) => c.removeAt(pts, i)); } }, "Delete")));
   }
 
   // ---------- wiring ----------
   function bindInputs() {
     $("picker").addEventListener("change", async (e) => {
+      if (!work) return;
       const value = e.target.value;
       if (!(await guardDiscard())) { renderPicker(); return; }
       if (value.startsWith("lib:")) openLibraryRoute(value.slice(4));
       else setWork(blankRoute());
     });
-    $("name").addEventListener("input", (e) => { work.route = { ...work.route, name: e.target.value }; renderStats(); });
-    $("desc").addEventListener("input", (e) => { work.route = { ...work.route, description: e.target.value }; renderStats(); });
+    $("name").addEventListener("input", (e) => { if (!work) return; work.route = { ...work.route, name: e.target.value }; renderActions(); renderStats(); });
+    $("desc").addEventListener("input", (e) => { if (!work) return; work.route = { ...work.route, description: e.target.value }; renderActions(); renderStats(); });
     $("tab-stops").addEventListener("click", () => showTab("stops"));
     $("tab-legs").addEventListener("click", () => showTab("legs"));
     // The route speed is saved with the route. The last value used also seeds new routes in this browser.
     $("speed").addEventListener("input", () => {
-      const v = parseFloat($("speed").value);
-      work.route = { ...work.route, speed_kn: v > 0 ? v : undefined };
-      if (v > 0) storeSpeed(v);
+      if (!work) return;
+      const raw = $("speed").value.trim();
+      const v = parseFloat(raw);
+      if (raw !== "" && !(v > 0 && v <= MAX_SPEED_KN)) {
+        A().setStatus(`Enter a route speed above 0 and up to ${MAX_SPEED_KN} kn.`, "error");
+        return;
+      }
+      work.route = { ...work.route, speed_kn: raw === "" ? undefined : v };
+      if (raw !== "") storeSpeed(v);
+      renderActions();
       renderStats();
     });
   }
@@ -275,29 +492,48 @@
     panel.querySelector(".planner").replaceWith(el("p", { class: "empty" }, `Routes could not be loaded: ${message}`));
   }
 
-  async function loadLibrary() {
+  async function loadLibrary(mine) {
     try {
       const data = await A().api("/api/admin/routes");
-      if (!panel.isConnected) return;
+      if (panel !== mine || !mine.isConnected) return;
       routes = Array.isArray(data.routes) ? data.routes : [];
       setWork(routes.length ? routes[0] : blankRoute());
     } catch (error) {
       A().setStatus(error.message, "error");
-      if (panel.isConnected) showLoadError(error.message);
+      if (panel === mine && mine.isConnected) showLoadError(error.message);
     }
   }
 
+  function bindKeyboard() {
+    if (keyHandler) document.removeEventListener("keydown", keyHandler);
+    keyHandler = (e) => {
+      if (!panel || !panel.isConnected || !work) return;
+      if (/^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || "")) return;
+      if (document.querySelector(".routes-modal")) return;
+      const key = e.key.toLowerCase();
+      if ((e.ctrlKey || e.metaKey) && key === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
+      else if ((e.ctrlKey || e.metaKey) && (key === "y" || (key === "z" && e.shiftKey))) { e.preventDefault(); redo(); }
+    };
+    document.addEventListener("keydown", keyHandler);
+  }
+
   function bind() {
+    destroyMap();
+    if (keyHandler) { document.removeEventListener("keydown", keyHandler); keyHandler = null; }
     panel = document.getElementById("routes-panel");
     if (!panel) return;
+    const mine = panel;
     work = null;
+    history = { undo: [], redo: [] };
     guard = {
       isDirty,
       confirmOptions: { title: "Unsaved route", message: "Discard your unsaved route changes?", confirmLabel: "Discard", cancelLabel: "Cancel", tone: "danger" }
     };
     A().setPageUnsavedGuard(guard);
     bindInputs();
-    loadLibrary();
+    bindKeyboard();
+    initMap(mine);
+    loadLibrary(mine);
   }
 
   window.IolantheRoutes = Object.freeze({ render, bind });
