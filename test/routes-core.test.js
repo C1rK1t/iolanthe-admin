@@ -98,3 +98,9 @@ test("routeSnapshot covers only the editable fields", () => {
   assert.equal(core.routeSnapshot(r), core.routeSnapshot({ ...r, revision: 4, updated_at: "u" }));
   assert.notEqual(core.routeSnapshot(r), core.routeSnapshot({ ...r, name: "B" }));
 });
+
+test("routeSnapshot ignores point key order, undefined values and null speed", () => {
+  const a = { name: "A", description: "", speed_kn: undefined, points: [{ latitude: 1, longitude: 2, name: "X", anchorage_id: undefined }] };
+  const b = { name: "A", description: "", speed_kn: null, points: [{ name: "X", longitude: 2, latitude: 1 }] };
+  assert.equal(core.routeSnapshot(a), core.routeSnapshot(b));
+});

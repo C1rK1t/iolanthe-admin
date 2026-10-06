@@ -102,7 +102,14 @@
 
   // What counts as "unsaved changes": the editable fields only.
   function routeSnapshot(route) {
-    return JSON.stringify({ name: route.name, description: route.description, speed_kn: route.speed_kn, points: route.points });
+    const keys = ["latitude", "longitude", "name", "anchorage_id", "site_id", "site_ids", "leg_speed_kn"];
+    const points = (route.points || []).map((p) => {
+      const out = {};
+      keys.forEach((k) => { if (p[k] !== undefined) out[k] = p[k]; });
+      return out;
+    });
+    const speed = route.speed_kn === undefined ? null : route.speed_kn;
+    return JSON.stringify({ name: route.name, description: route.description, speed_kn: speed, points });
   }
 
   return {

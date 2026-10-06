@@ -43,8 +43,10 @@
     { id: "delete", label: "Delete", icon: "erase", hint: "Tap a route point to delete it." }
   ];
 
-  // Task 6 wires the header actions that use this.
-  const noop = () => {};
+  let saving = false;    // a save request is in flight
+  let closeModal = null; // closes the open routes modal, if any
+  const JSON_HEADERS = { "Content-Type": "application/json" };
+  const post = (path, body) => A().api(path, { method: "POST", headers: JSON_HEADERS, body: JSON.stringify(body) });
 
   // ---------- helpers ----------
   function el(tag, attrs, ...children) {
@@ -141,11 +143,7 @@
   async function guardDiscard() {
     if (!isDirty()) return true;
     const ok = await A().showAdminConfirm(guard.confirmOptions);
-    if (ok) {
-      work.route = { ...work.route, ...JSON.parse(work.savedJson) };
-      history = { undo: [], redo: [] };
-      renderAll({ inputs: true });
-    }
+    if (ok) setWork(routes.find((r) => r.id === work.route.id) || blankRoute());
     return ok;
   }
 
@@ -288,16 +286,16 @@
       return btn;
     };
     $("actions").replaceChildren(
-      b("check", "Save", noop, "success", !dirty && hasId),
-      b("cancel", "Cancel (discard changes)", noop, "danger", !dirty),
+      b("check", "Save", saveRoute, "success", saving || (!dirty && hasId)),
+      b("cancel", "Cancel (discard changes)", cancelChanges, "danger", !dirty),
       el("span", { class: "icon-sep" }),
       b("undo", "Undo (Ctrl+Z)", undo, "", !history.undo.length),
       b("redo", "Redo (Ctrl+Y)", redo, "", !history.redo.length),
       el("span", { class: "icon-sep" }),
-      b("plus", "New route", noop),
-      b("saveAs", "Save As", noop, "", work.route.points.length < 2),
-      b("join", "Add another route to this one", noop),
-      b("trash", "Delete route", noop, "", !hasId));
+      b("plus", "New route", newRoute),
+      b("saveAs", "Save As", () => saveAs(false), "", work.route.points.length < 2),
+      b("join", "Add another route to this one", openJoin),
+      b("trash", "Delete route", deleteRoute, "", !hasId));
   }
 
   // ---------- map ----------
@@ -447,16 +445,249 @@
     const c = core();
     const stopIndex = work.route.points.slice(0, i + 1).filter(c.isStop).length;
     const nameInput = el("input", { type: "text", value: p.name || "", placeholder: "Optional label" });
-    nameInput.addEventListener("change", () => {
+    const heading = el("h3", {});
+    const headingText = (q) => (c.isStop(q) ? `Stop ${stopIndex} · ${q.name || "Stop"}` : (q.name ? `Waypoint · ${q.name}` : "Waypoint"));
+    heading.textContent = headingText(p);
+    // Commit on Enter or blur without rebuilding the map, so the popup (and a Delete click) is not disturbed.
+    const commitName = () => {
       const name = nameInput.value.trim();
-      editPoints((pts) => c.replaceAt(pts, i, { ...pts[i], name: name || undefined }), { popup: i });
-    });
+      const current = work.route.points[i];
+      if (!current || name === (current.name || "")) return;
+      history.undo.push(work.route.points);
+      history.redo = [];
+      work.route = { ...work.route, points: c.replaceAt(work.route.points, i, { ...current, name: name || undefined }) };
+      heading.textContent = headingText(work.route.points[i]);
+      renderActions();
+      renderStats();
+    };
+    nameInput.addEventListener("change", commitName);
+    nameInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); commitName(); nameInput.blur(); } });
     return el("div", { class: "pop" },
-      el("h3", {}, c.isStop(p) ? `Stop ${stopIndex} · ${p.name}` : (p.name ? `Waypoint · ${p.name}` : "Waypoint")),
+      heading,
       el("div", { class: "sub" }, fmtPos(p)),
       el("div", { class: "field" }, el("label", {}, "Name"), nameInput),
       el("div", { class: "actions" },
         el("button", { type: "button", class: "text-btn danger-text", onclick: () => { map.closePopup(); editPoints((pts) => c.removeAt(pts, i)); } }, "Delete")));
+  }
+
+  // ---------- modals (house rules: green save + red cancel top right, outside click and Escape cancel) ----------
+  function openModal({ title, body, onSave, saveTitle, wide }) {
+    if (closeModal) closeModal();
+    const backdrop = el("div", { class: "routes-modal modal-backdrop" });
+    let busy = false;
+    const close = () => {
+      backdrop.remove();
+      document.removeEventListener("keydown", onKey);
+      if (closeModal === close) closeModal = null;
+    };
+    const save = async () => {
+      if (busy) return;
+      busy = true;
+      try { if ((await onSave()) !== false) close(); } finally { busy = false; }
+    };
+    const onKey = (e) => { if (e.key === "Escape") close(); };
+    const iconBtn = (icon, label, cls, onclick) => {
+      const btn = el("button", { type: "button", class: `icon-btn ${cls}`, title: label, "aria-label": label, onclick });
+      btn.innerHTML = svg(icon);
+      return btn;
+    };
+    const card = el("div", { class: "modal-card", role: "dialog", "aria-modal": "true", style: wide ? "width:min(640px,100%)" : null },
+      el("div", { class: "card-header" },
+        el("h2", {}, title),
+        el("div", { class: "icon-row" },
+          onSave ? iconBtn("check", saveTitle || "Save", "success", save) : null,
+          iconBtn("cancel", "Cancel", "danger", close))),
+      el("div", { class: "modal-body" }, body));
+    backdrop.append(card);
+    backdrop.addEventListener("mousedown", (e) => { if (e.target === backdrop) close(); });
+    document.addEventListener("keydown", onKey);
+    document.body.append(backdrop);
+    closeModal = close;
+    setTimeout(() => { const f = card.querySelector(".modal-body input, .modal-body select, .modal-body textarea"); if (f) f.focus(); }, 0);
+    return { close, card };
+  }
+
+  // ---------- saving against the server ----------
+  const status = (message, tone) => A().setStatus(message, tone);
+  const reportError = (error) => { if (error && !error.loginRequired && error.message) status(error.message, "error"); };
+
+  function validateRoute() {
+    if (!work.route.name.trim()) return "Give the route a name before saving.";
+    if (work.route.points.length < 2) return "A route needs at least 2 points.";
+    return "";
+  }
+
+  // After any save, Save As or delete: the route is clean again, and the unsaved guard stays registered for later edits.
+  function afterPersist() {
+    if (isDirty()) return;
+    A().clearPageUnsavedGuard(guard);
+    A().setPageUnsavedGuard(guard);
+  }
+
+  function replaceInLibrary(saved) {
+    routes = routes.some((r) => r.id === saved.id) ? routes.map((r) => (r.id === saved.id ? saved : r)) : [...routes, saved];
+  }
+
+  async function reloadLibrary() {
+    const data = await A().api("/api/admin/routes");
+    routes = Array.isArray(data.routes) ? data.routes : [];
+  }
+
+  // The server turns a missing speed into its default, so a blank speed is sent as an explicit null.
+  const withSpeed = (route) => ({ ...route, speed_kn: route.speed_kn == null ? null : route.speed_kn });
+
+  async function saveRoute() {
+    if (!work || saving) return;
+    if (!work.route.id) { saveAs(true); return; }
+    const problem = validateRoute();
+    if (problem) { status(problem, "error"); return; }
+    const mine = panel;
+    const route = withSpeed({ ...work.route, name: work.route.name.trim() });
+    const id = route.id;
+    saving = true;
+    renderActions();
+    try {
+      const { route: saved } = await post("/api/admin/routes/save", { route, base_revision: work.baseRevision });
+      if (panel !== mine || !mine.isConnected) return;
+      replaceInLibrary(saved);
+      setWork(saved);
+      afterPersist();
+      status(`Saved "${saved.name}" · revision ${saved.revision}`, "ok");
+    } catch (error) {
+      if (panel !== mine || !mine.isConnected) return;
+      if (error.status === 409) await handleClash(error, id);
+      else reportError(error);
+    } finally {
+      saving = false;
+      if (panel === mine && mine.isConnected && work) renderActions();
+    }
+  }
+
+  async function handleClash(error, id) {
+    const reload = await A().showAdminConfirm({
+      title: "Route changed elsewhere",
+      message: `${error.message} Reloading discards your changes; Cancel keeps them so you can Save As.`,
+      confirmLabel: "Reload", cancelLabel: "Cancel", tone: "warning"
+    });
+    if (!reload) return;
+    try {
+      await reloadLibrary();
+      setWork(routes.find((r) => r.id === id) || (routes[0] || blankRoute()));
+      afterPersist();
+    } catch (e) { reportError(e); }
+  }
+
+  function saveAs(isFirstSave) {
+    if (!work || saving) return;
+    if (work.route.points.length < 2) { status("A route needs at least 2 points.", "error"); return; }
+    const mine = panel;
+    const defaultName = isFirstSave ? work.route.name : `${work.route.name || "Route"} (copy)`;
+    const nameInput = el("input", { type: "text", value: defaultName, autocomplete: "off" });
+    nameInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); card.querySelector(".icon-btn.success").click(); }
+    });
+    const { card } = openModal({
+      title: isFirstSave ? "Save new route" : "Save As", saveTitle: "Save",
+      body: el("div", { class: "field" }, el("label", {}, "New route name"), nameInput),
+      onSave: async () => {
+        const name = nameInput.value.trim();
+        if (!name) { status("Name is required.", "error"); return false; }
+        saving = true;
+        renderActions();
+        try {
+          const route = withSpeed({ ...work.route, id: "", name, source: work.route.source });
+          const { route: saved } = await post("/api/admin/routes/save", { route, base_revision: 0 });
+          if (panel !== mine || !mine.isConnected) return true;
+          replaceInLibrary(saved);
+          setWork(saved);
+          afterPersist();
+          status(`Saved "${saved.name}" to the library`, "ok");
+          return true;
+        } catch (error) {
+          reportError(error);
+          return false;
+        } finally {
+          saving = false;
+          if (panel === mine && mine.isConnected && work) renderActions();
+        }
+      }
+    });
+  }
+
+  async function deleteRoute() {
+    if (!work || !work.route.id) return;
+    const { id, name } = work.route;
+    const ok = await A().showAdminConfirm({
+      title: "Delete route?",
+      message: `Delete "${name}" from the library? Charters it was assigned to keep their own copy.`,
+      confirmLabel: "Delete", cancelLabel: "Cancel", tone: "danger"
+    });
+    if (!ok) return;
+    const mine = panel;
+    try {
+      await post("/api/admin/routes/delete", { id });
+      if (panel !== mine || !mine.isConnected) return;
+      routes = routes.filter((r) => r.id !== id);
+      setWork(routes.length ? routes[0] : blankRoute());
+      afterPersist();
+      status(`Deleted "${name}"`, "ok");
+    } catch (error) { reportError(error); }
+  }
+
+  async function newRoute() {
+    if (!work || !(await guardDiscard())) return;
+    setWork(blankRoute());
+    setMode("add");
+  }
+
+  async function cancelChanges() {
+    if (!work || !isDirty()) return;
+    const ok = await A().showAdminConfirm({
+      title: "Discard changes?", message: "Go back to the last saved version of this route?",
+      confirmLabel: "Discard", cancelLabel: "Cancel", tone: "danger"
+    });
+    if (ok) setWork(routes.find((r) => r.id === work.route.id) || blankRoute());
+  }
+
+  // ---------- add another route to this one ----------
+  function openJoin() {
+    if (!work) return;
+    const others = routes.filter((r) => r.id !== work.route.id);
+    if (!others.length) { status("There are no other routes to add.", ""); return; }
+    const c = core();
+    const sel = el("select", {}, others.map((r) => el("option", { value: r.id }, `${r.name} · ${c.routeNm(r.points).toFixed(0)} nm`)));
+    const opts = { atStart: false, reverse: false };
+    const preview = el("div", { class: "banner info" });
+    const update = () => {
+      const other = others.find((r) => r.id === sel.value);
+      const joined = c.joinPoints(work.route.points, other.points, opts);
+      const gap = c.joinGapNm(work.route.points, other.points, opts);
+      preview.textContent = `${work.route.name || "This route"} becomes ${c.routeNm(joined).toFixed(1)} nm with ${joined.filter(c.isStop).length} stops.`
+        + (gap > 0.05 ? ` The ${gap.toFixed(1)} nm gap between them becomes a straight leg; check it on the map.` : " They meet at the same spot, so the join is seamless.");
+    };
+    sel.addEventListener("change", update);
+    const radio = (name, checked, label, on) => el("label", {}, el("input", { type: "radio", name, checked, onchange: () => { on(); update(); } }), label);
+    const body = el("div", { class: "modal-body" },
+      el("p", {}, "Add a whole route to the one that is open, to build a longer route from ones you already have. The routes you add from are not changed."),
+      el("div", { class: "field" }, el("label", {}, "Route to add"), sel),
+      el("div", { class: "field" }, el("label", {}, "Where"), el("div", { class: "radio-list" },
+        radio("where", true, "After the end of this route", () => { opts.atStart = false; }),
+        radio("where", false, "Before the start of this route", () => { opts.atStart = true; }))),
+      el("div", { class: "field" }, el("label", {}, "Direction"), el("div", { class: "radio-list" },
+        radio("dir", true, "As saved", () => { opts.reverse = false; }),
+        radio("dir", false, "Reversed", () => { opts.reverse = true; }))),
+      preview,
+      work.route.id ? el("p", { class: "meta" }, `Tip: use Save As afterwards to keep "${work.route.name}" as it is and save the joined route under a new name.`) : null);
+    update();
+    openModal({
+      title: "Add another route", body, wide: true, saveTitle: "Add route",
+      onSave: () => {
+        const other = others.find((r) => r.id === sel.value);
+        editPoints((pts) => c.joinPoints(pts, other.points.map((p) => ({ ...p })), opts), { fit: true });
+        status(`Added ${other.name}.`, "ok");
+        return true;
+      }
+    });
   }
 
   // ---------- wiring ----------
@@ -473,18 +704,29 @@
     $("tab-stops").addEventListener("click", () => showTab("stops"));
     $("tab-legs").addEventListener("click", () => showTab("legs"));
     // The route speed is saved with the route. The last value used also seeds new routes in this browser.
+    const applySpeed = (v) => {
+      work.route = { ...work.route, speed_kn: v };
+      if (v !== undefined) storeSpeed(v);
+      renderActions();
+      renderStats();
+    };
+    // Valid values apply live and silently; invalid or half-typed ones (like "0" on the way to "0.5") are ignored until change.
     $("speed").addEventListener("input", () => {
+      if (!work) return;
+      const v = parseFloat($("speed").value);
+      if (v > 0 && v <= MAX_SPEED_KN) applySpeed(v);
+    });
+    $("speed").addEventListener("change", () => {
       if (!work) return;
       const raw = $("speed").value.trim();
       const v = parseFloat(raw);
-      if (raw !== "" && !(v > 0 && v <= MAX_SPEED_KN)) {
+      if (raw === "") { applySpeed(undefined); return; }
+      if (!(v > 0 && v <= MAX_SPEED_KN)) {
         A().setStatus(`Enter a route speed above 0 and up to ${MAX_SPEED_KN} kn.`, "error");
+        $("speed").value = work.route.speed_kn || "";
         return;
       }
-      work.route = { ...work.route, speed_kn: raw === "" ? undefined : v };
-      if (raw !== "") storeSpeed(v);
-      renderActions();
-      renderStats();
+      applySpeed(v);
     });
   }
 
@@ -509,8 +751,8 @@
     keyHandler = (e) => {
       if (!panel || !panel.isConnected || !work) return;
       if (/^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || "")) return;
-      if (document.querySelector(".routes-modal")) return;
-      const key = e.key.toLowerCase();
+      if (document.querySelector(".routes-modal, .admin-decision-backdrop")) return;
+      const key = (e.key || "").toLowerCase();
       if ((e.ctrlKey || e.metaKey) && key === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
       else if ((e.ctrlKey || e.metaKey) && (key === "y" || (key === "z" && e.shiftKey))) { e.preventDefault(); redo(); }
     };
@@ -518,6 +760,9 @@
   }
 
   function bind() {
+    if (closeModal) closeModal();
+    document.querySelectorAll(".routes-modal").forEach((n) => n.remove());
+    saving = false;
     destroyMap();
     if (keyHandler) { document.removeEventListener("keydown", keyHandler); keyHandler = null; }
     panel = document.getElementById("routes-panel");
