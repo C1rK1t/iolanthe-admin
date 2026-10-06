@@ -8179,6 +8179,119 @@
     return [current, ...extraLines].filter(Boolean).join("\n");
   }
 
+  function kmlTooltipHtml(label, name, position, description) {
+    const text = String(description || "").trim();
+    const shortText = text.length > 220 ? `${text.slice(0, 217)}...` : text;
+    return `
+      <div class="kml-compare-tooltip">
+        <span class="kml-compare-tooltip-label">${escapeHtml(label)}</span>
+        <strong>${escapeHtml(name)}</strong>
+        <span>${escapeHtml(position)}</span>
+        ${shortText ? `<span class="kml-compare-tooltip-text">${escapeHtml(shortText).replace(/\n/g, "<br>")}</span>` : ""}
+      </div>
+    `;
+  }
+
+  function openKmlPinCompareMap(pin, matches, selectedIndex) {
+    const selected = matches[selectedIndex] || matches[0];
+    const mapModal = openStackedDialogModal(`Compare: ${pin.name}`, `
+      <div class="kml-compare-legend">
+        <span><i class="kml-compare-dot is-pin"></i>Pin from route file</span>
+        <span><i class="kml-compare-dot is-site"></i>Existing site</span>
+        ${matches.length > 1 ? `<span><i class="kml-compare-dot is-other"></i>Other nearby sites</span>` : ""}
+        ${selected && Number.isFinite(selected.distance) ? `<span class="muted">${escapeHtml(formatNauticalMiles(selected.distance))} apart</span>` : ""}
+      </div>
+      <div class="site-map-picker-map kml-compare-map">
+        <p class="site-map-picker-status muted">Loading map...</p>
+      </div>
+      <p class="muted kml-compare-hint">Hover a marker to see its details.</p>
+    `, {
+      cardClass: "modal-map",
+      headerActionsHtml: `
+        <div class="button-row modal-title-actions">
+          ${iconButtonHtml("cancel", "Close", ` data-stacked-modal-close`)}
+        </div>
+      `
+    });
+    const container = mapModal.querySelector(".kml-compare-map");
+    let map = null;
+    const removeMap = () => {
+      if (map) {
+        map.remove();
+        map = null;
+      }
+    };
+    mapModal.addEventListener("click", event => {
+      if (event.target === mapModal) {
+        removeMap();
+        closeStackedDialogModal(mapModal);
+      }
+    });
+    mapModal.querySelector("[data-stacked-modal-close]").addEventListener("click", removeMap);
+
+    loadLeaflet().then(L => {
+      if (!container.isConnected) {
+        return;
+      }
+      container.innerHTML = "";
+      map = L.map(container, { worldCopyJump: true });
+      L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+        attribution: "Tiles &copy; Esri",
+        maxZoom: 18
+      }).addTo(map);
+      const tooltipOptions = { direction: "top", offset: [0, -8], className: "kml-compare-leaflet-tooltip" };
+      const pinLatLng = [pin.latitude, pin.longitude];
+      const points = [pinLatLng];
+      if (selected && Number.isFinite(selected.distance)) {
+        L.polyline([pinLatLng, [Number(selected.site.latitude), Number(selected.site.longitude)]], {
+          color: "#ffffff",
+          weight: 2,
+          dashArray: "6 6",
+          opacity: 0.9,
+          interactive: false
+        }).addTo(map);
+      }
+      matches.forEach(match => {
+        const latitude = Number(match.site.latitude);
+        const longitude = Number(match.site.longitude);
+        if (!Number.isFinite(match.distance)) {
+          return;
+        }
+        const isSelected = match === selected;
+        L.circleMarker([latitude, longitude], {
+          radius: isSelected ? 9 : 6,
+          color: "#ffffff",
+          weight: 2,
+          fillColor: isSelected ? "#1976d2" : "#7a8a94",
+          fillOpacity: 0.95
+        }).bindTooltip(kmlTooltipHtml(
+          isSelected ? "Existing site" : "Nearby site",
+          siteDisplayName(match.site),
+          formatSitePosition(match.site),
+          match.site.description
+        ), tooltipOptions).addTo(map);
+        points.push([latitude, longitude]);
+      });
+      L.circleMarker(pinLatLng, {
+        radius: 9,
+        color: "#ffffff",
+        weight: 2,
+        fillColor: "#e8812d",
+        fillOpacity: 0.95
+      }).bindTooltip(kmlTooltipHtml("Pin from route file", pin.name, formatSitePosition(pin), kmlPinSiteDescription(pin)), tooltipOptions).addTo(map);
+      if (points.length > 1) {
+        map.fitBounds(points, { padding: [48, 48], maxZoom: 16 });
+      } else {
+        map.setView(pinLatLng, SITE_MAP_PICKED_ZOOM);
+      }
+      window.setTimeout(() => map && map.invalidateSize(), 0);
+    }).catch(() => {
+      if (container.isConnected) {
+        container.innerHTML = `<p class="site-map-picker-status muted">Map unavailable offline.</p>`;
+      }
+    });
+  }
+
   function openKmlPinImportModal(pins, siteLibrary) {
     const headerActionsHtml = `
       <div class="button-row modal-title-actions">
@@ -8205,7 +8318,7 @@
             <option value="overwrite">Overwrite it</option>
             <option value="new">New site</option>
           </select>
-          <span class="kml-pin-match-site" data-kml-match-detail="${index}"></span>
+          ${iconButtonHtml("preview", "Compare on a map", ` data-kml-preview="${index}"`)}
         </span>
       ` : "";
       return `
@@ -8247,20 +8360,14 @@
       selectAll.checked = checked === boxes.length;
       selectAll.indeterminate = checked > 0 && checked < boxes.length;
     };
-    const syncMatchDetail = index => {
-      const detail = modal.querySelector(`[data-kml-match-detail="${index}"]`);
-      const matchSelect = modal.querySelector(`[data-kml-match="${index}"]`);
-      if (!detail || !matchSelect) {
-        return;
-      }
-      const match = matchesByPin[index][Number(matchSelect.value)];
-      detail.textContent = `Existing site: ${formatSitePosition(match.site)} · ${siteDescriptionPreview(match.site)}`;
-      detail.title = String(match.site.description || "");
-    };
     boxes.forEach(box => box.addEventListener("change", syncCount));
-    modal.querySelectorAll("[data-kml-match]").forEach(select => {
-      select.addEventListener("change", () => syncMatchDetail(select.dataset.kmlMatch));
-      syncMatchDetail(select.dataset.kmlMatch);
+    modal.querySelectorAll("[data-kml-preview]").forEach(button => {
+      button.addEventListener("click", event => {
+        event.preventDefault();
+        const index = Number(button.dataset.kmlPreview);
+        const matchSelect = modal.querySelector(`[data-kml-match="${index}"]`);
+        openKmlPinCompareMap(pins[index], matchesByPin[index], Number(matchSelect?.value || 0));
+      });
     });
     selectAll.addEventListener("change", () => {
       boxes.forEach(box => {
