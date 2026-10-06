@@ -1,12 +1,12 @@
 # Route Planner — handoff
 
-Last updated 2026-10-06, as of `main` at `076ed59`. The brainstorm and spec are done, and the mockup has been rebuilt
+Last updated 2026-10-07. The brainstorm and spec are done, and the mockup has been rebuilt
 and revised twice. **No product code has been written yet.**
 
 | File | What it is |
 |---|---|
 | [brainstorm.md](brainstorm.md) | Review of the existing code, risks, alternatives, and both rounds of David's answers |
-| [spec.md](spec.md) | Draft 1 spec: data files, server APIs, admin UI, phases. **Start here**, but read "Spec updates needed" below too. |
+| [spec.md](spec.md) | Draft 2 spec (2026-10-07): data files, server APIs, admin UI, phases, open questions (§7). **Start here.** |
 | [planner-mockup.html](planner-mockup.html) | Self-contained clickable mockup with demo Coron data, kept in step with the review feedback below |
 
 ## Mockup: where to see it
@@ -73,29 +73,26 @@ charters from the Itinerary page.
 - **Legs are cards like the stops**: a blue numbered dot, "From → To", then nm and h:mm. A Total card sits at the
   end. Clicking a leg zooms the map to it.
 
-## Spec updates needed (fold these into spec.md before phase 1)
+## Spec status
 
-- §4.1 side panel: Stops / Legs as tabs in one box; legs are stop-to-stop cards (no bearing column); stats are nm,
-  stops and h:mm. Undo / Redo move to the header icon row.
-- §4.1 point popup: add "Make stop at <anchorage>" (within 2 nm) and drag-to-anchorage snapping.
-- §4.1 header actions: add **Add another route** (join). It runs in the browser only, so there's no new API.
-- §4.1 narrow screens: the mockup puts the map straight after the route picker, which differs from "side panel
-  stacks above the map". Confirm which one to build.
-- §2.3 gap: a charter copy keeps coordinates only, so stops and names are lost when a copy is opened in the planner
-  or joined. Decide whether to add an additive `stops` field to the copy (the guest app ignores unknown fields).
-- §5 phase 1: the leg table becomes stop-to-stop cards.
+All the feedback above is folded into [spec.md](spec.md) **draft 2** (2026-10-07). That draft adds:
+- decisions D9 (stops and legs, not points) and D10 (joining routes)
+- the rewritten §4.1 side panel, header actions, snapping and popup
+- §4.4 Add another route
+- the updated phase table
+
+The questions still open are in spec §7:
+- Q1 narrow-screen layout
+- Q2 stops in charter copies
+- Q3 duplicate stop on snap
+- Q4 default distances
+- Q5 planning speed per browser
 
 ## Open items
 
-- **The captain's full review** of the mockup is due 2026-10-07. Only a first look has happened so far.
-- Small choices made by default, so confirm them:
-  - anchorages added as stops auto-link sites within 2 nm
-  - "Make stop at" is offered within 2 nm
-  - the "sites served" picker highlights sites within 5 nm
-  - planning speed is per browser and isn't saved
-  - Settings → "Route Track" gets renamed to "Track Logging"
-- A point dropped onto an anchorage that is already the next or previous stop creates a duplicate stop. Decide
-  whether to merge or block it.
+- **The captain's full review** of the mockup is due 2026-10-07. Only a first look has happened so far. Take his
+  answers to spec §7 at the same time.
+- Settings → "Route Track" gets renamed to "Track Logging" (phase 5). Confirm the name.
 - Optional extras for phase 5: OpenSeaMap seamark overlay, vendored Leaflet (the admin currently needs internet
   for Leaflet and tiles).
 
@@ -109,7 +106,7 @@ by turning the mockup's CSS (`:root` tokens, `.icon-btn`, `.stat`, `.banner`, `.
 
 ## Next step: phase 1
 
-First apply "Spec updates needed" above to spec.md. Then, from spec §5:
+Settle the spec §7 questions that affect phase 1 (Q1, Q4, Q5). Then, from spec §5:
 - **iolanthe-server** (`iolanthe/iolanthe-server` in the workspace):
   - `library/routes.json` and `library/anchorages.json` storage
   - `GET/POST /api/admin/routes[/save|/delete]` and `GET/POST /api/admin/anchorages[/save]`, with bridge-only

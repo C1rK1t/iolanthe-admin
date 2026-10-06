@@ -1,7 +1,8 @@
-# Route Planner — spec (draft 1)
+# Route Planner — spec (draft 2)
 
-Status: draft for review, 2026-10-06. Follows [brainstorm.md](brainstorm.md). The clickable mockup is
-[planner-mockup.html](planner-mockup.html).
+Status: draft 2, 2026-10-07. Draft 1 (2026-10-06) plus David's mockup review round 1 and the captain's first look,
+recorded in [HANDOFF.md](HANDOFF.md). Follows [brainstorm.md](brainstorm.md). The clickable mockup
+[planner-mockup.html](planner-mockup.html) matches this draft. Questions still open are in §7.
 
 Repos: `iolanthe-admin` (UI), `iolanthe-server` (storage and APIs). **No guest or crew changes.**
 
@@ -19,6 +20,8 @@ Repos: `iolanthe-admin` (UI), `iolanthe-server` (storage and APIs). **No guest o
 | D6 | Planning and assigning are **Charter Admin on the bridge VLAN only**, the same as Route Upload today. |
 | D7 | Existing charter routes are **imported into the library** once. |
 | D8 | A **stop can be associated with sites** it serves (e.g. a tender ride to a dive site). The association is stored on the stop within the route. |
+| D9 | The planner works in **stops and legs, not points**. Point counts and point numbers are never shown. Legs run stop to stop. |
+| D10 | A route can be **built by joining existing routes** (append or prepend, optionally reversed), then saved with Save As. |
 
 ---
 
@@ -87,6 +90,9 @@ On assign, the server writes the chosen plan exactly as the guest app reads it t
 The top-level `source` / `routes` legacy copy of primary is kept, as `writePlannedRoutePlan` does today.
 Guest and crew code don't change.
 
+A charter copy holds coordinates only, so stops, names and `site_ids` are lost when a copy is opened in the planner
+or joined onto another route. Whether to add an additive field for them is open (§7, Q2).
+
 ### 2.4 Migration (D7)
 
 When `library/routes.json` doesn't exist yet, the server creates it at startup. For every charter, each plan with
@@ -116,6 +122,9 @@ department: "charter" })`.
 
 `/api/admin/charter/<id>/upload-route` is removed in phase 4, once the planner import replaces it.
 
+Joining routes (D10), simplifying, and KML/GPX import and export all run in the browser, so they need no endpoints.
+A joined route is saved through `routes/save` like any other.
+
 Validation: points must hold valid lat/lon. A saved route must have at least 2 points. The name is required and is
 not unique-checked. The id is.
 
@@ -125,42 +134,63 @@ not unique-checked. The id is.
 
 ### 4.1 Charter → **Routes** panel (replaces "Route Upload")
 
-The layout is the map on the right, about 70% of the width. A side panel sits on the left and stacks above the map
-on narrow screens.
+The layout is the map on the right, about 70% of the width, with a side panel on the left. On desktop the side
+panel is exactly as tall as the map, so its bottom edge lines up with the map's.
 
-**Side panel**
-- **Route picker**: a library list with name, length and last updated. Below it a collapsed group of **Charter
-  copies** (read-only).
-- **Details**: name, description, total length in **nm**, point count, stop count.
-- **Stops list**: each stop with its associated sites underneath. This is the list the itinerary can be built
-  from by hand later.
-- **Leg table**: from → to, distance (nm), bearing (°T). An optional **planning speed (kn)** adds a time column. The
-  speed is remembered per browser and not saved with the route.
-- Header actions, top right, following the house convention:
-  - **Save** (green) and **Cancel** (red, which discards changes).
-  - Then New, Save As, Import, Export and Delete as secondary icons.
+On narrow screens everything stacks in one column: the route picker, then the map, then the rest of the side panel.
+This differs from draft 1, which put the whole side panel above the map; see §7, Q1.
+
+**Header actions** (top right, house convention, all square icon buttons):
+- **Save** (green) and **Cancel** (red, which discards changes).
+- **Undo** and **Redo**, which are also Ctrl+Z and Ctrl+Y / Ctrl+Shift+Z. History covers route edits only. Saved
+  anchorages and sites aren't undone.
+- Then **New**, **Save As**, **Add another route** (D10), **Import**, **Export** and **Delete**.
+
+**Side panel**, top to bottom:
+- **Route picker**: library routes with name, length and last updated. Below them, a group of **Charter copies**
+  (read-only).
+- **Name** and **Description**.
+- **Stats** as three shaded tiles: total **nm**, number of **stops**, and **h:mm** at the planning speed. There is no
+  point count (D9).
+- A **tabbed box** with two tabs, **Stops** and **Legs**, each showing its count. The box takes the remaining
+  height and scrolls inside, so its bottom stays level with the map's. On narrow screens it's capped at about 70% of
+  the screen height.
+  - **Stops tab**: one card per stop in route order. Each card has a blue numbered dot, the name, the anchorage
+    depth, any "anchorage moved / deleted" warning, and chips for the sites it serves. Clicking a card pans to the
+    stop and opens its popup. This is the list the itinerary can be built from by hand later.
+  - **Legs tab**: a **planning speed (kn)** field, remembered per browser and not saved with the route. Below it,
+    one card per **stop-to-stop leg**, styled like the stop cards: a blue numbered dot, "From → To", then distance
+    (nm) and time (h:mm, when a speed is set). There's no bearing column. If the route doesn't start or end at a
+    stop, its first and last points count as **Start** / **End**. A **Total** card follows the legs. Clicking a leg
+    zooms the map to it.
+- A small meta line: revision, last updated, source, and an "unsaved changes" flag.
 
 **Map toolbar (modes)**
 
 | Mode | Tap on map | Tap on route point | Tap on anchorage | Tap on site |
 |---|---|---|---|---|
 | **Select** (default) | — | point popup | edit anchorage | edit site (existing Site modal) |
-| **Add** | add point at end | — | add as **stop** at end | add as waypoint at end |
+| **Add** | add point at end | — | add as **stop** at end (links sites within 2 nm) | add as waypoint at end |
 | **Delete** | — | delete point | — | — |
 | **Anchorage** | new anchorage here (modal) | — | edit anchorage | — |
 
 - Points are **draggable in every mode except Delete**. Map panning is paused while a point is held.
+- **Snap to anchorage**: a point dropped within 24 px of an anchorage marker becomes a **stop** at that anchorage.
+  It takes the anchorage's position and name and links the sites within 2 nm. Dragging a stop away elsewhere keeps
+  its anchorage link and shows the "moved" warning.
 - **Insert**: each leg shows a faint midpoint handle. Dragging it creates a new point there.
-- **Undo / Redo** buttons plus Ctrl+Z / Ctrl+Y. The history covers route edits only. Saved anchorages and sites
-  aren't undone.
-- Point popup actions:
+- Point popup: the heading is "Stop *n* · *name*", or "Waypoint" (with its name if it has one). Below it are the
+  position and the anchorage depth. Point numbers are not shown (D9). Actions:
+  - **Make stop at *anchorage*** (waypoints only): one button per anchorage within 2 nm, nearest first, with its
+    distance. It does the same as snapping.
   - **Name** (optional label)
   - **Sites served** (stops only): tick sites from a distance-sorted list (D8)
   - **Make anchorage**: opens the anchorage modal with lat/lon filled in. On save the point becomes a stop.
   - **Make site**: opens the existing Add Site modal with lat/lon filled in.
   - **Delete**
 - Styling:
-  - Waypoints are small white dots. Stops are larger anchor markers, numbered in route order.
+  - Waypoints are small white dots. Stops are larger blue markers, numbered in route order, with a small "!"
+    badge when their anchorage has moved or been deleted.
   - Anchorages not used by the route are dimmed anchor markers. Sites use the existing site pin style.
 - **Layers** control: Sites, Anchorages, Imported pins, and an optional OpenSeaMap seamarks overlay (phase 5).
 
@@ -193,7 +223,20 @@ warns.
 - **KML**: one `LineString` placemark plus a `Point` placemark per stop.
 - The file name is `<route-id>.gpx` / `.kml`. The download is generated in the browser.
 
-### 4.4 Itinerary page: route assignment
+### 4.4 Add another route (D10)
+
+- The header's **Add another route** button opens a modal with these fields:
+  - **Route to add**: library routes, plus charter copies once phase 4 is in.
+  - **Where**: after the end of this route, or before its start.
+  - **Direction**: as saved, or reversed.
+- A preview line gives the joined length and stop count. It also gives the gap that becomes a straight leg, or says
+  the join is seamless.
+- If the two routes meet at the same anchorage, or within 50 m, the duplicate point is dropped.
+- The join is one undoable edit. The source route isn't changed. After joining a saved route, the modal suggests
+  **Save As** to keep the original.
+- The scenario it covers: open route A (or New), add route B, then Save As "A + B".
+
+### 4.5 Itinerary page: route assignment
 
 - Each plan (Primary / Alternative) gets a **Route** row under the plan buttons. It shows:
   - the assigned route's name, length and assigned date
@@ -203,7 +246,7 @@ warns.
 - After the end date, the row is read-only: no picker, no Update, no Unassign.
 - The existing "Guests are using the Alternative itinerary but no Alternative route…" notice moves here.
 
-### 4.5 Small related change
+### 4.6 Small related change
 
 Settings → **Route Track** is renamed **Track Logging**, to avoid confusion with "Routes".
 
@@ -213,10 +256,10 @@ Settings → **Route Track** is renamed **Track Logging**, to avoid confusion wi
 
 | Phase | Server | Admin |
 |---|---|---|
-| 1 | routes + anchorages storage and APIs, migration | Routes panel: route list, map editing (add/insert/move/delete, undo), details and leg table, Save / Save As / Delete. Route Upload stays alongside for now. |
-| 2 | — | Overlays: sites (click to edit, add as waypoint, point → Make site) and anchorages (add/edit/move/delete, stops) |
+| 1 | routes + anchorages storage and APIs, migration | Routes panel: route picker, map editing (add/insert/move/delete), header Undo/Redo, name/description, stats tiles, Stops / Legs tabbed box with stop-to-stop leg cards, Save / Save As / Delete, Add another route (library routes). Route Upload stays alongside for now. |
+| 2 | — | Overlays: sites (click to edit, add as waypoint, point → Make site) and anchorages (add/edit/move/delete, stops, "Make stop at", snap-to-anchorage, moved warnings) |
 | 3 | — | KML/GPX import (Simplify, temporary pins) and export. Remove the old upload panel and pin modal. |
-| 4 | assign / unassign, remove `upload-route` | Itinerary route rows, "edited since assigned", read-only after charter end |
+| 4 | assign / unassign, remove `upload-route` | Itinerary route rows, "edited since assigned", read-only after charter end; charter copies in the picker and in Add another route |
 | 5 | — | OpenSeaMap overlay, vendored Leaflet, Track Logging rename |
 
 The planner code goes in a new `admin/routes.js`, loaded after `admin.js`, to keep `admin.js` from growing further.
@@ -232,3 +275,15 @@ version strings.
 - Showing stops or anchorages to guests or crew.
 - Offline map tiles.
 - Multi-line routes.
+
+---
+
+## 7. Open questions
+
+| # | Question | Mockup today |
+|---|---|---|
+| Q1 | On narrow screens, should the map come straight after the route picker (as in the mockup), or after the whole side panel (draft 1)? | Map after the picker |
+| Q2 | Should a charter copy (§2.3) keep its stops, as an additive `stops: [{name, latitude, longitude, anchorage_id, site_ids}]` per route? The guest app ignores unknown fields. Without it, opening or joining a copy loses the stops. | Coordinates only |
+| Q3 | When a point is snapped onto an anchorage that is already the next or previous stop, should it merge, be blocked, or create a second stop? | Creates a second stop |
+| Q4 | Confirm the default distances: auto-link sites within 2 nm, "Make stop at" within 2 nm, the sites-served picker highlights within 5 nm, snapping within 24 px. | As listed |
+| Q5 | Confirm that planning speed stays per browser and is not saved with the route. | Per browser |
