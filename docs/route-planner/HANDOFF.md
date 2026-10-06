@@ -73,6 +73,16 @@ charters from the Itinerary page.
 - **Legs are cards like the stops**: a blue numbered dot, "From → To", then nm and h:mm. A Total card sits at the
   end. Clicking a leg zooms the map to it.
 
+**Captain's full review** (2026-10-07): positive. One concrete change, now applied to the mockup and spec:
+- **Per-leg speed.** Each leg card has a "Route speed (*n* kn)" tickbox, ticked by default. Unticking it lets the
+  leg have its own speed, starting at the route speed. Re-ticking it resets the leg to the route speed. The leg's
+  speed is stored on the stop the leg starts from (`leg_speed_kn`) and saved with the route. In the demo, Lusong →
+  Black Island runs at 6 kn.
+- **The route speed is saved with the route** (`speed_kn`). David decided this on 2026-10-07, which closes spec Q5.
+  New routes start at the last speed used in that browser.
+- Two more captain requests belong on the **Itinerary** page and are logged in [../BACKLOG.md](../BACKLOG.md): fuel
+  estimation, and a client itinerary report with a route overview.
+
 ## Spec status
 
 All the feedback above is folded into [spec.md](spec.md) **draft 2** (2026-10-07). That draft adds:
@@ -86,12 +96,11 @@ The questions still open are in spec §7:
 - Q2 stops in charter copies
 - Q3 duplicate stop on snap
 - Q4 default distances
-- Q5 planning speed per browser
 
 ## Open items
 
-- **The captain's full review** of the mockup is due 2026-10-07. Only a first look has happened so far. Take his
-  answers to spec §7 at the same time.
+- **Spec §7 questions** Q1–Q4 still need answers from the captain or David. Q5 (route speed) is decided and
+  closed.
 - Settings → "Route Track" gets renamed to "Track Logging" (phase 5). Confirm the name.
 - Optional extras for phase 5: OpenSeaMap seamark overlay, vendored Leaflet (the admin currently needs internet
   for Leaflet and tiles).
@@ -106,7 +115,7 @@ by turning the mockup's CSS (`:root` tokens, `.icon-btn`, `.stat`, `.banner`, `.
 
 ## Next step: phase 1
 
-Settle the spec §7 questions that affect phase 1 (Q1, Q4, Q5). Then, from spec §5:
+Settle the spec §7 questions that affect phase 1 (Q1, Q4). Then, from spec §5:
 - **iolanthe-server** (`iolanthe/iolanthe-server` in the workspace):
   - `library/routes.json` and `library/anchorages.json` storage
   - `GET/POST /api/admin/routes[/save|/delete]` and `GET/POST /api/admin/anchorages[/save]`, with bridge-only

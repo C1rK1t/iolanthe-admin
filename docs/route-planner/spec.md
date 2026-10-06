@@ -37,6 +37,7 @@ Repos: `iolanthe-admin` (UI), `iolanthe-server` (storage and APIs). **No guest o
       "name": "Coron loop",
       "description": "Busuanga north side, return via Coron Town.",
       "revision": 4,
+      "speed_kn": 8,
       "created_at": "2026-10-06T10:00:00Z",
       "updated_at": "2026-10-06T11:20:00Z",
       "source": { "type": "planner" },
@@ -61,6 +62,12 @@ Repos: `iolanthe-admin` (UI), `iolanthe-server` (storage and APIs). **No guest o
   a list of sites, sorted by distance, with those within 5 nm shown first. Sites that are deleted later are dropped
   quietly when the route loads. The planner draws a faint dashed "tender" line from the stop to each associated site.
 - `source.type`: `planner`, `kml`, `gpx` (with `filename`), or `charter` (with `charter_id`, `plan`) for migrated routes.
+- `speed_kn` (knots): the **route speed**, saved with the route. Legs use it unless they have their own
+  `leg_speed_kn`. New routes start at the last speed used in that browser (default 8). Migrated and imported routes
+  start at 8.
+- `leg_speed_kn` (optional, knots, 0.5–30): the speed for the stop-to-stop leg that **starts** at this point. It's
+  set only on a stop, or on the route's first point. When it's absent, the leg uses the route speed. It's saved with
+  the route. If the stop is deleted, its leg merges into the previous one and the leg's own speed goes with it.
 
 ### 2.2 `library/anchorages.json` (new)
 
@@ -150,19 +157,25 @@ This differs from draft 1, which put the whole side panel above the map; see §7
 - **Route picker**: library routes with name, length and last updated. Below them, a group of **Charter copies**
   (read-only).
 - **Name** and **Description**.
-- **Stats** as three shaded tiles: total **nm**, number of **stops**, and **h:mm** at the planning speed. There is no
-  point count (D9).
+- **Stats** as three shaded tiles: total **nm**, number of **stops**, and **h:mm** underway, which uses the per-leg
+  speeds. There is no point count (D9).
 - A **tabbed box** with two tabs, **Stops** and **Legs**, each showing its count. The box takes the remaining
   height and scrolls inside, so its bottom stays level with the map's. On narrow screens it's capped at about 70% of
   the screen height.
   - **Stops tab**: one card per stop in route order. Each card has a blue numbered dot, the name, the anchorage
     depth, any "anchorage moved / deleted" warning, and chips for the sites it serves. Clicking a card pans to the
     stop and opens its popup. This is the list the itinerary can be built from by hand later.
-  - **Legs tab**: a **planning speed (kn)** field, remembered per browser and not saved with the route. Below it,
-    one card per **stop-to-stop leg**, styled like the stop cards: a blue numbered dot, "From → To", then distance
-    (nm) and time (h:mm, when a speed is set). There's no bearing column. If the route doesn't start or end at a
-    stop, its first and last points count as **Start** / **End**. A **Total** card follows the legs. Clicking a leg
-    zooms the map to it.
+  - **Legs tab**: a **route speed (kn)** field at the top, saved with the route (`speed_kn`, §2.1). Below it, one card per
+    **stop-to-stop leg**, styled like the stop cards: a blue numbered dot, "From → To", then distance (nm) and time
+    (h:mm at *n* kn). There's no bearing column. If the route doesn't start or end at a stop, its first and last
+    points count as **Start** / **End**. A **Total** card follows the legs. Clicking a leg zooms the map to it.
+  - **Per-leg speed** (captain, 2026-10-07): each leg card has a **Route speed (*n* kn)** tickbox, ticked by
+    default.
+    - Unticking it shows a speed field for that leg, starting at the route speed. The leg card is tinted so
+      overridden legs stand out.
+    - Re-ticking it clears the leg's own speed, so the leg goes back to the route speed.
+    - Leg speed changes are undoable and saved with the route (`leg_speed_kn`, §2.1).
+    - The time tile and the Total card add up the per-leg times. They show "—" if any leg has no speed.
 - A small meta line: revision, last updated, source, and an "unsaved changes" flag.
 
 **Map toolbar (modes)**
@@ -270,6 +283,10 @@ version strings.
 
 ## 6. Out of scope (for now)
 
+Fuel estimation and a client itinerary report with a route overview are wanted, but they belong to the Itinerary
+page, not the planner. See [../BACKLOG.md](../BACKLOG.md).
+
+
 - Day legs or a link between route points and itinerary days. Stop → site associations are the natural bridge
   for later, e.g. "fill the itinerary from this route's stops".
 - Showing stops or anchorages to guests or crew.
@@ -283,7 +300,6 @@ version strings.
 | # | Question | Mockup today |
 |---|---|---|
 | Q1 | On narrow screens, should the map come straight after the route picker (as in the mockup), or after the whole side panel (draft 1)? | Map after the picker |
-| Q2 | Should a charter copy (§2.3) keep its stops, as an additive `stops: [{name, latitude, longitude, anchorage_id, site_ids}]` per route? The guest app ignores unknown fields. Without it, opening or joining a copy loses the stops. | Coordinates only |
+| Q2 | Should a charter copy (§2.3) keep its stops, as an additive `stops: [{name, latitude, longitude, anchorage_id, site_ids, leg_speed_kn}]` per route? The guest app ignores unknown fields. Without it, opening or joining a copy loses the stops and leg speeds. | Coordinates only |
 | Q3 | When a point is snapped onto an anchorage that is already the next or previous stop, should it merge, be blocked, or create a second stop? | Creates a second stop |
 | Q4 | Confirm the default distances: auto-link sites within 2 nm, "Make stop at" within 2 nm, the sites-served picker highlights within 5 nm, snapping within 24 px. | As listed |
-| Q5 | Confirm that planning speed stays per browser and is not saved with the route. | Per browser |
