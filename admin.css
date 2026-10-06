@@ -1889,13 +1889,20 @@ body[data-admin-section] .status-panel {
   gap: 0.7rem;
 }
 
-.site-map-picker {
-  display: grid;
-  gap: 0.35rem;
+.site-map-picker-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  font-size: 0.85rem;
+}
+
+.modal-card.modal-map {
+  width: min(960px, 100%);
 }
 
 .site-map-picker-map {
-  height: 320px;
+  height: min(62vh, 560px);
   border: 1px solid var(--line);
   border-radius: 8px;
   overflow: hidden;
@@ -1903,14 +1910,18 @@ body[data-admin-section] .status-panel {
   cursor: crosshair;
 }
 
-.site-map-picker-status {
+.site-map-picker-status,
+.site-map-picker-readout {
   margin: 0;
+}
+
+.site-map-picker-status {
   padding: 1rem;
 }
 
-.site-map-picker-hint {
-  margin: 0;
-  font-size: 0.85rem;
+.site-map-picker-readout {
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .image-upload-card {

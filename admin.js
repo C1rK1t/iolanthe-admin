@@ -5559,7 +5559,6 @@
   const SITE_MAP_DEFAULT_ZOOM = 6;
   const SITE_MAP_PICKED_ZOOM = 13;
   let leafletLoadPromise = null;
-  let activeSitePickerMap = null;
 
   function loadLeaflet() {
     if (window.L) {
@@ -5592,35 +5591,23 @@
     return leafletLoadPromise;
   }
 
-  function sitePickerMapHtml(prefix) {
+  function sitePickerButtonHtml(id) {
     return `
-      <div class="site-map-picker full">
-        <div id="${prefix}-map" class="site-map-picker-map" aria-label="Map: click or drag the marker to set the site position">
-          <p class="site-map-picker-status muted">Loading map...</p>
-        </div>
-        <p class="site-map-picker-hint muted">Click the map or drag the marker to set Latitude and Longitude.</p>
+      <div class="site-map-picker-row full">
+        <span class="muted">Pick the position on a map instead of typing it.</span>
+        ${iconButtonHtml("map", "Pick position on map", ` id="${id}"`)}
       </div>
     `;
   }
 
-  // Wires a Leaflet map to the latitude/longitude DMM fields: picking on the map
-  // fills the fields, and editing the fields moves the marker.
-  function setupSitePickerMap(modal, prefix, latitudePrefix, longitudePrefix, siteLibrary) {
-    if (activeSitePickerMap) {
-      activeSitePickerMap.remove();
-      activeSitePickerMap = null;
-    }
-    const container = modal.querySelector(`#${prefix}-map`);
-    if (!container) {
-      return;
-    }
-    const fieldIds = [latitudePrefix, longitudePrefix]
-      .flatMap(fieldPrefix => ["degrees", "minutes", "hemisphere"].map(part => `#${fieldPrefix}-${part}`));
-
+  // Opens a stacked map dialog seeded from the parent's latitude/longitude DMM
+  // fields. Commit writes the pin back into those fields; cancel, Escape or a
+  // click on the backdrop closes it without changing anything.
+  function openSitePickerMap(parentModal, latitudePrefix, longitudePrefix, siteLibrary) {
     const readPosition = () => {
       try {
-        const latitude = readCoordinateFields(modal, latitudePrefix, "latitude");
-        const longitude = readCoordinateFields(modal, longitudePrefix, "longitude");
+        const latitude = readCoordinateFields(parentModal, latitudePrefix, "latitude");
+        const longitude = readCoordinateFields(parentModal, longitudePrefix, "longitude");
         return latitude === 0 && longitude === 0 ? null : [latitude, longitude];
       } catch (error) {
         return null;
@@ -5628,16 +5615,14 @@
     };
 
     const writeField = (selector, value) => {
-      const field = modal.querySelector(selector);
+      const field = parentModal.querySelector(selector);
       if (field && field.value !== value) {
         field.value = value;
         field.dispatchEvent(new Event("change", { bubbles: true }));
       }
     };
 
-    let writingFields = false;
     const writePosition = latlng => {
-      writingFields = true;
       const latitude = Math.max(-90, Math.min(90, latlng.lat));
       const longitude = ((((latlng.lng + 180) % 360) + 360) % 360) - 180;
       [[latitudePrefix, latitude, "latitude"], [longitudePrefix, longitude, "longitude"]].forEach(([fieldPrefix, value, type]) => {
@@ -5651,16 +5636,66 @@
         writeField(`#${fieldPrefix}-minutes`, coordinate.minutes);
         writeField(`#${fieldPrefix}-hemisphere`, coordinate.hemisphere);
       });
-      writingFields = false;
     };
+
+    const formatPin = latlng => {
+      const latitude = decimalToDmm(latlng.lat, "latitude");
+      const longitude = decimalToDmm(latlng.lng, "longitude");
+      return `${latitude.degrees}°${latitude.minutes}'${latitude.hemisphere} ${longitude.degrees}°${longitude.minutes}'${longitude.hemisphere}`;
+    };
+
+    const mapModal = openStackedDialogModal("Pick Site Position", `
+      <div id="site-map-picker-map" class="site-map-picker-map">
+        <p class="site-map-picker-status muted">Loading map...</p>
+      </div>
+      <p id="site-map-picker-readout" class="site-map-picker-readout muted">Click the map to drop a pin, then drag it to fine-tune.</p>
+    `, {
+      cardClass: "modal-map",
+      headerActionsHtml: `
+        <div class="button-row modal-title-actions">
+          ${iconButtonHtml("save", "Use this position", ` id="site-map-picker-commit" disabled`)}
+          ${iconButtonHtml("cancel", "Cancel", ` data-stacked-modal-close`)}
+        </div>
+      `
+    });
+    const container = mapModal.querySelector("#site-map-picker-map");
+    const readout = mapModal.querySelector("#site-map-picker-readout");
+    const commitButton = mapModal.querySelector("#site-map-picker-commit");
+    let map = null;
+    let marker = null;
+
+    const close = () => {
+      if (map) {
+        map.remove();
+        map = null;
+      }
+      closeStackedDialogModal(mapModal);
+    };
+    mapModal.addEventListener("click", event => {
+      if (event.target === mapModal) {
+        close();
+      }
+    });
+    mapModal.querySelector("[data-stacked-modal-close]").addEventListener("click", () => {
+      if (map) {
+        map.remove();
+        map = null;
+      }
+    });
+    commitButton.addEventListener("click", () => {
+      if (!marker) {
+        return;
+      }
+      writePosition(marker.getLatLng());
+      close();
+    });
 
     loadLeaflet().then(L => {
       if (!container.isConnected) {
         return;
       }
       container.innerHTML = "";
-      const map = L.map(container, { worldCopyJump: true });
-      activeSitePickerMap = map;
+      map = L.map(container, { worldCopyJump: true });
       L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
         attribution: "Tiles &copy; Esri",
         maxZoom: 18
@@ -5679,57 +5714,35 @@
         }).bindTooltip(escapeHtml(name)).addTo(map);
       });
 
-      let marker = null;
       const placeMarker = latlng => {
         if (marker) {
           marker.setLatLng(latlng);
-          return;
+        } else {
+          marker = L.marker(latlng, { draggable: true, autoPan: true }).addTo(map);
+          marker.on("drag dragend", () => {
+            readout.textContent = formatPin(marker.getLatLng());
+          });
         }
-        marker = L.marker(latlng, { draggable: true, autoPan: true }).addTo(map);
-        marker.on("dragend", () => writePosition(marker.getLatLng()));
+        readout.textContent = formatPin(marker.getLatLng());
+        commitButton.disabled = false;
       };
 
       const initial = readPosition();
       if (initial) {
-        placeMarker(initial);
+        placeMarker(L.latLng(initial));
         map.setView(initial, SITE_MAP_PICKED_ZOOM);
       } else if (otherSites.length) {
         map.fitBounds(L.latLngBounds(otherSites.map(([latitude, longitude]) => [latitude, longitude])), { padding: [24, 24], maxZoom: 10 });
       } else {
         map.setView(SITE_MAP_DEFAULT_CENTER, SITE_MAP_DEFAULT_ZOOM);
       }
+      map.on("click", event => placeMarker(event.latlng));
 
-      map.on("click", event => {
-        placeMarker(event.latlng);
-        writePosition(event.latlng);
-      });
-
-      const syncFromFields = () => {
-        if (writingFields) {
-          return;
-        }
-        const position = readPosition();
-        if (!position) {
-          return;
-        }
-        placeMarker(position);
-        if (!map.getBounds().contains(position)) {
-          map.panTo(position);
-        }
-      };
-      fieldIds.forEach(selector => {
-        const field = modal.querySelector(selector);
-        if (field) {
-          field.addEventListener("input", syncFromFields);
-          field.addEventListener("change", syncFromFields);
-        }
-      });
-
-      // The modal may still be laying out when the map is created.
-      window.setTimeout(() => map.invalidateSize(), 0);
+      // The dialog may still be laying out when the map is created.
+      window.setTimeout(() => map && map.invalidateSize(), 0);
     }).catch(() => {
       if (container.isConnected) {
-        container.innerHTML = `<p class="site-map-picker-status muted">Map unavailable offline. Enter the position in the fields above.</p>`;
+        container.innerHTML = `<p class="site-map-picker-status muted">Map unavailable offline. Enter the position in the Latitude and Longitude fields.</p>`;
       }
     });
   }
@@ -5757,7 +5770,7 @@
         </label>
         ${coordinateFieldsHtml("site-editor-latitude", "Latitude", "latitude", draft.latitude)}
         ${coordinateFieldsHtml("site-editor-longitude", "Longitude", "longitude", draft.longitude)}
-        ${sitePickerMapHtml("site-editor")}
+        ${sitePickerButtonHtml("site-editor-pick-on-map")}
         <label class="full">Description
           <textarea id="site-editor-description">${escapeText(draft.description || "")}</textarea>
         </label>
@@ -5936,7 +5949,9 @@
       drawImages();
     });
     drawImages();
-    setupSitePickerMap(modal, "site-editor", "site-editor-latitude", "site-editor-longitude", siteLibrary);
+    modal.querySelector("#site-editor-pick-on-map").addEventListener("click", () => {
+      openSitePickerMap(modal, "site-editor-latitude", "site-editor-longitude", siteLibrary);
+    });
 
     modal.querySelector("#site-editor-form").addEventListener("submit", async event => {
       event.preventDefault();
@@ -9300,6 +9315,14 @@
         </svg>
       `;
     }
+    if (kind === "map") {
+      return `
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linejoin="round"></path>
+          <circle cx="12" cy="10" r="2.4" fill="none" stroke="currentColor" stroke-width="2.1"></circle>
+        </svg>
+      `;
+    }
     if (kind === "camera") {
       return `
         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -9395,7 +9418,7 @@
     if (kind === "purchase" || kind === "confirm" || kind === "save") {
       return "success";
     }
-    if (kind === "add" || kind === "import" || kind === "edit" || kind === "promote" || kind === "clone" || kind === "move-up" || kind === "move-down" || kind === "prev" || kind === "next" || kind === "camera" || kind === "refresh" || kind === "retry-primary" || kind === "restart-route" || kind === "notes" || kind === "invoice" || kind === "reverse") {
+    if (kind === "add" || kind === "import" || kind === "edit" || kind === "promote" || kind === "clone" || kind === "move-up" || kind === "move-down" || kind === "prev" || kind === "next" || kind === "camera" || kind === "map" || kind === "refresh" || kind === "retry-primary" || kind === "restart-route" || kind === "notes" || kind === "invoice" || kind === "reverse") {
       return "secondary";
     }
     return "danger";
