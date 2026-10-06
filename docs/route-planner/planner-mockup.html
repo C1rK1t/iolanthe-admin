@@ -25,6 +25,7 @@
   --pin: #e8862a;
   --route: #ffd23f;
   --shadow: 0 12px 30px rgba(16, 32, 40, 0.18);
+  --map-h: max(520px, min(calc(100vh - 32px), 820px));
 }
 * { box-sizing: border-box; }
 html { -webkit-font-smoothing: antialiased; }
@@ -68,7 +69,18 @@ button, input, select, textarea { font: inherit; }
 
 /* Planner layout: side panel left (~30%), map right (~70%) */
 .planner { display: grid; grid-template-columns: minmax(300px, 30%) minmax(0, 1fr); gap: 16px; }
-.side { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.side { display: flex; flex-direction: column; gap: 14px; min-width: 0; height: var(--map-h); }
+/* Stops / Legs share one box that fills the side panel down to the map's bottom edge and scrolls inside */
+.tabbox { flex: 1; min-height: 160px; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.tabs { display: flex; background: var(--soft); border-bottom: 1px solid var(--line); }
+.tabs button { flex: 1; border: 0; background: none; color: var(--muted); font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; padding: 10px 8px; cursor: pointer; border-bottom: 3px solid transparent; }
+.tabs button[aria-selected="true"] { color: var(--accent-dark); background: #fff; border-bottom-color: var(--accent); }
+.tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tabs .count { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px; background: #dfe7ea; color: var(--ink); font-size: 11px; margin-left: 4px; letter-spacing: 0; }
+.tab-panel { flex: 1; min-height: 0; overflow-y: auto; padding: 10px; }
+.leg-item .title { font-weight: 700; }
+.leg-item .leg-meta { margin: 4px 0 0 30px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.leg-total { display: flex; justify-content: space-between; gap: 8px; padding: 8px 10px; border-radius: 8px; background: var(--soft); font-weight: 700; font-variant-numeric: tabular-nums; }
 .field label, .side-label { display: block; font-size: 12px; font-weight: 700; color: var(--muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
 .field input, .field select, .field textarea { width: 100%; border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; background: #fff; color: var(--ink); }
 .field textarea { min-height: 64px; resize: vertical; }
@@ -92,16 +104,11 @@ button, input, select, textarea { font: inherit; }
 .chip { font-size: 12px; background: #fbe9e7; color: #8e2a1f; border-radius: 999px; padding: 2px 8px; }
 .warn-text { color: var(--warn); font-size: 12px; font-weight: 700; }
 .empty { color: var(--muted); font-size: 13px; }
-table.legs { width: 100%; border-collapse: collapse; font-size: 13px; }
-.legs th, .legs td { padding: 5px 4px; border-bottom: 1px solid #edf0f2; text-align: left; }
-.legs th { color: var(--muted); font-weight: 700; font-size: 12px; }
-.legs .num { text-align: right; font-variant-numeric: tabular-nums; }
-.legs tfoot td { font-weight: 700; border-bottom: 0; }
-.speed-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+.speed-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin-bottom: 8px; white-space: nowrap; }
 .speed-row input { width: 64px; border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; }
 
 /* Map */
-.map-wrap { position: sticky; top: 16px; align-self: start; height: min(calc(100vh - 32px), 820px); min-height: 520px; border-radius: 8px; overflow: hidden; background: #1d3540; }
+.map-wrap { position: sticky; top: 16px; align-self: start; height: var(--map-h); border-radius: 8px; overflow: hidden; background: #1d3540; }
 #map { position: absolute; inset: 0; }
 #map.mode-add, #map.mode-anchorage { cursor: crosshair; }
 .map-fallback { position: absolute; inset: 0; display: grid; place-items: center; color: #fff; text-align: center; padding: 24px; }
@@ -183,6 +190,7 @@ table.legs { width: 100%; border-collapse: collapse; font-size: 13px; }
   .side { display: contents; }
   .side > * { order: 3; min-width: 0; }
   .side > .field:first-child { order: 1; }
+  .tabbox { max-height: 70vh; }
   .map-wrap { order: 2; }
   .map-wrap { position: relative; top: 0; height: 65vh; min-height: 380px; }
   .map-hint { max-width: calc(100% - 24px); bottom: 34px; }
@@ -226,14 +234,18 @@ table.legs { width: 100%; border-collapse: collapse; font-size: 13px; }
             <textarea id="route-desc" placeholder="Optional"></textarea>
           </div>
           <div class="stats" id="stats"></div>
-          <div>
-            <span class="side-label">Stops</span>
-            <div class="stops" id="stops"></div>
-          </div>
-          <div>
-            <span class="side-label">Legs</span>
-            <div class="speed-row">Planning speed <input id="speed" type="number" min="0" max="30" step="0.5"> kn <span class="meta">(this browser only)</span></div>
-            <div id="legs"></div>
+          <div class="tabbox">
+            <div class="tabs" role="tablist" aria-label="Stops and legs">
+              <button type="button" role="tab" id="tab-stops" aria-controls="panel-stops" aria-selected="true">Stops <span class="count" id="count-stops"></span></button>
+              <button type="button" role="tab" id="tab-legs" aria-controls="panel-legs" aria-selected="false">Legs <span class="count" id="count-legs"></span></button>
+            </div>
+            <div class="tab-panel" role="tabpanel" id="panel-stops" aria-labelledby="tab-stops">
+              <div class="stops" id="stops"></div>
+            </div>
+            <div class="tab-panel" role="tabpanel" id="panel-legs" aria-labelledby="tab-legs" hidden>
+              <label class="speed-row" title="Remembered in this browser only; not saved with the route">Planning speed <input id="speed" type="number" min="0" max="30" step="0.5"> kn</label>
+              <div class="stops" id="legs"></div>
+            </div>
           </div>
           <div class="meta" id="route-meta"></div>
         </aside>
@@ -696,6 +708,7 @@ table.legs { width: 100%; border-collapse: collapse; font-size: 13px; }
         !a ? el('div', { class: 'warn-text' }, '⚠ Anchorage deleted. The stop keeps its position.') : null,
         siteChips.length ? el('div', { class: 'chips' }, siteChips) : el('div', { class: 'empty', style: 'margin-top:4px' }, 'No sites linked'));
     });
+    $('count-stops').textContent = stops.length || '';
     $('stops').replaceChildren(...(stops.length ? stops : [el('div', { class: 'empty' }, work.copyOf ? 'Charter copies hold coordinates only, so they have no stops.' : 'No stops yet. In Add mode, tap an anchorage to add one.')]));
 
     renderLegs();
@@ -720,24 +733,36 @@ table.legs { width: 100%; border-collapse: collapse; font-size: 13px; }
     const label = ({ p, i }) => (isStop(p) ? p.name : (i === 0 ? 'Start' : 'End'));
     return ends.slice(1).map((to, k) => {
       const from = ends[k];
-      return { from: label(from), to: label(to), nm: routeNm(pts.slice(from.i, to.i + 1)) };
+      return { from: label(from), to: label(to), fromIndex: from.i, toIndex: to.i, nm: routeNm(pts.slice(from.i, to.i + 1)) };
     });
+  }
+
+  function focusLeg(leg) {
+    if (!map) return;
+    map.closePopup();
+    map.fitBounds(L.latLngBounds(work.route.points.slice(leg.fromIndex, leg.toIndex + 1).map(ll)).pad(0.25));
   }
 
   function renderLegs() {
     const pts = work.route.points;
     const speed = speedKn();
-    if (pts.length < 2) { $('legs').replaceChildren(el('div', { class: 'empty' }, 'Add at least two points to see legs.')); return; }
-    const legs = stopLegs(pts);
+    const legs = pts.length < 2 ? [] : stopLegs(pts);
+    $('count-legs').textContent = legs.length || '';
+    if (!legs.length) { $('legs').replaceChildren(el('div', { class: 'empty' }, 'Add at least two points to see legs.')); return; }
     const total = legs.reduce((sum, l) => sum + l.nm, 0);
-    const rows = legs.map((l, k) => el('tr', {},
-      el('td', {}, k + 1), el('td', {}, `${l.from} → ${l.to}`),
-      el('td', { class: 'num' }, l.nm.toFixed(1)),
-      speed ? el('td', { class: 'num' }, fmtHm(l.nm / speed)) : null));
-    $('legs').replaceChildren(el('table', { class: 'legs' },
-      el('thead', {}, el('tr', {}, el('th', {}, '#'), el('th', {}, 'Stop to stop'), el('th', { class: 'num' }, 'nm'), speed ? el('th', { class: 'num' }, 'h:mm') : null)),
-      el('tbody', {}, rows),
-      el('tfoot', {}, el('tr', {}, el('td', {}), el('td', {}, 'Total'), el('td', { class: 'num' }, total.toFixed(1)), speed ? el('td', { class: 'num' }, fmtHm(total / speed)) : null))));
+    const timeText = (nm) => (speed ? ` · ${fmtHm(nm / speed)}` : '');
+    $('legs').replaceChildren(
+      ...legs.map((l, k) => el('div', { class: 'stop-item leg-item', title: 'Show this leg on the map', onclick: () => focusLeg(l) },
+        el('div', { class: 'title' }, el('span', { class: 'stop-num' }, k + 1), `${l.from} → ${l.to}`),
+        el('div', { class: 'leg-meta' }, `${l.nm.toFixed(1)} nm${timeText(l.nm)}`))),
+      el('div', { class: 'leg-total' }, el('span', {}, 'Total'), el('span', {}, `${total.toFixed(1)} nm${timeText(total)}`)));
+  }
+
+  function showTab(name) {
+    ['stops', 'legs'].forEach((t) => {
+      $(`tab-${t}`).setAttribute('aria-selected', String(t === name));
+      $(`panel-${t}`).hidden = t !== name;
+    });
   }
 
   function renderModes() {
@@ -1452,6 +1477,8 @@ ${r.points.filter(isStop).map((p) => `  <Placemark><name>${x(p.name)}</name><Poi
     });
     $('route-name').addEventListener('input', (e) => { work.route = { ...work.route, name: e.target.value }; renderActions(); renderStats(); });
     $('route-desc').addEventListener('input', (e) => { work.route = { ...work.route, description: e.target.value }; renderActions(); renderStats(); });
+    $('tab-stops').addEventListener('click', () => showTab('stops'));
+    $('tab-legs').addEventListener('click', () => showTab('legs'));
     $('speed').value = loadSpeed();
     $('speed').addEventListener('input', () => { storeSpeed($('speed').value); renderStats(); });
     $('itin-charter').addEventListener('change', (e) => { ui.itinCharter = e.target.value; renderItinerary(); });

@@ -66,6 +66,12 @@ charters from the Itinerary page.
    an option to reverse it. A duplicate point where the two routes meet is dropped. Then use Save As to keep the
    originals. Spec §3/§4.1 need this added: it's browser-only, so there's no new API.
 
+Captain's first look (2026-10-06), applied:
+- **Stops and Legs share one tabbed box** (with counts on the tabs). On desktop it fills the side panel and ends
+  level with the bottom of the map, scrolling inside. On phones it's capped at 70% of the screen height.
+- **Legs are cards like the stops**: a blue numbered dot, "From → To", then nm and h:mm. A Total card sits at the
+  end. Clicking a leg zooms the map to it.
+
 **Style rollout:** David wants the mockup's visual style used across the **whole Admin site**. That means the square
 icon buttons (green save / red cancel, grey secondary, separators), the shaded stat tiles and panels, the button
 styles, the type and the uppercase field labels. Plan it as its own piece of work after the Routes phases, or
