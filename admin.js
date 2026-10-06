@@ -5330,7 +5330,7 @@
           <label>KML file
             <input id="route-file" type="file" accept=".kml,application/vnd.google-earth.kml+xml,text/xml,application/xml" required>
           </label>
-          <p class="muted full">Uploading a route replaces only the selected plan's route and converts the KML into <code>planned-route.json</code>. Existing single-route data is treated as the Primary route.</p>
+          <p class="muted full">Uploading a route replaces only the selected plan's route and converts the KML into <code>planned-route.json</code>. Existing single-route data is treated as the Primary route. If the file contains pins, you can pick which ones to add as new sites after the upload.</p>
         </form>
       </section>
     `;
@@ -7998,6 +7998,12 @@
     })) {
       return;
     }
+    let kmlPins = [];
+    try {
+      kmlPins = parseKmlPins(await file.text());
+    } catch (error) {
+      kmlPins = [];
+    }
     try {
       await api(`/api/admin/charter/${encodeURIComponent(charterId)}/upload-route?plan=${encodeURIComponent(routePlan)}`, {
         method: "POST",
@@ -8012,7 +8018,218 @@
       await renderCharter();
     } catch (error) {
       setStatus(error.message, "error");
+      return;
     }
+    if (kmlPins.length) {
+      try {
+        openKmlPinImportModal(kmlPins, await loadSites());
+      } catch (error) {
+        setStatus(error.message, "error");
+      }
+    }
+  }
+
+  function kmlChildrenByName(parent, name) {
+    return Array.from(parent?.children || []).filter(child => child.localName === name);
+  }
+
+  function kmlDescendantsByName(parent, name) {
+    return Array.from(parent?.getElementsByTagName("*") || []).filter(child => child.localName === name);
+  }
+
+  function kmlChildText(parent, name) {
+    const child = kmlChildrenByName(parent, name)[0];
+    return child ? String(child.textContent || "").trim() : "";
+  }
+
+  function kmlHtmlToText(value) {
+    const html = String(value || "").trim();
+    if (!html || !/[<&]/.test(html)) {
+      return html;
+    }
+    const doc = new DOMParser().parseFromString(
+      html.replace(/<br\s*\/?>/gi, "\n").replace(/<\/(p|div|li|tr|h[1-6])>/gi, "\n"),
+      "text/html"
+    );
+    return String(doc.body?.textContent || "")
+      .split("\n")
+      .map(line => line.trim())
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  function kmlExtendedData(placemark) {
+    const fields = [];
+    kmlChildrenByName(placemark, "ExtendedData").forEach(extended => {
+      kmlDescendantsByName(extended, "Data").forEach(data => {
+        const label = kmlChildText(data, "displayName") || data.getAttribute("name") || "";
+        const value = kmlHtmlToText(kmlChildText(data, "value"));
+        if (label && value) {
+          fields.push({ label, value });
+        }
+      });
+      kmlDescendantsByName(extended, "SimpleData").forEach(data => {
+        const label = data.getAttribute("name") || "";
+        const value = kmlHtmlToText(data.textContent);
+        if (label && value) {
+          fields.push({ label, value });
+        }
+      });
+    });
+    return fields;
+  }
+
+  // Returns the Point placemarks ("pins") in a KML document; route lines are ignored.
+  function parseKmlPins(text) {
+    const doc = new DOMParser().parseFromString(String(text || ""), "application/xml");
+    if (doc.getElementsByTagName("parsererror").length) {
+      return [];
+    }
+    const pins = [];
+    kmlDescendantsByName(doc, "Placemark").forEach(placemark => {
+      const point = kmlDescendantsByName(placemark, "Point")[0];
+      if (!point) {
+        return;
+      }
+      const [longitude, latitude] = kmlChildText(point, "coordinates").split(/[\s,]+/).filter(Boolean).map(Number);
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)
+        || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) {
+        return;
+      }
+      const folder = placemark.parentElement && placemark.parentElement.localName === "Folder"
+        ? kmlChildText(placemark.parentElement, "name")
+        : "";
+      pins.push({
+        name: kmlChildText(placemark, "name") || `Pin ${pins.length + 1}`,
+        description: kmlHtmlToText(kmlChildText(placemark, "description")),
+        fields: kmlExtendedData(placemark),
+        folder,
+        latitude: Number(latitude.toFixed(6)),
+        longitude: Number(longitude.toFixed(6))
+      });
+    });
+    return pins;
+  }
+
+  function kmlPinSiteDescription(pin) {
+    return [
+      pin.description,
+      ...pin.fields.map(field => `${field.label}: ${field.value}`)
+    ].filter(Boolean).join("\n");
+  }
+
+  function kmlPinDetailsHtml(pin) {
+    const rows = [
+      pin.folder ? { label: "Folder", value: pin.folder } : null,
+      pin.description ? { label: "Description", value: pin.description } : null,
+      ...pin.fields
+    ].filter(Boolean);
+    if (!rows.length) {
+      return `<p class="muted kml-pin-empty">No other data in this pin.</p>`;
+    }
+    return `
+      <dl class="kml-pin-data">
+        ${rows.map(row => `<dt>${escapeHtml(row.label)}</dt><dd>${escapeHtml(row.value)}</dd>`).join("")}
+      </dl>
+    `;
+  }
+
+  function openKmlPinImportModal(pins, siteLibrary) {
+    const headerActionsHtml = `
+      <div class="button-row modal-title-actions">
+        ${iconSubmitButtonHtml("save", "Import selected pins as sites", ` form="kml-pin-import-form"`)}
+        ${iconButtonHtml("cancel", "Cancel", ` data-modal-close`)}
+      </div>
+    `;
+    const existingNames = new Set(siteLibrary.sites.map(normalizedSiteName).filter(Boolean));
+    const seenNames = new Set();
+    const rowsHtml = pins.map((pin, index) => {
+      const key = pin.name.trim().toLocaleLowerCase();
+      const duplicate = existingNames.has(key);
+      const repeated = !duplicate && seenNames.has(key);
+      seenNames.add(key);
+      return `
+        <label class="kml-pin-row${duplicate || repeated ? " is-duplicate" : ""}">
+          <input type="checkbox" name="kml-pin" value="${index}"${duplicate || repeated ? "" : " checked"}>
+          <span class="kml-pin-body">
+            <span class="kml-pin-heading">
+              <strong>${escapeHtml(pin.name)}</strong>
+              ${duplicate ? `<span class="kml-pin-flag">Already a site</span>` : ""}
+              ${repeated ? `<span class="kml-pin-flag">Repeated in file</span>` : ""}
+            </span>
+            <span class="site-position">${escapeHtml(formatSitePosition(pin))}</span>
+            ${kmlPinDetailsHtml(pin)}
+          </span>
+        </label>
+      `;
+    }).join("");
+    const modal = openDialogModal("Import Pins as Sites", `
+      <form id="kml-pin-import-form" class="kml-pin-import" novalidate>
+        <p class="muted">This route file contains ${pins.length} pin${pins.length === 1 ? "" : "s"}. Tick the ones to add to the Site Editor. Pins whose names match an existing site are left unticked.</p>
+        <div class="kml-pin-toolbar">
+          <label class="kml-pin-select-all">
+            <input type="checkbox" id="kml-pin-select-all">
+            <span>Select all</span>
+          </label>
+          <span id="kml-pin-count" class="muted"></span>
+        </div>
+        <div class="kml-pin-list">${rowsHtml}</div>
+        <p id="kml-pin-import-error" class="modal-error" role="alert"></p>
+      </form>
+    `, { cardClass: "modal-wide", headerActionsHtml });
+    const form = modal.querySelector("#kml-pin-import-form");
+    const selectAll = modal.querySelector("#kml-pin-select-all");
+    const countField = modal.querySelector("#kml-pin-count");
+    const errorField = modal.querySelector("#kml-pin-import-error");
+    const boxes = Array.from(modal.querySelectorAll("input[name='kml-pin']"));
+    const syncCount = () => {
+      const checked = boxes.filter(box => box.checked).length;
+      countField.textContent = `${checked} of ${boxes.length} selected`;
+      selectAll.checked = checked === boxes.length;
+      selectAll.indeterminate = checked > 0 && checked < boxes.length;
+    };
+    boxes.forEach(box => box.addEventListener("change", syncCount));
+    selectAll.addEventListener("change", () => {
+      boxes.forEach(box => {
+        box.checked = selectAll.checked;
+      });
+      syncCount();
+    });
+    syncCount();
+
+    form.addEventListener("submit", async event => {
+      event.preventDefault();
+      errorField.textContent = "";
+      const selected = boxes.filter(box => box.checked).map(box => pins[Number(box.value)]);
+      if (!selected.length) {
+        errorField.textContent = "Tick at least one pin to import, or cancel.";
+        return;
+      }
+      try {
+        const working = { ...siteLibrary, sites: [...siteLibrary.sites] };
+        const created = selected.map(pin => {
+          const site = normalizeSiteEditorDraft({
+            ...blankSite(),
+            title: pin.name,
+            latitude: pin.latitude,
+            longitude: pin.longitude,
+            description: kmlPinSiteDescription(pin)
+          }, working, null);
+          working.sites.push(site);
+          return site;
+        });
+        await saveSitesLibrary(
+          normalizeSiteLibrary(working),
+          `Imported ${created.length} site${created.length === 1 ? "" : "s"} from the route file.`
+        );
+        markModalSaved(modal);
+        closeDialogModal();
+      } catch (error) {
+        errorField.textContent = error.message === "A site with this name already exists."
+          ? "A ticked pin has the same name as an existing site or another ticked pin. Untick it and try again."
+          : (error.message || "Unable to import pins.");
+      }
+    });
   }
 
   async function renderGalley() {

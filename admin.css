@@ -3147,3 +3147,109 @@ button.admin-icon-button--preview:focus {
     padding-inline: 0.8rem;
   }
 }
+
+.kml-pin-import {
+  display: grid;
+  gap: 10px;
+}
+
+.kml-pin-import > p {
+  margin: 0;
+}
+
+.kml-pin-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.kml-pin-select-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+}
+
+.kml-pin-list {
+  display: grid;
+  gap: 8px;
+  max-height: min(60vh, 560px);
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.kml-pin-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  cursor: pointer;
+}
+
+.kml-pin-row:has(input:checked) {
+  border-color: var(--accent);
+  background: #eef6f7;
+}
+
+.kml-pin-row input[type="checkbox"],
+.kml-pin-select-all input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  margin: 2px 0 0;
+}
+
+.kml-pin-body {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.kml-pin-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.kml-pin-flag {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #f6e7d2;
+  color: #7a4a12;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.kml-pin-row .site-position {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.kml-pin-data {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 2px 12px;
+  margin: 4px 0 0;
+  font-size: 0.9rem;
+}
+
+.kml-pin-data dt {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.kml-pin-data dd {
+  margin: 0;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.kml-pin-empty {
+  margin: 0;
+  font-size: 0.9rem;
+}
