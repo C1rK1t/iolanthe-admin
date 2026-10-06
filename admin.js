@@ -2060,7 +2060,7 @@
     }
     const selectId = `${section}-charter-select`;
     const hasCharters = Array.isArray(state.charters) && state.charters.length > 0;
-    const showCharterSelector = !(section === "charter" && state.sectionPanels.charter === "sites");
+    const showCharterSelector = !(section === "charter" && ["sites", "routes"].includes(state.sectionPanels.charter));
     const showCharterActions = section === "charter"
       && state.sectionPanels.charter === "info"
       && canManageCharterAdmin();
@@ -7886,6 +7886,9 @@
     if (activePanel === "crew") {
       return renderCrewPanel();
     }
+    if (activePanel === "routes") {
+      return window.IolantheRoutes ? window.IolantheRoutes.render() : placeholderCard("Routes");
+    }
     if (activePanel === "route-upload") {
       return renderRouteUploadPanel(plannedRoute, itinerary, charterInfo);
     }
@@ -7906,6 +7909,12 @@
     }
     if (activePanel === "crew") {
       bindCrewPanel(crewList);
+      return;
+    }
+    if (activePanel === "routes") {
+      if (window.IolantheRoutes) {
+        window.IolantheRoutes.bind({ siteLibrary });
+      }
       return;
     }
     if (activePanel === "route-upload") {
@@ -7930,6 +7939,7 @@
       { id: "info", label: "Charter Info" },
       { id: "itinerary", label: "Itinerary" },
       { id: "crew", label: "Crew" },
+      { id: "routes", label: "Routes" },
       { id: "route-upload", label: "Route Upload" },
       { id: "sites", label: "Site Editor" }
     ];
@@ -15605,6 +15615,18 @@
     }
   });
   els.resetSessionButton.addEventListener("click", resetSessionForDevelopment);
+
+  // Helpers for panels that live in their own files (routes.js). Read-only; add to it only what those files need.
+  window.IolantheAdmin = Object.freeze({
+    api,
+    setStatus,
+    escapeHtml,
+    showAdminConfirm,
+    setPageUnsavedGuard,
+    clearPageUnsavedGuard,
+    loadLeaflet,
+    canManageCharterAdmin
+  });
 
   loadBootstrap();
 })();
