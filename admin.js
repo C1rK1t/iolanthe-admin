@@ -8111,6 +8111,22 @@
     return pins;
   }
 
+  // Pins this close to an existing site (or with the same name) are offered as a possible match.
+  const KML_PIN_MATCH_RADIUS_NM = 2;
+
+  function distanceNauticalMiles(a, b) {
+    const toRadians = value => Number(value) * Math.PI / 180;
+    const dLat = toRadians(b.latitude) - toRadians(a.latitude);
+    const dLon = toRadians(b.longitude) - toRadians(a.longitude);
+    const h = Math.sin(dLat / 2) ** 2
+      + Math.cos(toRadians(a.latitude)) * Math.cos(toRadians(b.latitude)) * Math.sin(dLon / 2) ** 2;
+    return 2 * 3440.065 * Math.asin(Math.min(1, Math.sqrt(h)));
+  }
+
+  function formatNauticalMiles(value) {
+    return `${value < 10 ? value.toFixed(1) : Math.round(value)} NM`;
+  }
+
   function kmlPinSiteDescription(pin) {
     return [
       pin.description,
@@ -8118,54 +8134,97 @@
     ].filter(Boolean).join("\n");
   }
 
-  function kmlPinDetailsHtml(pin) {
-    const rows = [
-      pin.folder ? { label: "Folder", value: pin.folder } : null,
-      pin.description ? { label: "Description", value: pin.description } : null,
-      ...pin.fields
-    ].filter(Boolean);
-    if (!rows.length) {
-      return `<p class="muted kml-pin-empty">No other data in this pin.</p>`;
+  function kmlPinPreview(pin) {
+    const text = kmlPinSiteDescription(pin).replace(/\s+/g, " ").trim();
+    return text || "No description";
+  }
+
+  function kmlPinMatches(pin, sites) {
+    const pinName = pin.name.trim().toLocaleLowerCase();
+    return sites
+      .map(site => {
+        const hasPosition = Number.isFinite(Number(site.latitude)) && Number.isFinite(Number(site.longitude))
+          && String(site.latitude) !== "" && String(site.longitude) !== "";
+        return {
+          site,
+          sameName: normalizedSiteName(site) === pinName,
+          distance: hasPosition ? distanceNauticalMiles(pin, site) : Infinity
+        };
+      })
+      .filter(match => match.sameName || match.distance <= KML_PIN_MATCH_RADIUS_NM)
+      .sort((a, b) => (b.sameName - a.sameName) || (a.distance - b.distance));
+  }
+
+  function kmlMatchLabel(match) {
+    const distance = Number.isFinite(match.distance) ? formatNauticalMiles(match.distance) : "no position";
+    return `${siteDisplayName(match.site)} (${match.sameName ? "same name, " : ""}${distance})`;
+  }
+
+  function uniqueKmlSiteName(name, sites) {
+    const taken = new Set(sites.map(normalizedSiteName));
+    let candidate = name;
+    let suffix = 2;
+    while (taken.has(candidate.trim().toLocaleLowerCase())) {
+      candidate = `${name} ${suffix}`;
+      suffix += 1;
     }
-    return `
-      <dl class="kml-pin-data">
-        ${rows.map(row => `<dt>${escapeHtml(row.label)}</dt><dd>${escapeHtml(row.value)}</dd>`).join("")}
-      </dl>
-    `;
+    return candidate;
+  }
+
+  function mergeSiteDescription(existing, incoming) {
+    const current = String(existing || "").trim();
+    const extraLines = String(incoming || "").split("\n")
+      .map(line => line.trim())
+      .filter(line => line && !current.includes(line));
+    return [current, ...extraLines].filter(Boolean).join("\n");
   }
 
   function openKmlPinImportModal(pins, siteLibrary) {
     const headerActionsHtml = `
       <div class="button-row modal-title-actions">
-        ${iconSubmitButtonHtml("save", "Import selected pins as sites", ` form="kml-pin-import-form"`)}
+        ${iconSubmitButtonHtml("save", "Import selected pins", ` form="kml-pin-import-form"`)}
         ${iconButtonHtml("cancel", "Cancel", ` data-modal-close`)}
       </div>
     `;
-    const existingNames = new Set(siteLibrary.sites.map(normalizedSiteName).filter(Boolean));
-    const seenNames = new Set();
+    const matchesByPin = pins.map(pin => kmlPinMatches(pin, siteLibrary.sites));
+    const matchedCount = matchesByPin.filter(matches => matches.length).length;
     const rowsHtml = pins.map((pin, index) => {
-      const key = pin.name.trim().toLocaleLowerCase();
-      const duplicate = existingNames.has(key);
-      const repeated = !duplicate && seenNames.has(key);
-      seenNames.add(key);
+      const matches = matchesByPin[index];
+      const preview = kmlPinPreview(pin);
+      const matchHtml = matches.length ? `
+        <span class="kml-pin-match">
+          <span class="kml-pin-flag">${matches[0].sameName ? "Already a site" : "Near a site"}</span>
+          <select data-kml-match="${index}" aria-label="Existing site for ${escapeAttribute(pin.name)}">
+            ${matches.map((match, matchIndex) => `
+              <option value="${matchIndex}" title="${escapeAttribute(`${formatSitePosition(match.site)} · ${siteDescriptionPreview(match.site)}`)}">${escapeHtml(kmlMatchLabel(match))}</option>
+            `).join("")}
+          </select>
+          <select data-kml-action="${index}" aria-label="What to do with ${escapeAttribute(pin.name)}">
+            <option value="existing" selected>Use existing</option>
+            <option value="merge">Merge into it</option>
+            <option value="overwrite">Overwrite it</option>
+            <option value="new">New site</option>
+          </select>
+          <span class="kml-pin-match-site" data-kml-match-detail="${index}"></span>
+        </span>
+      ` : "";
       return `
-        <label class="kml-pin-row${duplicate || repeated ? " is-duplicate" : ""}">
-          <input type="checkbox" name="kml-pin" value="${index}"${duplicate || repeated ? "" : " checked"}>
+        <div class="kml-pin-row${matches.length ? " is-matched" : ""}">
+          <input type="checkbox" name="kml-pin" value="${index}" checked aria-label="Import ${escapeAttribute(pin.name)}">
           <span class="kml-pin-body">
-            <span class="kml-pin-heading">
+            <span class="kml-pin-line">
               <strong>${escapeHtml(pin.name)}</strong>
-              ${duplicate ? `<span class="kml-pin-flag">Already a site</span>` : ""}
-              ${repeated ? `<span class="kml-pin-flag">Repeated in file</span>` : ""}
+              <span class="site-position">${escapeHtml(formatSitePosition(pin))}</span>
+              <span class="kml-pin-preview" title="${escapeAttribute(kmlPinSiteDescription(pin))}">${escapeHtml(preview)}</span>
             </span>
-            <span class="site-position">${escapeHtml(formatSitePosition(pin))}</span>
-            ${kmlPinDetailsHtml(pin)}
+            ${matchHtml}
           </span>
-        </label>
+        </div>
       `;
     }).join("");
     const modal = openDialogModal("Import Pins as Sites", `
       <form id="kml-pin-import-form" class="kml-pin-import" novalidate>
-        <p class="muted">This route file contains ${pins.length} pin${pins.length === 1 ? "" : "s"}. Tick the ones to add to the Site Editor. Pins whose names match an existing site are left unticked.</p>
+        <p class="muted">${pins.length} pin${pins.length === 1 ? "" : "s"} found. Ticked pins are imported with their full description and data.${matchedCount ? ` ${matchedCount} ${matchedCount === 1 ? "is" : "are"} within ${KML_PIN_MATCH_RADIUS_NM} NM of, or named like, an existing site: choose what to do with ${matchedCount === 1 ? "it" : "each"}.` : ""}</p>
         <div class="kml-pin-toolbar">
           <label class="kml-pin-select-all">
             <input type="checkbox" id="kml-pin-select-all">
@@ -8188,7 +8247,21 @@
       selectAll.checked = checked === boxes.length;
       selectAll.indeterminate = checked > 0 && checked < boxes.length;
     };
+    const syncMatchDetail = index => {
+      const detail = modal.querySelector(`[data-kml-match-detail="${index}"]`);
+      const matchSelect = modal.querySelector(`[data-kml-match="${index}"]`);
+      if (!detail || !matchSelect) {
+        return;
+      }
+      const match = matchesByPin[index][Number(matchSelect.value)];
+      detail.textContent = `Existing site: ${formatSitePosition(match.site)} · ${siteDescriptionPreview(match.site)}`;
+      detail.title = String(match.site.description || "");
+    };
     boxes.forEach(box => box.addEventListener("change", syncCount));
+    modal.querySelectorAll("[data-kml-match]").forEach(select => {
+      select.addEventListener("change", () => syncMatchDetail(select.dataset.kmlMatch));
+      syncMatchDetail(select.dataset.kmlMatch);
+    });
     selectAll.addEventListener("change", () => {
       boxes.forEach(box => {
         box.checked = selectAll.checked;
@@ -8200,34 +8273,67 @@
     form.addEventListener("submit", async event => {
       event.preventDefault();
       errorField.textContent = "";
-      const selected = boxes.filter(box => box.checked).map(box => pins[Number(box.value)]);
+      const selected = boxes.filter(box => box.checked).map(box => Number(box.value));
       if (!selected.length) {
         errorField.textContent = "Tick at least one pin to import, or cancel.";
         return;
       }
       try {
         const working = { ...siteLibrary, sites: [...siteLibrary.sites] };
-        const created = selected.map(pin => {
-          const site = normalizeSiteEditorDraft({
-            ...blankSite(),
-            title: pin.name,
-            latitude: pin.latitude,
-            longitude: pin.longitude,
-            description: kmlPinSiteDescription(pin)
-          }, working, null);
-          working.sites.push(site);
-          return site;
+        const counts = { created: 0, merged: 0, overwritten: 0, kept: 0 };
+        selected.forEach(index => {
+          const pin = pins[index];
+          const matches = matchesByPin[index];
+          const action = matches.length
+            ? modal.querySelector(`[data-kml-action="${index}"]`).value
+            : "new";
+          if (action === "existing") {
+            counts.kept += 1;
+            return;
+          }
+          if (action === "new") {
+            const site = normalizeSiteEditorDraft({
+              ...blankSite(),
+              title: uniqueKmlSiteName(pin.name, working.sites),
+              latitude: pin.latitude,
+              longitude: pin.longitude,
+              description: kmlPinSiteDescription(pin)
+            }, working, null);
+            working.sites.push(site);
+            counts.created += 1;
+            return;
+          }
+          const targetId = siteIdForInput(matches[Number(modal.querySelector(`[data-kml-match="${index}"]`).value)].site);
+          const targetIndex = working.sites.findIndex(site => siteIdForInput(site) === targetId);
+          const target = working.sites[targetIndex];
+          const hasPosition = String(target.latitude ?? "") !== "" && Number.isFinite(Number(target.latitude))
+            && String(target.longitude ?? "") !== "" && Number.isFinite(Number(target.longitude));
+          const draft = action === "overwrite"
+            ? { ...target, latitude: pin.latitude, longitude: pin.longitude, description: kmlPinSiteDescription(pin) }
+            : {
+              ...target,
+              latitude: hasPosition ? target.latitude : pin.latitude,
+              longitude: hasPosition ? target.longitude : pin.longitude,
+              description: mergeSiteDescription(target.description, kmlPinSiteDescription(pin))
+            };
+          working.sites[targetIndex] = normalizeSiteEditorDraft(draft, working, target);
+          counts[action === "overwrite" ? "overwritten" : "merged"] += 1;
         });
-        await saveSitesLibrary(
-          normalizeSiteLibrary(working),
-          `Imported ${created.length} site${created.length === 1 ? "" : "s"} from the route file.`
-        );
+        const summary = [
+          counts.created ? `${counts.created} created` : "",
+          counts.merged ? `${counts.merged} merged` : "",
+          counts.overwritten ? `${counts.overwritten} overwritten` : "",
+          counts.kept ? `${counts.kept} kept as existing` : ""
+        ].filter(Boolean).join(", ");
+        if (counts.created || counts.merged || counts.overwritten) {
+          await saveSitesLibrary(normalizeSiteLibrary(working), `Route pins imported: ${summary}.`);
+        } else {
+          setStatus("No site changes: every ticked pin kept its existing site.", "ok");
+        }
         markModalSaved(modal);
         closeDialogModal();
       } catch (error) {
-        errorField.textContent = error.message === "A site with this name already exists."
-          ? "A ticked pin has the same name as an existing site or another ticked pin. Untick it and try again."
-          : (error.message || "Unable to import pins.");
+        errorField.textContent = error.message || "Unable to import pins.";
       }
     });
   }
