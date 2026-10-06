@@ -124,11 +124,11 @@
   // ---------- working route ----------
   const isDirty = () => Boolean(work) && core().routeSnapshot(work.route) !== work.savedJson;
 
-  function setWork(route) {
+  function setWork(route, opts) {
     const clone = JSON.parse(JSON.stringify(route));
     work = { route: clone, savedJson: core().routeSnapshot(clone), baseRevision: clone.revision || 0 };
     history = { undo: [], redo: [] };
-    renderAll({ fit: true, inputs: true });
+    renderAll({ fit: true, inputs: true, ...(opts || {}) });
   }
 
   function openLibraryRoute(id) {
@@ -536,6 +536,20 @@
   // The server turns a missing speed into its default, so a blank speed is sent as an explicit null.
   const withSpeed = (route) => ({ ...route, speed_kn: route.speed_kn == null ? null : route.speed_kn });
 
+  // Applies a server-saved route. If the user kept editing while the request was in flight, keep those edits as unsaved.
+  function applySaved(saved, sent, isNewRoute) {
+    replaceInLibrary(saved);
+    if (!isNewRoute && work.route.id !== saved.id) { renderPicker(); return; }
+    const current = { ...work.route, name: (work.route.name || "").trim() };
+    if (core().routeSnapshot(current) === sent) { setWork(saved, { fit: false }); afterPersist(); return; }
+    work.baseRevision = saved.revision;
+    work.route = { ...work.route, id: saved.id, revision: saved.revision, updated_at: saved.updated_at, created_at: saved.created_at, source: saved.source };
+    work.savedJson = core().routeSnapshot(saved);
+    renderPicker();
+    renderActions();
+    renderStats();
+  }
+
   async function saveRoute() {
     if (!work || saving) return;
     if (!work.route.id) { saveAs(true); return; }
@@ -544,14 +558,13 @@
     const mine = panel;
     const route = withSpeed({ ...work.route, name: work.route.name.trim() });
     const id = route.id;
+    const sent = core().routeSnapshot(route);
     saving = true;
     renderActions();
     try {
       const { route: saved } = await post("/api/admin/routes/save", { route, base_revision: work.baseRevision });
       if (panel !== mine || !mine.isConnected) return;
-      replaceInLibrary(saved);
-      setWork(saved);
-      afterPersist();
+      applySaved(saved, sent, false);
       status(`Saved "${saved.name}" · revision ${saved.revision}`, "ok");
     } catch (error) {
       if (panel !== mine || !mine.isConnected) return;
@@ -596,11 +609,10 @@
         renderActions();
         try {
           const route = withSpeed({ ...work.route, id: "", name, source: work.route.source });
+          const sent = core().routeSnapshot(route);
           const { route: saved } = await post("/api/admin/routes/save", { route, base_revision: 0 });
           if (panel !== mine || !mine.isConnected) return true;
-          replaceInLibrary(saved);
-          setWork(saved);
-          afterPersist();
+          applySaved(saved, sent, true);
           status(`Saved "${saved.name}" to the library`, "ok");
           return true;
         } catch (error) {
@@ -615,7 +627,7 @@
   }
 
   async function deleteRoute() {
-    if (!work || !work.route.id) return;
+    if (!work || !work.route.id || saving) return;
     const { id, name } = work.route;
     const ok = await A().showAdminConfirm({
       title: "Delete route?",
@@ -631,7 +643,16 @@
       setWork(routes.length ? routes[0] : blankRoute());
       afterPersist();
       status(`Deleted "${name}"`, "ok");
-    } catch (error) { reportError(error); }
+    } catch (error) {
+      if (error.status !== 404) { reportError(error); return; }
+      try {
+        await reloadLibrary();
+        if (panel !== mine || !mine.isConnected) return;
+        setWork(routes[0] || blankRoute());
+        afterPersist();
+        status("That route had already been deleted.", "");
+      } catch (e) { reportError(e); }
+    }
   }
 
   async function newRoute() {
@@ -662,8 +683,9 @@
       const other = others.find((r) => r.id === sel.value);
       const joined = c.joinPoints(work.route.points, other.points, opts);
       const gap = c.joinGapNm(work.route.points, other.points, opts);
+      const dropped = joined.length < work.route.points.length + other.points.length || !work.route.points.length || !other.points.length;
       preview.textContent = `${work.route.name || "This route"} becomes ${c.routeNm(joined).toFixed(1)} nm with ${joined.filter(c.isStop).length} stops.`
-        + (gap > 0.05 ? ` The ${gap.toFixed(1)} nm gap between them becomes a straight leg; check it on the map.` : " They meet at the same spot, so the join is seamless.");
+        + (dropped ? " They share a stop or meet within 50 m, so the duplicate point is dropped." : ` The ${gap.toFixed(1)} nm gap between them becomes a straight leg; check it on the map.`);
     };
     sel.addEventListener("change", update);
     const radio = (name, checked, label, on) => el("label", {}, el("input", { type: "radio", name, checked, onchange: () => { on(); update(); } }), label);
