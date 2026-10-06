@@ -3147,3 +3147,136 @@ button.admin-icon-button--preview:focus {
     padding-inline: 0.8rem;
   }
 }
+
+.kml-pin-import {
+  display: grid;
+  gap: 10px;
+}
+
+.kml-pin-import > p {
+  margin: 0;
+}
+
+.kml-pin-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.kml-pin-select-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+}
+
+.kml-pin-list {
+  display: grid;
+  gap: 4px;
+  max-height: min(60vh, 560px);
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.kml-pin-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+}
+
+.kml-pin-row:has(input[name="kml-pin"]:checked) {
+  border-color: var(--accent);
+  background: #eef6f7;
+}
+
+.kml-pin-row.is-matched:has(input[name="kml-pin"]:checked) {
+  border-color: #c8873a;
+  background: #fdf6ec;
+}
+
+.kml-pin-row input[type="checkbox"],
+.kml-pin-select-all input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  margin: 1px 0 0;
+  padding: 0;
+}
+
+.kml-pin-body {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.kml-pin-line {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.kml-pin-line strong {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kml-pin-line .site-position {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.kml-pin-preview {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.kml-pin-match {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+}
+
+.kml-pin-match select {
+  width: auto;
+  max-width: 100%;
+  min-height: 0;
+  height: auto;
+  padding: 3px 6px;
+  font-size: 0.85rem;
+}
+
+.kml-pin-match-site {
+  flex: 1 1 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.kml-pin-flag {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #f6e7d2;
+  color: #7a4a12;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
