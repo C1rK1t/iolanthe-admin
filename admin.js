@@ -5554,6 +5554,186 @@
     return normalizeSiteEntry({ ...draft, id: siteId, title }, existingIds);
   }
 
+  const LEAFLET_VERSION = "1.9.4";
+  const SITE_MAP_DEFAULT_CENTER = [11.5, 122.5];
+  const SITE_MAP_DEFAULT_ZOOM = 6;
+  const SITE_MAP_PICKED_ZOOM = 13;
+  let leafletLoadPromise = null;
+  let activeSitePickerMap = null;
+
+  function loadLeaflet() {
+    if (window.L) {
+      return Promise.resolve(window.L);
+    }
+    if (leafletLoadPromise) {
+      return leafletLoadPromise;
+    }
+    leafletLoadPromise = new Promise((resolve, reject) => {
+      const base = `https://unpkg.com/leaflet@${LEAFLET_VERSION}/dist`;
+      if (!document.querySelector("link[data-leaflet]")) {
+        const link = document.createElement("link");
+        link.rel = "stylesheet";
+        link.href = `${base}/leaflet.css`;
+        link.crossOrigin = "anonymous";
+        link.dataset.leaflet = "true";
+        document.head.appendChild(link);
+      }
+      const script = document.createElement("script");
+      script.src = `${base}/leaflet.js`;
+      script.crossOrigin = "anonymous";
+      script.onload = () => (window.L ? resolve(window.L) : reject(new Error("Leaflet did not load.")));
+      script.onerror = () => {
+        leafletLoadPromise = null;
+        script.remove();
+        reject(new Error("Leaflet could not be loaded."));
+      };
+      document.head.appendChild(script);
+    });
+    return leafletLoadPromise;
+  }
+
+  function sitePickerMapHtml(prefix) {
+    return `
+      <div class="site-map-picker full">
+        <div id="${prefix}-map" class="site-map-picker-map" aria-label="Map: click or drag the marker to set the site position">
+          <p class="site-map-picker-status muted">Loading map...</p>
+        </div>
+        <p class="site-map-picker-hint muted">Click the map or drag the marker to set Latitude and Longitude.</p>
+      </div>
+    `;
+  }
+
+  // Wires a Leaflet map to the latitude/longitude DMM fields: picking on the map
+  // fills the fields, and editing the fields moves the marker.
+  function setupSitePickerMap(modal, prefix, latitudePrefix, longitudePrefix, siteLibrary) {
+    if (activeSitePickerMap) {
+      activeSitePickerMap.remove();
+      activeSitePickerMap = null;
+    }
+    const container = modal.querySelector(`#${prefix}-map`);
+    if (!container) {
+      return;
+    }
+    const fieldIds = [latitudePrefix, longitudePrefix]
+      .flatMap(fieldPrefix => ["degrees", "minutes", "hemisphere"].map(part => `#${fieldPrefix}-${part}`));
+
+    const readPosition = () => {
+      try {
+        const latitude = readCoordinateFields(modal, latitudePrefix, "latitude");
+        const longitude = readCoordinateFields(modal, longitudePrefix, "longitude");
+        return latitude === 0 && longitude === 0 ? null : [latitude, longitude];
+      } catch (error) {
+        return null;
+      }
+    };
+
+    const writeField = (selector, value) => {
+      const field = modal.querySelector(selector);
+      if (field && field.value !== value) {
+        field.value = value;
+        field.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    };
+
+    let writingFields = false;
+    const writePosition = latlng => {
+      writingFields = true;
+      const latitude = Math.max(-90, Math.min(90, latlng.lat));
+      const longitude = ((((latlng.lng + 180) % 360) + 360) % 360) - 180;
+      [[latitudePrefix, latitude, "latitude"], [longitudePrefix, longitude, "longitude"]].forEach(([fieldPrefix, value, type]) => {
+        const coordinate = decimalToDmm(value, type);
+        // Rounding minutes to 3 dp can produce 60.000; carry it into degrees.
+        if (coordinate.minutes === "60.000") {
+          coordinate.minutes = "0.000";
+          coordinate.degrees = String(Number(coordinate.degrees) + 1).padStart(type === "latitude" ? 2 : 3, "0");
+        }
+        writeField(`#${fieldPrefix}-degrees`, coordinate.degrees);
+        writeField(`#${fieldPrefix}-minutes`, coordinate.minutes);
+        writeField(`#${fieldPrefix}-hemisphere`, coordinate.hemisphere);
+      });
+      writingFields = false;
+    };
+
+    loadLeaflet().then(L => {
+      if (!container.isConnected) {
+        return;
+      }
+      container.innerHTML = "";
+      const map = L.map(container, { worldCopyJump: true });
+      activeSitePickerMap = map;
+      L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+        attribution: "Tiles &copy; Esri",
+        maxZoom: 18
+      }).addTo(map);
+
+      const otherSites = (Array.isArray(siteLibrary?.sites) ? siteLibrary.sites : [])
+        .map(site => [Number(site?.latitude), Number(site?.longitude), siteDisplayName(site, "Site")])
+        .filter(([latitude, longitude]) => Number.isFinite(latitude) && Number.isFinite(longitude) && (latitude || longitude));
+      otherSites.forEach(([latitude, longitude, name]) => {
+        L.circleMarker([latitude, longitude], {
+          radius: 5,
+          color: "#ffffff",
+          weight: 1.5,
+          fillColor: "#0b6e99",
+          fillOpacity: 0.9
+        }).bindTooltip(escapeHtml(name)).addTo(map);
+      });
+
+      let marker = null;
+      const placeMarker = latlng => {
+        if (marker) {
+          marker.setLatLng(latlng);
+          return;
+        }
+        marker = L.marker(latlng, { draggable: true, autoPan: true }).addTo(map);
+        marker.on("dragend", () => writePosition(marker.getLatLng()));
+      };
+
+      const initial = readPosition();
+      if (initial) {
+        placeMarker(initial);
+        map.setView(initial, SITE_MAP_PICKED_ZOOM);
+      } else if (otherSites.length) {
+        map.fitBounds(L.latLngBounds(otherSites.map(([latitude, longitude]) => [latitude, longitude])), { padding: [24, 24], maxZoom: 10 });
+      } else {
+        map.setView(SITE_MAP_DEFAULT_CENTER, SITE_MAP_DEFAULT_ZOOM);
+      }
+
+      map.on("click", event => {
+        placeMarker(event.latlng);
+        writePosition(event.latlng);
+      });
+
+      const syncFromFields = () => {
+        if (writingFields) {
+          return;
+        }
+        const position = readPosition();
+        if (!position) {
+          return;
+        }
+        placeMarker(position);
+        if (!map.getBounds().contains(position)) {
+          map.panTo(position);
+        }
+      };
+      fieldIds.forEach(selector => {
+        const field = modal.querySelector(selector);
+        if (field) {
+          field.addEventListener("input", syncFromFields);
+          field.addEventListener("change", syncFromFields);
+        }
+      });
+
+      // The modal may still be laying out when the map is created.
+      window.setTimeout(() => map.invalidateSize(), 0);
+    }).catch(() => {
+      if (container.isConnected) {
+        container.innerHTML = `<p class="site-map-picker-status muted">Map unavailable offline. Enter the position in the fields above.</p>`;
+      }
+    });
+  }
+
   function openSiteEditorModal(siteLibrary, site, onSave) {
     const editing = Boolean(site);
     const draft = {
@@ -5577,6 +5757,7 @@
         </label>
         ${coordinateFieldsHtml("site-editor-latitude", "Latitude", "latitude", draft.latitude)}
         ${coordinateFieldsHtml("site-editor-longitude", "Longitude", "longitude", draft.longitude)}
+        ${sitePickerMapHtml("site-editor")}
         <label class="full">Description
           <textarea id="site-editor-description">${escapeText(draft.description || "")}</textarea>
         </label>
@@ -5755,6 +5936,7 @@
       drawImages();
     });
     drawImages();
+    setupSitePickerMap(modal, "site-editor", "site-editor-latitude", "site-editor-longitude", siteLibrary);
 
     modal.querySelector("#site-editor-form").addEventListener("submit", async event => {
       event.preventDefault();

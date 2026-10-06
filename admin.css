@@ -1889,6 +1889,30 @@ body[data-admin-section] .status-panel {
   gap: 0.7rem;
 }
 
+.site-map-picker {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.site-map-picker-map {
+  height: 320px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #dfe6ea;
+  cursor: crosshair;
+}
+
+.site-map-picker-status {
+  margin: 0;
+  padding: 1rem;
+}
+
+.site-map-picker-hint {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
 .image-upload-card {
   display: grid;
   gap: 0.7rem;
