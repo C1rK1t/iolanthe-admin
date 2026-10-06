@@ -5558,6 +5558,9 @@
   const SITE_MAP_DEFAULT_CENTER = [11.5, 122.5];
   const SITE_MAP_DEFAULT_ZOOM = 6;
   const SITE_MAP_PICKED_ZOOM = 13;
+  // A couple of levels out from the picked zoom, to show the surrounding area.
+  const SITE_MAP_NEARBY_ZOOM = SITE_MAP_PICKED_ZOOM - 2;
+  let lastOpenedSitePosition = null;
   let leafletLoadPromise = null;
 
   function loadLeaflet() {
@@ -5686,6 +5689,8 @@
       if (!marker) {
         return;
       }
+      const { lat, lng } = marker.getLatLng();
+      lastOpenedSitePosition = [lat, lng];
       writePosition(marker.getLatLng());
       close();
     });
@@ -5731,8 +5736,9 @@
       if (initial) {
         placeMarker(L.latLng(initial));
         map.setView(initial, SITE_MAP_PICKED_ZOOM);
-      } else if (otherSites.length) {
-        map.fitBounds(L.latLngBounds(otherSites.map(([latitude, longitude]) => [latitude, longitude])), { padding: [24, 24], maxZoom: 10 });
+      } else if (lastOpenedSitePosition || otherSites.length) {
+        const [latitude, longitude] = lastOpenedSitePosition || otherSites[otherSites.length - 1];
+        map.setView([latitude, longitude], SITE_MAP_NEARBY_ZOOM);
       } else {
         map.setView(SITE_MAP_DEFAULT_CENTER, SITE_MAP_DEFAULT_ZOOM);
       }
@@ -5749,6 +5755,11 @@
 
   function openSiteEditorModal(siteLibrary, site, onSave) {
     const editing = Boolean(site);
+    const openedLatitude = Number(site?.latitude);
+    const openedLongitude = Number(site?.longitude);
+    if (editing && Number.isFinite(openedLatitude) && Number.isFinite(openedLongitude) && (openedLatitude || openedLongitude)) {
+      lastOpenedSitePosition = [openedLatitude, openedLongitude];
+    }
     const draft = {
       ...blankSite(),
       ...(editing ? cloneData(site) : {})
