@@ -1,13 +1,15 @@
 # Route Planner — handoff
 
-Last updated 2026-10-07. The brainstorm and spec are done, and the mockup has been rebuilt
-and revised twice. **No product code has been written yet.**
+Last updated 2026-10-07, as of `main` at `274633d`. The brainstorm and spec (draft 2) are done. The captain has
+reviewed the mockup and is positive, and his changes are applied. **No product code has been written yet.** Next:
+answers to spec §7 Q1 and Q4, then phase 1.
 
 | File | What it is |
 |---|---|
 | [brainstorm.md](brainstorm.md) | Review of the existing code, risks, alternatives, and both rounds of David's answers |
 | [spec.md](spec.md) | Draft 2 spec (2026-10-07): data files, server APIs, admin UI, phases, open questions (§7). **Start here.** |
 | [planner-mockup.html](planner-mockup.html) | Self-contained clickable mockup with demo Coron data, kept in step with the review feedback below |
+| [../BACKLOG.md](../BACKLOG.md) | Admin backlog: fuel estimation and the client itinerary report (Itinerary page), and the style rollout |
 
 ## Mockup: where to see it
 
@@ -25,8 +27,13 @@ and revised twice. **No product code has been written yet.**
   - Import → "Use a sample KML"
   - Itinerary in the left menu shows the route assignment rows
 
-Commits: `06f12cf` (brainstorm, spec, first mockup), `831e8d7` (rebuild and review round 1), `076ed59` (captain's
-first look).
+Commits:
+- `06f12cf`: brainstorm, spec, first mockup
+- `831e8d7`: rebuild and review round 1
+- `076ed59`: captain's first look
+- `ad660fb`: handoff refresh
+- `59d27d4`: spec draft 2
+- `274633d`: per-leg and route speeds, backlog
 
 ## Background
 
@@ -90,8 +97,10 @@ All the feedback above is folded into [spec.md](spec.md) **draft 2** (2026-10-07
 - the rewritten §4.1 side panel, header actions, snapping and popup
 - §4.4 Add another route
 - the updated phase table
+- per-leg speeds (§4.1) and the `speed_kn` / `leg_speed_kn` fields (§2.1)
+- a pointer from §6 to the backlog
 
-The questions still open are in spec §7:
+The questions still open are in spec §7 (Q5, the route speed, is closed):
 - Q1 narrow-screen layout
 - Q2 stops in charter copies
 - Q3 duplicate stop on snap
