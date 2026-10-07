@@ -177,6 +177,50 @@
     title.select();
   }
 
+  // Drag an activity by its grip. Pointer events so mouse and touch behave the same (touch-action: none on the grip).
+  function startActivityDrag(event, activity, row) {
+    event.preventDefault();
+    const grip = event.currentTarget;
+    grip.setPointerCapture(event.pointerId);
+    const ghost = row.cloneNode(true);
+    ghost.classList.add("itinerary-activity--ghost");
+    ghost.style.width = `${row.offsetWidth}px`;
+    document.body.append(ghost);
+    row.classList.add("itinerary-activity--source");
+    let target = null;   // { sub, stopId, day, index, ok }
+
+    const locate = (e) => {
+      ghost.style.left = `${e.clientX + 8}px`;
+      ghost.style.top = `${e.clientY - 10}px`;
+      ghost.style.display = "none";
+      const under = document.elementFromPoint(e.clientX, e.clientY);
+      ghost.style.display = "";
+      const sub = under && under.closest ? under.closest(".itinerary-sub") : null;
+      panel.querySelectorAll(".itinerary-sub--over, .itinerary-sub--refused").forEach((n) => n.classList.remove("itinerary-sub--over", "itinerary-sub--refused"));
+      if (!sub) { target = null; return; }
+      const stopId = sub.dataset.stopId;
+      const day = Number(sub.dataset.day);
+      const ok = core().canDropActivity(work.itinerary, activity.id, stopId, day, dayCount());
+      const rows = [...sub.querySelectorAll(".itinerary-activity")].filter((r) => r !== row);
+      const index = rows.filter((r) => { const b = r.getBoundingClientRect(); return e.clientY > b.top + b.height / 2; }).length;
+      sub.classList.add(ok ? "itinerary-sub--over" : "itinerary-sub--refused");
+      target = { sub, stopId, day, index, ok };
+    };
+    const finish = () => {
+      grip.removeEventListener("pointermove", locate);
+      grip.removeEventListener("pointerup", finish);
+      grip.removeEventListener("pointercancel", finish);
+      ghost.remove();
+      row.classList.remove("itinerary-activity--source");
+      panel.querySelectorAll(".itinerary-sub--over, .itinerary-sub--refused").forEach((n) => n.classList.remove("itinerary-sub--over", "itinerary-sub--refused"));
+      if (target && target.ok) commit(core().moveActivity(work.itinerary, activity.id, target.stopId, target.day, target.index));
+      else if (target && !target.ok) status(activity.site_id ? `${siteTitle(activity.site_id)} is not served from that stop.` : "That day is outside the stop's span.", "error");
+    };
+    grip.addEventListener("pointermove", locate);
+    grip.addEventListener("pointerup", finish);
+    grip.addEventListener("pointercancel", finish);
+  }
+
   let addMenu = null;
   function closeAddMenu() { if (addMenu) { addMenu.remove(); addMenu = null; } }
 

@@ -114,3 +114,9 @@
 .itinerary-menu__item--free { border-style: dashed; }
 .itinerary-menu__search { font: inherit; padding: 4px 6px; border: 1px solid var(--line); border-radius: 4px; }
 .itinerary-menu__results { display: flex; flex-direction: column; gap: 4px; max-height: 200px; overflow: auto; }
+
+.itinerary-activity__grip { touch-action: none; }
+.itinerary-activity--ghost { position: fixed; z-index: 50; pointer-events: none; opacity: 0.85; box-shadow: var(--shadow); }
+.itinerary-activity--source { opacity: 0.35; }
+.itinerary-sub--over { outline: 2px solid var(--accent); outline-offset: -1px; }
+.itinerary-sub--refused { outline: 2px dashed var(--danger, #a93d35); outline-offset: -1px; }
