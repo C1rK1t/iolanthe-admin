@@ -124,3 +124,10 @@ Started 2026-10-07. Each line is a decision David made during the brainstorm. Th
   browser: admin global `button` styles swelled the edge handles (hardened), oversized popover checkboxes, thumbnail
   wrapping (header is now a two-row grid). Implementer's sound deviations: edges overlay not confined to grid column
   3; `.itinerary-panel` positioned for the popover; handles re-positioned on resize.
+- **2026-10-07 plan 4 (Route panel charter mode + removals) done** on admin `feat/itinerary-v2`, verified in the
+  browser: all Charter/Galley/Hotel panels load with no script errors after ~1,500 lines of v1 itinerary code were
+  removed; Edit route opens charter mode (picker and name hidden, note, day spans on Stops cards, "Charter route ·
+  revision N"); deleting a stop with activities → Save → "Remove stops?" confirm → revision 3 on the server with the
+  activities gone; subject switch back to library mode shows the unchanged library actions; Back to days re-derives
+  the itinerary. Extra fixes: Galley day count now from charter dates (not the v1 normaliser); charter-mode header
+  meta; every admin asset tag at `admin-itin-v2`.
