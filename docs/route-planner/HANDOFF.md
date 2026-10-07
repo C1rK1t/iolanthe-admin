@@ -1,7 +1,7 @@
 # Route Planner — handoff
 
 Last updated 2026-10-07. **Phases 1, 2 and 3 are complete and live** (phase 3 merged at `9828511`, with the
-server at `0e68d98`). Two captain style tweaks followed (live at `ff53ea8`, see "After phase 3"). Next: **phase 4**
+server at `0e68d98`). Captain tweaks followed: muted whites, counts in the stat tile, copy legs for Excel (see "After phase 3"). Next: **phase 4**
 (assign routes to charters). Spec Q2 is still open and is needed first.
 
 | File | What it is |
@@ -226,8 +226,15 @@ by turning the mockup's CSS (`:root` tokens, `.icon-btn`, `.stat`, `.banner`, `.
     rest of the admin is still white. This is a pointer for the style rollout below.
   - **Counts moved** (`ff53ea8`): the Stops / Legs tab titles no longer have count pills. The middle stat tile reads
     "11 / 10" with the label "stops / legs" (`lists.legCount()`).
-  - Version strings are now mixed: `routes.css` v5, `routes.js` and `routes-lists.js` v4, everything else v3. Bump
-    only the files you change.
+  - **Copy legs for Excel** (`feat/routes-copy-legs`): a copy button beside the route speed on the Legs tab. It puts
+    tab-separated rows on the clipboard (Leg, From, To, Distance (nm), Speed (kn), Time (h:mm), Hours, then a Total
+    row), built by `routes-core.legsTsv`. A name that would start a formula gets a leading `'`.
+    - The boat admin is plain http, where `navigator.clipboard` is missing, so it falls back to a hidden textarea and
+      `execCommand("copy")`.
+    - The Total's time is rounded from the exact sum, so it can differ by a minute from adding the rounded legs.
+      That matches the panel's Total card.
+  - Version strings are mixed: `routes.css` v6, `routes.js` and `routes-lists.js` v5, `routes-core.js` and
+    `routes-ui.js` v4, everything else v3. Bump only the files you change.
 - **Reviews caught and fixed:**
   - **Security:** every admin `<textarea>` and three `<option>`s filled HTML through `escapeText`, which escapes nothing.
     An imported pin description could inject script via Make site. They now use `escapeHtml`. `htmlToText` also
