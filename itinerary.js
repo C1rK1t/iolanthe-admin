@@ -29,6 +29,7 @@
             <div class="itinerary-panel__dates muted" id="itinerary-dates"></div>
           </div>
           <div class="itinerary-panel__actions" id="itinerary-actions"></div>
+          <div class="itinerary-thumb" id="itinerary-thumb" title="Open the route"></div>
         </div>
         <div class="itinerary-panel__welcome" id="itinerary-welcome"></div>
         <div class="itinerary-panel__hint muted" id="itinerary-hint" hidden></div>
@@ -114,8 +115,29 @@
     return days;
   }
 
+  // A static SVG of the route path and stops; no tiles, so it needs nothing from the network.
+  function renderThumb() {
+    const box = panel.querySelector("#itinerary-thumb");
+    const points = work.itinerary.route.points;
+    box.replaceChildren();
+    if (points.length < 2) { box.hidden = true; return; }
+    box.hidden = false;
+    const W = 160, H = 110, PAD = 8;
+    const lats = points.map((p) => p.latitude), lons = points.map((p) => p.longitude);
+    const minLat = Math.min(...lats), maxLat = Math.max(...lats), minLon = Math.min(...lons), maxLon = Math.max(...lons);
+    const spanLat = Math.max(maxLat - minLat, 0.0001), spanLon = Math.max((maxLon - minLon) * Math.cos((minLat + maxLat) / 2 * Math.PI / 180), 0.0001);
+    const scale = Math.min((W - 2 * PAD) / spanLon, (H - 2 * PAD) / spanLat);
+    const x = (p) => PAD + ((p.longitude - minLon) * Math.cos((minLat + maxLat) / 2 * Math.PI / 180)) * scale;
+    const y = (p) => H - PAD - (p.latitude - minLat) * scale;
+    const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, width: W, height: H, class: "itinerary-thumb__svg" });
+    svg.append(svgEl("path", { class: "itinerary-thumb__path", d: points.map((p, i) => `${i ? "L" : "M"} ${x(p).toFixed(1)} ${y(p).toFixed(1)}`).join(" ") }));
+    points.filter(core().isStop).forEach((p) => svg.append(svgEl("circle", { class: "itinerary-thumb__stop", cx: x(p).toFixed(1), cy: y(p).toFixed(1), r: 3 })));
+    box.append(svg);
+  }
+
   function renderAll() {
     renderHeader();
+    renderThumb();
     renderWelcome();
     const days = renderDays();
     requestAnimationFrame(() => drawLine(days));

@@ -70,3 +70,7 @@
   .itinerary-board { grid-template-columns: minmax(90px, 120px) 32px minmax(0, 1fr); }
   .itinerary-stop-title__times { white-space: normal; }
 }
+
+.itinerary-thumb { width: 160px; height: 110px; background: rgba(80, 180, 120, 0.10); border: 1px solid rgba(80, 180, 120, 0.6); border-radius: 6px; overflow: hidden; cursor: pointer; }
+.itinerary-thumb__path { fill: none; stroke: var(--route); stroke-width: 2; stroke-linejoin: round; }
+.itinerary-thumb__stop { fill: var(--route); stroke: #fff; stroke-width: 1; }
