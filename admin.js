@@ -19,6 +19,8 @@
     },
     selectedSection: "",
     selectedCharter: "",
+    charterContext: null,
+    routesSubject: "library",
     selectedItineraryPlan: "primary",
     itinerarySelectedDays: {},
     sites: [],
@@ -7801,7 +7803,11 @@
     }
     if (activePanel === "routes") {
       if (window.IolantheRoutes) {
-        window.IolantheRoutes.bind({ siteLibrary });
+        const subject = state.routesSubject === "charter"
+          ? { type: "charter", charterId: state.selectedCharter, charter: charterInfo, itinerary, focusStopId: state.routesFocusStopId || "" }
+          : { type: "library" };
+        state.routesFocusStopId = "";
+        window.IolantheRoutes.bind({ siteLibrary, subject });
       }
       return;
     }
@@ -7815,7 +7821,7 @@
       { id: "info", label: "Charter Info" },
       { id: "itinerary", label: "Itinerary" },
       { id: "crew", label: "Crew" },
-      { id: "routes", label: "Routes" },
+      { id: "routes", label: "Route" },
       { id: "sites", label: "Site Editor" }
     ];
     const activePanel = panels.some(panel => panel.id === state.sectionPanels.charter) ? state.sectionPanels.charter : "info";
@@ -7842,6 +7848,7 @@
       ]);
       const charterInfo = normalizeCharterInfo(bundle["charter.json"]);
       const itinerary = bundle["itinerary.json"] || {};
+      state.charterContext = { charterId: state.selectedCharter, charter: charterInfo, itinerary, siteLibrary };
       const guestList = normalizeGuestList(bundle["guest_list.json"]);
       const crewList = normalizeCrewEditorList(bundle["crew_list.json"]);
       const content = charterPanelContent(activePanel, charterInfo, itinerary, guestList, crewList, siteLibrary);
@@ -7861,6 +7868,17 @@
       bindSectionToolbar("charter", renderCharter);
     }
   }
+
+  // Switch the Charter section to a panel from code (Itinerary <-> Route). options.subject: "library" | "charter".
+  async function showCharterPanel(panelId, options = {}) {
+    if (!(await confirmDiscardPageChanges())) return false;
+    if (options.subject) state.routesSubject = options.subject;
+    if (options.focusStopId) state.routesFocusStopId = options.focusStopId;
+    state.sectionPanels.charter = panelId;
+    await renderCharter();
+    return true;
+  }
+  const getCharterContext = () => state.charterContext;
 
   async function renderGalley() {
     const activePanel = GALLEY_PANELS.some(panel => panel.id === state.sectionPanels.galley)
@@ -15035,7 +15053,9 @@
     canManageCharterAdmin,
     openSiteEditorModal,
     saveSitesLibrary,
-    normalizeSiteLibrary
+    normalizeSiteLibrary,
+    showCharterPanel,
+    getCharterContext
   });
 
   loadBootstrap();
