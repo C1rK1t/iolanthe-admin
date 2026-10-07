@@ -30,10 +30,16 @@ URL access also requires `?key=<settings.admin.urlKey>`.
 - `admin.js` — all client-side logic (~15k lines, IIFE)
 - `assets/icons/admin/` — favicons and department login icons
 - `routes-core.js` — Route Planner pure logic (also a Node module; tests in `test/`, run `node --test`)
-- `routes.js` / `routes.css` — Charter → Routes panel. It uses the `window.IolantheAdmin` helpers exposed at the end
-  of `admin.js`, and its styles are scoped under `.routes-panel` / `.routes-modal`
-- `routes-places.js` — Routes panel places: anchorages and sites on the map, the anchorage modal, and the bridge to
-  the admin's Site Editor modal (`IolantheAdmin.openSiteEditorModal`)
+- `routes.js` / `routes.css` — Charter → Routes panel: state, side panel, header, map, saving and wiring. It uses the
+  `window.IolantheAdmin` helpers exposed at the end of `admin.js`, and its styles are scoped under `.routes-panel` /
+  `.routes-modal`. Helper files, each created per bind with a `ctx` from routes.js:
+  - `routes-ui.js` — `el()`, icons, `fmtPos` and the modal shell (`openModal`)
+  - `routes-popup.js` — the point popup (Make stop at / Make stop here / Remove stop, sites served)
+  - `routes-lists.js` — the Stops / Legs tab lists and per-leg speeds
+  - `routes-join.js` — Add another route
+  - `routes-places.js` — anchorages and sites on the map, the anchorage modal, and the bridge to the admin's Site
+    Editor modal (`IolantheAdmin.openSiteEditorModal`)
+  - `routes-io.js` — KML/GPX import (DOMParser, Simplify, Replace/Append), temporary imported pins, GPX/KML export
 
 ## Path conventions
 

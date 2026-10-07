@@ -37,7 +37,8 @@
     return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}`;
   }
 
-  const isStop = (point) => Boolean(point && point.anchorage_id);
+  // A stop is at an anchorage (anchorage_id) or a plain stop (stop: true: hold position or drift, no anchorage).
+  const isStop = (point) => Boolean(point && (point.anchorage_id || point.stop === true));
   const replaceAt = (arr, index, value) => arr.map((item, j) => (j === index ? value : item));
   const insertAt = (arr, index, value) => [...arr.slice(0, index), value, ...arr.slice(index)];
   const removeAt = (arr, index) => arr.filter((_, j) => j !== index);
@@ -102,7 +103,7 @@
 
   // What counts as "unsaved changes": the editable fields only.
   function routeSnapshot(route) {
-    const keys = ["latitude", "longitude", "name", "anchorage_id", "site_id", "site_ids", "leg_speed_kn"];
+    const keys = ["latitude", "longitude", "name", "anchorage_id", "site_id", "site_ids", "leg_speed_kn", "stop"];
     const points = (route.points || []).map((p) => {
       const out = {};
       keys.forEach((k) => { if (p[k] !== undefined) out[k] = p[k]; });
@@ -165,13 +166,255 @@
     return metres > MOVED_WARN_M ? metres : 0;
   }
 
+  const DEFAULT_STOP_NAME = "Stop";
+
+  // "Make stop here": point index becomes a plain stop where it is. An unnamed point is named "Stop", numbered
+  // against the route's other stop names (uniqueName). A point that is already a stop is returned unchanged.
+  function makePlainStop(points, index) {
+    const point = points[index];
+    if (!point || isStop(point)) {
+      return points;
+    }
+    const otherStopNames = points.filter((p, j) => j !== index && isStop(p)).map((p) => p.name);
+    const name = point.name || uniqueName(DEFAULT_STOP_NAME, otherStopNames);
+    return replaceAt(points, index, { ...point, name, stop: true });
+  }
+
+  // "Remove stop": an anchorage or plain stop goes back to a waypoint at the same position, keeping its name.
+  // Its sites served go, and so does its leg speed (its leg merges into the previous one, spec §2.1), except on the
+  // first point, which still starts the first leg.
+  function removeStop(points, index) {
+    const point = points[index];
+    if (!point) {
+      return points;
+    }
+    const { anchorage_id: _a, stop: _s, site_ids: _ids, leg_speed_kn: speed, ...rest } = point;
+    return replaceAt(points, index, index === 0 && speed ? { ...rest, leg_speed_kn: speed } : rest);
+  }
+
   function routesUsingAnchorage(routes, anchorageId) {
     return (routes || []).filter((route) => (route.points || []).some((p) => p.anchorage_id === anchorageId));
   }
 
+  // A name that no other entry uses: a duplicate (case-insensitive) becomes "<base> #NN", one past the highest
+  // number already used for that base, where the plain base counts as 1. "Anchorage" + ["Anchorage"] -> "Anchorage #02".
+  const NUMBER_SUFFIX = /\s+#(\d+)$/;
+  function uniqueName(name, existingNames) {
+    const wanted = String(name || "").trim();
+    const others = (existingNames || []).map((n) => String(n || "").trim()).filter(Boolean);
+    const key = (n) => n.toLowerCase();
+    if (!others.some((n) => key(n) === key(wanted))) {
+      return wanted;
+    }
+    const base = wanted.replace(NUMBER_SUFFIX, "");
+    const highest = others.reduce((max, n) => {
+      const match = n.match(NUMBER_SUFFIX);
+      const nBase = match ? n.slice(0, match.index) : n;
+      return key(nBase) === key(base) ? Math.max(max, match ? Number(match[1]) : 1) : max;
+    }, 1);
+    return `${base} #${String(highest + 1).padStart(2, "0")}`;
+  }
+
+  // ---------- import / export (spec §4.2, §4.3) ----------
+  const IMPORT_TARGET_POINTS = 60; // the default Simplify tolerance keeps an imported line under about this many points
+  const MAX_TOLERANCE_M = 200;
+  const TOLERANCE_STEP_M = 5;
+  const PIN_MATCH_NM = 2;          // an imported pin is flagged "near X" within this range (the PR #2 rule)
+
+  const validPos = (p) => Boolean(p) && Number.isFinite(p.latitude) && Number.isFinite(p.longitude)
+    && Math.abs(p.latitude) <= 90 && Math.abs(p.longitude) <= 180;
+
+  // KML <coordinates>: whitespace-separated "lon,lat[,alt]" tuples. Invalid tuples are dropped.
+  function parseKmlCoordinates(text) {
+    return String(text || "").trim().replace(/\s*,\s*/g, ",").split(/\s+/).filter(Boolean)
+      .map((tuple) => tuple.split(",").map((part) => (part.trim() === "" ? NaN : Number(part))))
+      .map(([longitude, latitude]) => ({ latitude, longitude }))
+      .filter(validPos);
+  }
+
+  // KML descriptions are often HTML. Keeps the text, one line per <br> or block element.
+  const ENTITIES = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
+  function htmlToText(value) {
+    return String(value || "")
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/(p|div|li|tr|h[1-6])>/gi, "\n")
+      .replace(/<[^>]*>/g, "")
+      .replace(/&(#\d+|#x[0-9a-f]+|[a-z]+);/gi, (match, e) => {
+        if (e[0] === "#") {
+          const code = e[1].toLowerCase() === "x" ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
+          return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : match;
+        }
+        const named = ENTITIES[e.toLowerCase()];
+        return named === undefined ? match : named;
+      })
+      .replace(/<[^>]*>/g, "") // tags that were entity-encoded (&lt;b&gt;) only appear once decoded
+      .split("\n").map((line) => line.trim()).filter(Boolean).join("\n");
+  }
+
+  // Element helpers that match on localName, so default and prefixed namespaces (kml:Placemark) both work.
+  const descendants = (node, name) => Array.from(node.getElementsByTagName("*")).filter((n) => n.localName === name);
+  const child = (node, name) => (node ? Array.from(node.children || []).find((n) => n.localName === name) || null : null);
+  const childText = (node, name) => { const n = child(node, name); return n ? String(n.textContent || "").trim() : ""; };
+  const gpxPoint = (n) => ({ latitude: parseFloat(n.getAttribute("lat")), longitude: parseFloat(n.getAttribute("lon")) });
+
+  // Reads a parsed KML or GPX document. root is the documentElement: the browser parses with DOMParser, and the tests
+  // pass a tiny fake element. Lines: KML LineString, GPX rte / trk (all segments). Pins: KML Point placemarks, GPX wpt.
+  // Invalid coordinates are dropped, and a line needs 2 valid points to count.
+  function extractGeo(root, filename) {
+    const byName = root.localName === "gpx" ? "gpx" : (root.localName === "kml" ? "kml" : "");
+    const type = byName || (/\.gpx$/i.test(filename || "") ? "gpx" : "kml");
+    const lines = [];
+    const pins = [];
+    let name;
+    if (type === "gpx") {
+      name = childText(child(root, "metadata"), "name");
+      descendants(root, "rte").forEach((r, i) => lines.push({ name: childText(r, "name") || `Route ${i + 1}`, points: descendants(r, "rtept").map(gpxPoint) }));
+      descendants(root, "trk").forEach((t, i) => lines.push({ name: childText(t, "name") || `Track ${i + 1}`, points: descendants(t, "trkpt").map(gpxPoint) }));
+      descendants(root, "wpt").forEach((w, i) => pins.push({ name: childText(w, "name") || `Pin ${i + 1}`, description: childText(w, "desc") || childText(w, "cmt"), ...gpxPoint(w) }));
+    } else {
+      name = childText(child(root, "Document") || root, "name");
+      descendants(root, "Placemark").forEach((pm, i) => {
+        const pmName = childText(pm, "name") || `Placemark ${i + 1}`;
+        descendants(pm, "LineString").forEach((ls) => lines.push({ name: pmName, points: parseKmlCoordinates(childText(ls, "coordinates")) }));
+        descendants(pm, "Point").forEach((pt) => {
+          const pos = parseKmlCoordinates(childText(pt, "coordinates"))[0];
+          if (pos) pins.push({ name: pmName, description: htmlToText(childText(pm, "description")), ...pos });
+        });
+      });
+    }
+    return {
+      type,
+      name,
+      lines: lines.map((l) => ({ ...l, points: l.points.filter(validPos) })).filter((l) => l.points.length >= 2),
+      pins: pins.filter(validPos)
+    };
+  }
+
+  // Douglas-Peucker on a local flat projection, tolerance in metres. Always keeps the first and last points.
+  function simplify(points, tolM) {
+    if (!(tolM > 0) || points.length < 3) return points.slice();
+    const lat0 = points[0].latitude * Math.PI / 180;
+    const xy = points.map((p) => [p.longitude * 111320 * Math.cos(lat0), p.latitude * 110540]);
+    const segDist = (p, a, b) => {
+      const dx = b[0] - a[0];
+      const dy = b[1] - a[1];
+      const len2 = dx * dx + dy * dy;
+      const t = len2 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len2)) : 0;
+      return Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy);
+    };
+    const keep = points.map((_, i) => i === 0 || i === points.length - 1);
+    const stack = [[0, points.length - 1]];
+    while (stack.length) {
+      const [s, e] = stack.pop();
+      let maxD = 0;
+      let idx = -1;
+      for (let i = s + 1; i < e; i += 1) {
+        const d = segDist(xy[i], xy[s], xy[e]);
+        if (d > maxD) { maxD = d; idx = i; }
+      }
+      if (maxD > tolM) { keep[idx] = true; stack.push([s, idx], [idx, e]); }
+    }
+    return points.filter((_, i) => keep[i]);
+  }
+
+  // The smallest tolerance (5 m steps, up to 200 m) that brings the line to IMPORT_TARGET_POINTS points or fewer.
+  // The kept count only falls as the tolerance rises, so a binary search over the steps needs a few passes, not 41.
+  function defaultTolerance(points) {
+    const fits = (step) => simplify(points, step * TOLERANCE_STEP_M).length <= IMPORT_TARGET_POINTS;
+    let lo = 0;
+    let hi = Math.floor(MAX_TOLERANCE_M / TOLERANCE_STEP_M);
+    if (!fits(hi)) return MAX_TOLERANCE_M;
+    while (lo < hi) {
+      const mid = Math.floor((lo + hi) / 2);
+      if (fits(mid)) hi = mid; else lo = mid + 1;
+    }
+    return lo * TOLERANCE_STEP_M;
+  }
+
+  // Joins lines in file order. A line that starts within 50 m of where the previous one ended loses that duplicate point.
+  const joinLines = (lines) => lines.reduce((acc, line) => joinPoints(acc, line.points), []);
+
+  // pick: { join: true } for all lines in file order, otherwise { line: index }.
+  function chosenLinePoints(lines, pick) {
+    if (pick && pick.join) return joinLines(lines);
+    const line = lines[(pick && pick.line) || 0];
+    return line ? line.points : [];
+  }
+
+  // Imported points as plain positions: they replace the route's points, or are appended (dropping a duplicate join point).
+  function importPoints(current, incoming, mode) {
+    const plain = incoming.map((p) => ({ latitude: p.latitude, longitude: p.longitude }));
+    return mode === "append" ? joinPoints(current, plain) : plain;
+  }
+
+  // The site or anchorage an imported pin may duplicate: the same name (ignoring case) first, then the nearest within 2 nm.
+  function pinMatch(pin, sites, anchorages) {
+    const key = (s) => String(s || "").trim().toLowerCase();
+    const candidates = [
+      ...(sites || []).map((s) => ({ kind: "site", name: s.title || s.id || "Site", pos: s })),
+      ...(anchorages || []).map((a) => ({ kind: "anchorage", name: a.name || a.id, pos: a }))
+    ].map((x) => ({ kind: x.kind, name: x.name, nm: validPos(x.pos) ? distNm(pin, x.pos) : Infinity, sameName: key(x.name) === key(pin.name) }))
+      .filter((x) => x.sameName || x.nm <= PIN_MATCH_NM)
+      .sort((x, y) => (y.sameName - x.sameName) || (x.nm - y.nm));
+    return candidates[0] || null;
+  }
+
+  const XML_INVALID_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g; // not allowed in XML 1.0, even escaped
+  const XML_ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" };
+  const xmlEscape = (s) => String(s === undefined || s === null ? "" : s).replace(XML_INVALID_CHARS, "").replace(/[&<>"']/g, (ch) => XML_ESCAPES[ch]);
+  const fix6 = (n) => Number(n).toFixed(6);
+
+  function slugify(name) {
+    return String(name || "").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  }
+  const exportBaseName = (route) => route.id || slugify(route.name) || "route";
+
+  // GPX 1.1: stops as <wpt>, then one <rte> with every point. Stops and named points carry <name>.
+  function toGpx(route) {
+    const title = xmlEscape(route.name || "Route");
+    const pts = route.points || [];
+    const wpts = pts.filter(isStop).map((p) => `  <wpt lat="${fix6(p.latitude)}" lon="${fix6(p.longitude)}"><name>${xmlEscape(p.name || "Stop")}</name></wpt>`);
+    const rtepts = pts.map((p) => {
+      const label = p.name || (isStop(p) ? "Stop" : "");
+      return `    <rtept lat="${fix6(p.latitude)}" lon="${fix6(p.longitude)}">${label ? `<name>${xmlEscape(label)}</name>` : ""}</rtept>`;
+    });
+    return [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<gpx version="1.1" creator="Iolanthe Admin" xmlns="http://www.topografix.com/GPX/1/1">',
+      `  <metadata><name>${title}</name></metadata>`,
+      ...wpts,
+      "  <rte>",
+      `    <name>${title}</name>`,
+      ...rtepts,
+      "  </rte>",
+      "</gpx>",
+      ""
+    ].join("\n");
+  }
+
+  // KML: one LineString placemark plus a Point placemark per stop. KML coordinates are lon,lat,alt.
+  function toKml(route) {
+    const title = xmlEscape(route.name || "Route");
+    const pts = route.points || [];
+    const coord = (p) => `${fix6(p.longitude)},${fix6(p.latitude)},0`;
+    return [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      `<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>${title}</name>`,
+      `  <Placemark><name>${title}</name><LineString><coordinates>${pts.map(coord).join(" ")}</coordinates></LineString></Placemark>`,
+      ...pts.filter(isStop).map((p) => `  <Placemark><name>${xmlEscape(p.name || "Stop")}</name><Point><coordinates>${coord(p)}</coordinates></Point></Placemark>`),
+      "</Document></kml>",
+      ""
+    ].join("\n");
+  }
+
+
   return {
     METRES_PER_NM, distM, distNm, routeNm, fmtHm, isStop, replaceAt, insertAt, removeAt,
     stopLegs, totalHours, setLegSpeed, joinPoints, joinGapNm, routeSnapshot,
-    sitesWithin, nearbyAnchorages, stopAt, makeStopAt, appendStop, anchorageMovedM, routesUsingAnchorage
+    sitesWithin, nearbyAnchorages, stopAt, makeStopAt, appendStop, anchorageMovedM, routesUsingAnchorage, uniqueName,
+    makePlainStop, removeStop,
+    IMPORT_TARGET_POINTS, MAX_TOLERANCE_M, TOLERANCE_STEP_M, PIN_MATCH_NM, validPos, parseKmlCoordinates, htmlToText,
+    extractGeo, simplify, defaultTolerance, joinLines, chosenLinePoints, importPoints, pinMatch, xmlEscape, slugify,
+    exportBaseName, toGpx, toKml
   };
 });

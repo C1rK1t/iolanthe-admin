@@ -5,6 +5,7 @@
 
   const SNAP_PX = 24; // a dropped point within this screen distance of an anchorage marker snaps to it (spec §7 Q4)
   const ANCHOR_PATH = '<circle cx="12" cy="5" r="2"/><path d="M12 7v14M5 13a7 7 0 0 0 14 0M8 10h8"/>';
+  const DEFAULT_ANCHORAGE_NAME = "Anchorage";
   const ANCHOR_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true">${ANCHOR_PATH}</svg>`;
 
   function create(ctx) {
@@ -87,11 +88,12 @@
     const routeNames = (routes) => routes.map((r) => r.name).join(", ");
 
     // Create (anchorage null, pos given) or edit an anchorage. Resolves to the saved anchorage, or null on cancel.
-    // opts: { name } pre-fills a new anchorage's name.
+    // opts: { name } pre-fills a new anchorage's name (default "Anchorage"). A new or renamed anchorage whose name
+    // another anchorage already uses is saved as "<name> #NN" (core.uniqueName).
     function openAnchorageModal(anchorage, pos, opts) {
       return new Promise((resolve) => {
         const isNew = !anchorage;
-        const src = anchorage || { name: (opts && opts.name) || "", latitude: pos.latitude, longitude: pos.longitude, depth_m: "", notes: "" };
+        const src = anchorage || { name: (opts && opts.name) || DEFAULT_ANCHORAGE_NAME, latitude: pos.latitude, longitude: pos.longitude, depth_m: "", notes: "" };
         const f = {
           name: el("input", { type: "text", value: src.name, maxlength: "80" }),
           lat: el("input", { type: "number", step: "0.0001", value: src.latitude.toFixed(5) }),
@@ -126,16 +128,23 @@
             if (!(Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180)) { A.setStatus("Enter a valid latitude and longitude.", "error"); return false; }
             const entry = { ...(anchorage || {}), name, latitude, longitude, notes: f.notes.value.slice(0, 500) };
             if (f.depth.value === "") delete entry.depth_m; else entry.depth_m = parseFloat(f.depth.value);
+            const renamed = isNew || name !== anchorage.name;
             let beforeIds = new Set();
+            let finalName = name;
             try {
+              // The final name is worked out against the latest list, inside the queued save.
               const saved = await saveLibrary((list) => {
                 beforeIds = new Set(list.map((a) => a.id));
-                return isNew ? [...list, entry] : list.map((a) => (a.id === anchorage.id ? entry : a));
+                const others = list.filter((a) => isNew || a.id !== anchorage.id).map((a) => a.name);
+                finalName = renamed ? core.uniqueName(name, others) : name;
+                const next = { ...entry, name: finalName };
+                return isNew ? [...list, next] : list.map((a) => (a.id === anchorage.id ? next : a));
               });
               const result = isNew
-                ? saved.find((a) => !beforeIds.has(a.id)) || saved.find((a) => a.name === name)
+                ? saved.find((a) => !beforeIds.has(a.id)) || saved.find((a) => a.name === finalName)
                 : saved.find((a) => a.id === anchorage.id);
-              A.setStatus(isNew ? "Anchorage created." : "Anchorage saved.", "ok");
+              const done = isNew ? "Anchorage created." : "Anchorage saved.";
+              A.setStatus(finalName !== name ? `Saved as "${finalName}".` : done, "ok");
               finish(result || null);
               ctx.onChanged();
               return true;
@@ -183,7 +192,7 @@
     }
 
     // Opens the admin's own Site Editor dialog (#dialog-modal). Resolves to the saved site, or null when the dialog
-    // closes without saving. opts: { name } pre-fills the title of a new site; pos gives its position.
+    // closes without saving. opts: { name, description } pre-fill a new site; pos gives its position.
     function openSiteModal(site, pos, opts) {
       return new Promise((resolve) => {
         const siteLibrary = ctx.getSiteLibrary();
@@ -197,7 +206,7 @@
           resolve(value);
           if (value) ctx.onChanged();
         };
-        const defaults = site ? undefined : { title: (opts && opts.name) || "", latitude: pos.latitude, longitude: pos.longitude, tags: [], images: [], media: [] };
+        const defaults = site ? undefined : { title: (opts && opts.name) || "", description: (opts && opts.description) || "", latitude: pos.latitude, longitude: pos.longitude, tags: [], images: [], media: [] };
         A.openSiteEditorModal(siteLibrary, site, async (saved) => {
           const next = A.normalizeSiteLibrary({
             ...siteLibrary,
