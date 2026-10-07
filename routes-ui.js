@@ -17,7 +17,8 @@
     erase: '<path d="M7 21h10M5 15l9-9 5 5-9 9H8z"/>',
     join: '<circle cx="5" cy="6" r="2"/><circle cx="5" cy="18" r="2"/><path d="M7 6h3a4 4 0 0 1 4 4v0a4 4 0 0 0 4 4h3M7 18h3a4 4 0 0 0 4-4"/><path d="M18 11l3 3-3 3"/>',
     import: '<path d="M12 16V4M7 9l5-5 5 5M4 20h16"/>',
-    export: '<path d="M12 4v12M7 11l5 5 5-5M4 20h16"/>'
+    export: '<path d="M12 4v12M7 11l5 5 5-5M4 20h16"/>',
+    copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>'
   };
   const svg = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
 

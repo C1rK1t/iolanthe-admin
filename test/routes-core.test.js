@@ -549,3 +549,22 @@ test("plain stops export as named GPX waypoints and KML pins", () => {
   assert.ok(core.toGpx(route).includes("<wpt lat=\"2.000000\" lon=\"2.000000\"><name>Drift</name></wpt>"));
   assert.ok(core.toKml(route).includes("<Placemark><name>Drift</name><Point>"));
 });
+
+test("legsTsv gives tab-separated rows with a header and a Total row, for pasting into Excel", () => {
+  const legs = [
+    { from: "Coron Town", to: "Lusong Island", nm: 6.71, speed: 8, hours: 6.71 / 8 },
+    { from: "Lusong Island", to: "End", nm: 9.04, speed: 6, hours: 9.04 / 6 }
+  ];
+  const rows = core.legsTsv(legs).split("\r\n").map((row) => row.split("\t"));
+  assert.deepEqual(rows[0], ["Leg", "From", "To", "Distance (nm)", "Speed (kn)", "Time (h:mm)", "Hours"]);
+  assert.deepEqual(rows[1], ["1", "Coron Town", "Lusong Island", "6.7", "8", "0:50", "0.84"]);
+  assert.deepEqual(rows[2], ["2", "Lusong Island", "End", "9.0", "6", "1:30", "1.51"]);
+  assert.deepEqual(rows[3], ["Total", "", "", "15.8", "", "2:21", "2.35"]);
+});
+
+test("legsTsv keeps names on one cell and stops Excel reading them as formulas", () => {
+  const legs = [{ from: "=HYPERLINK(1)", to: "Bay\tone\nline", nm: 1, speed: 0, hours: null }];
+  const rows = core.legsTsv(legs).split("\r\n").map((row) => row.split("\t"));
+  assert.deepEqual(rows[1], ["1", "'=HYPERLINK(1)", "Bay one line", "1.0", "", "", ""]);
+  assert.deepEqual(rows[2], ["Total", "", "", "1.0", "", "", ""]);
+});

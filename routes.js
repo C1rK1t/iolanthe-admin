@@ -86,7 +86,10 @@
               <div class="stops" id="routes-stops"></div>
             </div>
             <div class="tab-panel" role="tabpanel" id="routes-panel-legs" aria-labelledby="routes-tab-legs" hidden>
-              <label class="speed-row" title="Saved with the route. Legs use it unless they have their own speed.">Route speed <input id="routes-speed" type="number" min="0" max="30" step="0.5"> kn</label>
+              <div class="legs-head">
+                <label class="speed-row" title="Saved with the route. Legs use it unless they have their own speed.">Route speed <input id="routes-speed" type="number" min="0" max="30" step="0.5"> kn</label>
+                <button type="button" class="icon-btn small" id="routes-copy-legs" title="Copy the legs for Excel" aria-label="Copy the legs for Excel"></button>
+              </div>
               <div class="stops" id="routes-legs"></div>
             </div>
           </div>
@@ -635,6 +638,8 @@
     $("name").addEventListener("input", (e) => { if (!work) return; work.route = { ...work.route, name: e.target.value }; renderActions(); renderStats(); });
     $("desc").addEventListener("input", (e) => { if (!work) return; work.route = { ...work.route, description: e.target.value }; renderActions(); renderStats(); });
     $("tab-stops").addEventListener("click", () => showTab("stops"));
+    $("copy-legs").innerHTML = svg("copy");
+    $("copy-legs").addEventListener("click", () => lists.copyLegs());
     $("tab-legs").addEventListener("click", () => showTab("legs"));
     // The route speed is saved with the route. The last value used also seeds new routes in this browser.
     const applySpeed = (v) => {

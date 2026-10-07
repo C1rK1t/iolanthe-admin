@@ -70,6 +70,25 @@
     return legs.reduce((sum, leg) => sum + leg.hours, 0);
   }
 
+  // Leg table as tab-separated text for pasting into Excel: a header, one row per leg and a Total row.
+  // A name is kept on one cell, and one starting with = + - @ gets a leading ' so Excel doesn't run it as a formula.
+  function legsTsv(legs) {
+    const cell = (text) => {
+      const flat = String(text === undefined || text === null ? "" : text).replace(/[\t\r\n]+/g, " ");
+      return /^[=+\-@]/.test(flat) ? `'${flat}` : flat;
+    };
+    const time = (hours) => (hours === null ? "" : fmtHm(hours));
+    const decimal = (hours) => (hours === null ? "" : hours.toFixed(2));
+    const total = totalHours(legs);
+    const nm = legs.reduce((sum, leg) => sum + leg.nm, 0);
+    const rows = [
+      ["Leg", "From", "To", "Distance (nm)", "Speed (kn)", "Time (h:mm)", "Hours"],
+      ...legs.map((leg, k) => [String(k + 1), cell(leg.from), cell(leg.to), leg.nm.toFixed(1), leg.speed ? String(leg.speed) : "", time(leg.hours), decimal(leg.hours)]),
+      ["Total", "", "", nm.toFixed(1), "", time(total), decimal(total)]
+    ];
+    return rows.map((row) => row.join("\t")).join("\r\n");
+  }
+
   function setLegSpeed(points, index, value) {
     const point = points[index];
     if (value) {
@@ -410,7 +429,7 @@
 
   return {
     METRES_PER_NM, distM, distNm, routeNm, fmtHm, isStop, replaceAt, insertAt, removeAt,
-    stopLegs, totalHours, setLegSpeed, joinPoints, joinGapNm, routeSnapshot,
+    stopLegs, totalHours, legsTsv, setLegSpeed, joinPoints, joinGapNm, routeSnapshot,
     sitesWithin, nearbyAnchorages, stopAt, makeStopAt, appendStop, anchorageMovedM, routesUsingAnchorage, uniqueName,
     makePlainStop, removeStop,
     IMPORT_TARGET_POINTS, MAX_TOLERANCE_M, TOLERANCE_STEP_M, PIN_MATCH_NM, validPos, parseKmlCoordinates, htmlToText,
