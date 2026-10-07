@@ -150,3 +150,7 @@ Started 2026-10-07. Each line is a decision David made during the brainstorm. Th
   6 charters converted (same counts as the rehearsal), schema 4, `/api/charter` version 2, `/api/planned-route` 200.
   The live admin (still old `main`) has an Itinerary panel that no longer matches the data until admin#5 merges;
   the live guest shows the active `test` charter, which is empty anyway. Next: merge admin#5, then guest#1.
+- **2026-10-07 ALL THREE DEPLOYED.** admin#5 merged `b947078`, guest#1 merged `a83e066`; both pulled onto the vessel
+  and served (admin assets at `admin-itin-v2`; guest `itinerary-days.js` + `guest.js` v2, SW cache v4). The charter
+  itinerary rework spec A is live. Follow-ups: plan 5 Task 8 one release later (drop the v1 converter and the legacy
+  planned-route wrapper, add `?v=` to the guest script tags); captain's tweak round on the editor; specs B and C.
