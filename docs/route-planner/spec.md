@@ -166,7 +166,8 @@ This replaces draft 1's "side panel above the map" (decided 2026-10-07, §7 Q1).
   height and scrolls inside, so its bottom stays level with the map's. On narrow screens it's capped at about 70% of
   the screen height.
   - **Stops tab**: one card per stop in route order. Each card has a blue numbered dot, the name, the anchorage
-    depth, any "anchorage moved / deleted" warning, and chips for the sites it serves. Clicking a card pans to the
+    depth (a plain stop shows "Holding / drifting" instead), any "anchorage moved / deleted" warning, and chips for
+    the sites it serves. Clicking a card pans to the
     stop and opens its popup. This is the list the itinerary can be built from by hand later.
   - **Legs tab**: a **route speed (kn)** field at the top, saved with the route (`speed_kn`, §2.1). Below it, one card per
     **stop-to-stop leg**, styled like the stop cards: a blue numbered dot, "From → To", then distance (nm) and time
@@ -215,6 +216,9 @@ This replaces draft 1's "side panel above the map" (decided 2026-10-07, §7 Q1).
 
 **Modals** follow the house rules: green save and red cancel top right, and clicking outside cancels.
 - The **anchorage modal** has name, latitude/longitude (with the PR #1 map picker), depth (m), notes, and Delete.
+  A new anchorage's name starts as "Anchorage" (or the imported pin's name). On save, a name another anchorage
+  already has (ignoring case) becomes "<name> #02", "#03", … (one past the highest number in use), and the status
+  says so. The server gives a new anchorage a free id, since a renamed anchorage keeps its old one.
 - The **site modal** is the existing Site Editor modal, reused as it is.
 
 **Unsaved changes** use the existing `confirmDiscardPageChanges` guard. Leaving with unpromoted imported pins also

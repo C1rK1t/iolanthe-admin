@@ -74,7 +74,9 @@
     async function makeAnchorageFromPoint(i) {
       const p = points()[i];
       closePopup();
-      const saved = await places.openAnchorageModal(null, p, { name: p.name });
+      // A plain stop's automatic "Stop" / "Stop #02" name isn't a useful anchorage name: use the "Anchorage" default.
+      const name = p.name && !/^Stop( #\d+)?$/.test(p.name) ? p.name : undefined;
+      const saved = await places.openAnchorageModal(null, p, { name });
       if (saved && points()[i]) ctx.makeStopAtAnchorage(i, saved);
     }
 
