@@ -220,7 +220,9 @@
     const r = work.route;
     const src = r.source || {};
     const srcText = src.type === "charter" ? "migrated from a charter" : src.type === "kml" || src.type === "gpx" ? `imported from ${src.filename || src.type}` : "planner";
-    $("meta").textContent = r.id
+    $("meta").textContent = isCharter()
+      ? `Charter route · revision ${(subject.itinerary && subject.itinerary.revision) || 0}${isDirty() ? " · unsaved changes" : ""}`
+      : r.id
       ? `Revision ${r.revision} · updated ${fmtDate(r.updated_at)} · source: ${srcText}${isDirty() ? " · unsaved changes" : ""}`
       : (isDirty() ? "Unsaved new route" : "");
   }
