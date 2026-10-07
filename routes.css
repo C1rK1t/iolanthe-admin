@@ -195,6 +195,12 @@
 .routes-modal .field input[type=range] { width: auto; padding: 0; border: 0; }
 .routes-modal .field input:focus, .routes-modal .field select:focus, .routes-modal .field textarea:focus { outline: 2px solid rgba(23,111,122,.35); border-color: var(--accent); }
 
+.routes-modal .meta { font-size: 12px; color: var(--muted); }
+.routes-modal .empty { color: var(--muted); font-size: 13px; }
+.routes-modal .banner { border-radius: 8px; padding: 10px 12px; font-size: 13px; line-height: 1.4; }
+.routes-modal .banner.info { background: #e4f1f3; color: #0e4f58; }
+.routes-modal .banner.warn { background: var(--warn-bg); color: #5c3c00; }
+
 @media (max-width: 900px) {
   .routes-panel .planner { grid-template-columns: minmax(0, 1fr); gap: 14px; }
   /* Phone: route picker, then the map, then the rest of the side panel */

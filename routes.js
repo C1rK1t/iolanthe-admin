@@ -1,7 +1,7 @@
 // Routes panel (Charter → Routes). Uses window.IolantheAdmin (admin.js) and window.IolantheRoutesCore.
 // Ported from docs/route-planner/planner-mockup.html. Split into: routes-ui.js (el, icons, modal shell),
 // routes-popup.js (point popup), routes-lists.js (Stops / Legs lists), routes-join.js (Add another route),
-// routes-places.js (anchorages, sites).
+// routes-places.js (anchorages, sites), routes-io.js (KML / GPX import, imported pins, export).
 (function () {
   "use strict";
 
@@ -27,6 +27,7 @@
   let popup = null;      // IolantheRoutesPopup instance, created fresh by each bind()
   let lists = null;      // IolantheRoutesLists instance, created fresh by each bind()
   let join = null;       // IolantheRoutesJoin instance, created fresh by each bind()
+  let io = null;         // IolantheRoutesIo instance (import, pins, export), created fresh by each bind()
 
   const { el, svg, openModal, closeModal } = window.IolantheRoutesUi;
 
@@ -226,6 +227,7 @@
       b("plus", "New route", newRoute),
       b("saveAs", "Save As", () => saveAs(false), "", work.route.points.length < 2),
       b("join", "Add another route to this one", () => join.openJoin()),
+      b("export", "Export GPX / KML", () => io.openExport(), "", work.route.points.length < 2),
       b("trash", "Delete route", deleteRoute, "", !hasId));
   }
 
@@ -730,6 +732,16 @@
       getRoutes: () => routes,
       editPoints,
       status
+    });
+    io = window.IolantheRoutesIo.create({
+      A: A(),
+      core: core(),
+      places: myPlaces,
+      getWork: () => work,
+      getMap: () => map,
+      isDirty,
+      editPoints,
+      renderAll
     });
     initMap(mine);
     loadLibrary(mine);
