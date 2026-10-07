@@ -169,6 +169,25 @@
     return (routes || []).filter((route) => (route.points || []).some((p) => p.anchorage_id === anchorageId));
   }
 
+  // A name that no other entry uses: a duplicate (case-insensitive) becomes "<base> #NN", one past the highest
+  // number already used for that base, where the plain base counts as 1. "Anchorage" + ["Anchorage"] -> "Anchorage #02".
+  const NUMBER_SUFFIX = /\s+#(\d+)$/;
+  function uniqueName(name, existingNames) {
+    const wanted = String(name || "").trim();
+    const others = (existingNames || []).map((n) => String(n || "").trim()).filter(Boolean);
+    const key = (n) => n.toLowerCase();
+    if (!others.some((n) => key(n) === key(wanted))) {
+      return wanted;
+    }
+    const base = wanted.replace(NUMBER_SUFFIX, "");
+    const highest = others.reduce((max, n) => {
+      const match = n.match(NUMBER_SUFFIX);
+      const nBase = match ? n.slice(0, match.index) : n;
+      return key(nBase) === key(base) ? Math.max(max, match ? Number(match[1]) : 1) : max;
+    }, 1);
+    return `${base} #${String(highest + 1).padStart(2, "0")}`;
+  }
+
   // ---------- import / export (spec §4.2, §4.3) ----------
   const IMPORT_TARGET_POINTS = 60; // the default Simplify tolerance keeps an imported line under about this many points
   const MAX_TOLERANCE_M = 200;
@@ -365,7 +384,7 @@
   return {
     METRES_PER_NM, distM, distNm, routeNm, fmtHm, isStop, replaceAt, insertAt, removeAt,
     stopLegs, totalHours, setLegSpeed, joinPoints, joinGapNm, routeSnapshot,
-    sitesWithin, nearbyAnchorages, stopAt, makeStopAt, appendStop, anchorageMovedM, routesUsingAnchorage,
+    sitesWithin, nearbyAnchorages, stopAt, makeStopAt, appendStop, anchorageMovedM, routesUsingAnchorage, uniqueName,
     IMPORT_TARGET_POINTS, MAX_TOLERANCE_M, TOLERANCE_STEP_M, PIN_MATCH_NM, validPos, parseKmlCoordinates, htmlToText,
     extractGeo, simplify, defaultTolerance, joinLines, chosenLinePoints, importPoints, pinMatch, xmlEscape, slugify,
     exportBaseName, toGpx, toKml

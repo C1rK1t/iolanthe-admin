@@ -448,3 +448,29 @@ test("xmlEscape strips control characters that XML 1.0 forbids but keeps tab, LF
   assert.equal(core.xmlEscape("a\tb\nc\rd"), "a\tb\nc\rd");
   assert.ok(core.toGpx({ id: "x", name: "A\u0008B", points: [P(1, 1), P(2, 2)] }).includes("<name>AB</name>"));
 });
+
+test("uniqueName keeps a name nobody else uses (trimmed)", () => {
+  assert.equal(core.uniqueName("  Anchorage  ", []), "Anchorage");
+  assert.equal(core.uniqueName("Anchorage", ["Lusong Island"]), "Anchorage");
+  assert.equal(core.uniqueName("Anchorage", ["Anchorage #02"]), "Anchorage");
+});
+
+test("uniqueName numbers a duplicate one past the highest used, the plain base counting as 1", () => {
+  assert.equal(core.uniqueName("Anchorage", ["Anchorage"]), "Anchorage #02");
+  assert.equal(core.uniqueName("Anchorage", ["Anchorage", "Anchorage #02"]), "Anchorage #03");
+  assert.equal(core.uniqueName("Anchorage", ["Anchorage", "Anchorage #05"]), "Anchorage #06");
+  assert.equal(core.uniqueName("Anchorage #02", ["Anchorage", "Anchorage #02"]), "Anchorage #03");
+  assert.equal(core.uniqueName("Anchorage #02", ["Anchorage #02"]), "Anchorage #03");
+});
+
+test("uniqueName matches case-insensitively, works for any name and pads to two digits", () => {
+  assert.equal(core.uniqueName("anchorage", ["ANCHORAGE"]), "anchorage #02");
+  assert.equal(core.uniqueName("Lusong Island", ["Lusong Island", "Lusong Island #02"]), "Lusong Island #03");
+  assert.equal(core.uniqueName("Lusong Island #02", ["Lusong Island #02", "Other"]), "Lusong Island #03");
+  assert.equal(core.uniqueName("A", ["A", "A #09"]), "A #10");
+  assert.equal(core.uniqueName("A", ["A", "A #123"]), "A #124");
+});
+
+test("uniqueName ignores blank and missing names in the list", () => {
+  assert.equal(core.uniqueName("Stop", [undefined, null, "", "Stop"]), "Stop #02");
+});
