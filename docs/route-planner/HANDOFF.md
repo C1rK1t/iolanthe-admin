@@ -1,6 +1,6 @@
 # Route Planner — handoff
 
-Last updated 2026-10-07. **Phase 1 is complete and live.** The server route library is in `iolanthe-server`
+Last updated 2026-10-07. **Phases 1 and 2 are complete** (phase 2 at `24d6568`). **Phase 1 is complete and live.** The server route library is in `iolanthe-server`
 `2ac4b8d`, and the admin Routes panel is in `iolanthe-admin` `91d679a`. Next: **phase 2** (site and anchorage
 overlays). Q3 is decided (merge), so nothing blocks it.
 
@@ -166,14 +166,43 @@ by turning the mockup's CSS (`:root` tokens, `.icon-btn`, `.stat`, `.banner`, `.
   `iolanthe-server/data-local/routes-dev`). The Charter Admin test password is at `admin.passwords.charter` in that
   folder's `settings.json`.
 
-## Next: phase 2
+## Phase 2 (done, 2026-10-07)
+
+- **Merged** to `iolanthe-admin` `main` at `24d6568`. The plan is `docs/superpowers/plans/2026-10-07-routes-phase2-places.md`.
+  It goes live on the boat within 5 minutes (the cron).
+- **New file:** `routes-places.js` (anchorages and sites on the map, the anchorage modal, the Site Editor bridge).
+  `routes-core.js` gained the places logic, and tests are now 28 (`node --test`). admin.js exposes
+  `openSiteEditorModal` (with an optional `defaults` argument for a new site), `saveSitesLibrary` and
+  `normalizeSiteLibrary`. Version strings are `admin-routes-v2`.
+- **Features:**
+  - Anchorage mode: create, edit, move and delete (with a used-by confirm). Anchorage library saves are serialised.
+  - Stops:
+    - created from Add mode, "Make stop at" (2 nm) and drag-to-snap (24 px)
+    - **merge** with an adjacent stop at the same anchorage (Q3)
+    - a stop nudged near its own anchorage keeps its name and sites
+  - Sites: pins, click to edit (the real Site Editor), Add → named waypoint, and Make site (for waypoints only)
+  - Sites served (5 nm groups), tender lines, "moved"/"deleted" warnings with the "!" badge, Move stop to
+    anchorage, and a layers toggle
+- **Reviews caught and fixed:**
+  - the leg speed being lost on re-snap
+  - false "deleted" warnings while anchorages were loading
+  - the wrong new anchorage being picked
+  - overlapping saves losing an update
+  - re-snapping a nudged stop
+- **Follow-ups:**
+  - `routes.js` is 974 lines (over the 800 guideline). Split the point popup into its own file.
+  - Local dev data has leftover test anchorages and routes.
+  - Browser checks need the local test login; David allowed agents to read the dev password, but the auto-mode
+    classifier still blocks subagents. The workaround is for the main session to log in to the browser pane and
+    hand over the session.
+
+## Next: phase 3
 
 From spec §5:
-- site and anchorage overlays on the map: click a site to edit it; add a site as a waypoint; point → Make site
-- anchorages: add, edit, move and delete; Anchorage mode; stops; "Make stop at"; snap-to-anchorage; moved warnings
-- the sites-served picker on stops
-- spec §7 Q3 is decided: **merge**
-- the mockup's JS is the working reference again; spec §4.1 has the details
+- KML/GPX import in the browser: Simplify, temporary pins (Add to route / Make anchorage / Make site, "near X" flags)
+- GPX/KML export
+- retire the old Route Upload panel and the KML pin import modal
+- the mockup's JS is the reference: `parseGeoFile`, `simplify`, `openImport`, `exportGpx`/`exportKml`
 
 ## Release process and conventions
 
