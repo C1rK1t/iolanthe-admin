@@ -335,6 +335,17 @@ test("defaultTolerance is the smallest 5 m step that keeps a line to 60 points o
   assert.equal(core.defaultTolerance(zigzag), core.MAX_TOLERANCE_M);
 });
 
+test("defaultTolerance matches a linear scan of the 5 m steps", () => {
+  const linear = (pts) => {
+    for (let t = 0; t <= core.MAX_TOLERANCE_M; t += core.TOLERANCE_STEP_M) if (core.simplify(pts, t).length <= core.IMPORT_TARGET_POINTS) return t;
+    return core.MAX_TOLERANCE_M;
+  };
+  const wobble = (n, amp) => Array.from({ length: n }, (_, i) => P(12 + i * 0.0005 + Math.sin(i * 1.7) * amp, 120 + i * 0.0004 + Math.cos(i * 1.3) * amp));
+  [denseTrack(), wobble(300, 0.0002), wobble(500, 0.0006), wobble(1000, 0.001), wobble(61, 0.0003)].forEach((pts) => {
+    assert.equal(core.defaultTolerance(pts), linear(pts));
+  });
+});
+
 test("joinLines joins in file order and drops the duplicate where lines meet", () => {
   const a = { points: [P(12, 120), P(12.1, 120)] };
   const b = { points: [P(12.1, 120.0001), P(12.2, 120)] }; // starts ~11 m from a's end
@@ -421,6 +432,11 @@ test("exportBaseName uses the route id, else a slug of the name, else 'route'", 
 
 test("slugify strips combining accents", () => {
   assert.equal(core.slugify("Cr\u00e8me Br\u00fbl\u00e9e to Hydra"), "creme-brulee-to-hydra");
+});
+
+test("htmlToText strips tags that only appear after decoding entities", () => {
+  assert.ok(!core.htmlToText("&lt;/textarea&gt;&lt;img src=x onerror=alert(1)&gt;").includes("<"));
+  assert.equal(core.htmlToText("Depth &lt;b&gt;12&lt;/b&gt; m"), "Depth 12 m");
 });
 
 test("parseKmlCoordinates tolerates spaces after the commas", () => {

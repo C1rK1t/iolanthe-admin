@@ -128,9 +128,11 @@
   // Leaving the panel loses unsaved route edits and the imported pins that weren't made into anchorages or sites.
   function leaveConfirm() {
     const n = io ? io.pinCount() : 0;
-    const pinText = n ? `${n} imported pin${n === 1 ? " hasn't" : "s haven't"} been made into an anchorage or site and will be lost.` : "";
-    const message = [isDirty() ? "Discard your unsaved route changes?" : "", pinText].filter(Boolean).join(" ");
-    return { ...ROUTE_DISCARD, title: isDirty() ? "Unsaved route" : "Imported pins", message };
+    const dirty = isDirty();
+    const pinText = n ? `${n} imported pin${n === 1 ? " hasn't" : "s haven't"} been made into an anchorage or site.` : "";
+    const ask = !dirty && n === 1 ? "Discard it?" : "Discard them?";
+    const message = [dirty ? "You have unsaved route changes." : "", pinText, ask].filter(Boolean).join(" ");
+    return { ...ROUTE_DISCARD, title: dirty ? "Unsaved route" : "Imported pins", message };
   }
 
   async function guardDiscard() {

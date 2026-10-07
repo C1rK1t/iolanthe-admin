@@ -4,7 +4,8 @@
   "use strict";
 
   const MAX_IMPORT_BYTES = 10 * 1024 * 1024; // larger files are refused before reading
-  const MAX_SOURCE_TEXT = 120;               // the server's limit for a route name and source.filename
+  const MAX_SOURCE_TEXT = 120;               // the server's limit for a route or point name and source.filename
+  const SAME_PIN_NM = 50 / 1852;             // an imported pin this close to an existing one of the same name is a repeat
   const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
   // ctx: { A, core, places, getWork, getMap, isDirty(), editPoints(fn, opts), renderAll(opts), isCurrent() }
@@ -59,7 +60,7 @@
           btn("Add to route", "text-btn secondary", () => {
             closePopup();
             dropPin(pin.id);
-            ctx.editPoints((pts) => [...pts, { latitude: pin.latitude, longitude: pin.longitude, name: pin.name }]);
+            ctx.editPoints((pts) => [...pts, { latitude: pin.latitude, longitude: pin.longitude, name: pin.name.slice(0, MAX_SOURCE_TEXT) }]);
           }),
           btn("Make anchorage", "text-btn secondary", () => promote(pin, () => places.openAnchorageModal(null, pin, { name: pin.name }))),
           btn("Make site", "text-btn secondary", () => promote(pin, () => places.openSiteModal(null, pin, { name: pin.name, description: pin.description }))),
@@ -74,8 +75,19 @@
       let parsed = null;
       let filename = "";
       const pick = { line: 0, join: false, tol: 0, mode: "replace" };
-      const raw = () => (parsed ? c.chosenLinePoints(parsed.lines, pick) : []);
-      const retune = () => { pick.tol = c.defaultTolerance(raw()); };
+      let loadSeq = 0;      // a file chosen while another is still being read wins
+      let choices = new Map(); // per line choice: { points, tol (the default), fits (default is within the target) }
+      const choice = () => {
+        const key = pick.join ? "join" : `line-${pick.line}`;
+        if (!choices.has(key)) {
+          const points = c.chosenLinePoints(parsed.lines, pick);
+          const tol = c.defaultTolerance(points);
+          choices.set(key, { points, tol, fits: c.simplify(points, tol).length <= c.IMPORT_TARGET_POINTS });
+        }
+        return choices.get(key);
+      };
+      const raw = () => (parsed ? choice().points : []);
+      const retune = () => { pick.tol = choice().tol; };
       const radio = (name, checked, label, on) => el("label", {}, el("input", { type: "radio", name, checked, onchange: on }), label);
 
       function renderStage() {
@@ -105,32 +117,37 @@
           lineChoice,
           parsed.lines.length
             ? el("div", { class: "field" }, el("label", {}, "Simplify"), el("div", { class: "slider-row" }, slider, tolLabel),
-              el("div", { class: "meta" }, count, ` from ${points.length}. The default keeps it under about ${c.IMPORT_TARGET_POINTS}.`))
+              el("div", { class: "meta" }, count, ` from ${points.length}.`, choice().fits ? ` The default keeps it under about ${c.IMPORT_TARGET_POINTS}.` : ""))
             : el("p", { class: "empty" }, "No lines found. Only pins will be imported."),
           hasPoints && parsed.lines.length ? el("div", { class: "field" }, el("label", {}, "The open route already has points"),
             el("div", { class: "radio-list" },
               radio("import-mode", pick.mode === "replace", "Replace them", () => { pick.mode = "replace"; }),
               radio("import-mode", pick.mode === "append", "Append to the end", () => { pick.mode = "append"; }))) : null,
-          parsed.pins.length ? el("p", { class: "meta" }, `${plural(parsed.pins.length, "pin")} will show as temporary orange markers. They are not saved until you make them an anchorage or a site.`) : null
+          parsed.pins.length ? el("p", { class: "meta" }, parsed.pins.length === 1
+            ? "1 pin will show as a temporary orange marker. It isn't saved until you make it an anchorage or a site."
+            : `${parsed.pins.length} pins will show as temporary orange markers. They aren't saved until you make them anchorages or sites.`) : null
         ].filter(Boolean));
       }
 
       async function load(file) {
         if (!/\.(kml|gpx)$/i.test(file.name)) { A.setStatus("Choose a .kml or .gpx file. KMZ isn't supported: export it as KML first.", "error"); return; }
         if (file.size > MAX_IMPORT_BYTES) { A.setStatus("That file is over 10 MB, too big to import.", "error"); return; }
+        const seq = ++loadSeq;
+        const stale = () => !ctx.isCurrent() || seq !== loadSeq;
         try {
           const text = await file.text();
-          if (!ctx.isCurrent()) return;
+          if (stale()) return;
           const geo = parseFile(text, file.name);
           if (!geo.lines.length && !geo.pins.length) { A.setStatus("No lines or pins found in that file.", "error"); return; }
           parsed = geo;
+          choices = new Map();
           filename = file.name;
           pick.line = 0;
           pick.join = false;
           if (parsed.lines.length) retune(); else pick.tol = 0;
           renderStage();
         } catch (error) {
-          if (ctx.isCurrent()) A.setStatus(`Couldn't read the file: ${error.message || "unknown error"}.`, "error");
+          if (!stale()) A.setStatus(`Couldn't read the file: ${error.message || "unknown error"}.`, "error");
         }
       }
       fileInput.addEventListener("change", () => { if (fileInput.files[0]) load(fileInput.files[0]); });
@@ -142,7 +159,9 @@
           if (!parsed) { A.setStatus("Choose a file first.", "error"); return false; }
           const work = ctx.getWork();
           const newPts = c.simplify(raw(), pick.tol);
-          const added = parsed.pins.map((p) => ({ ...p, id: `pin-${++pinSeq}` }));
+          const repeat = (p, list) => list.some((q) => q.name === p.name && c.distNm(p, q) <= SAME_PIN_NM);
+          const added = parsed.pins.reduce((acc, p) => (repeat(p, [...pins, ...acc]) ? acc : [...acc, { ...p, id: `pin-${++pinSeq}` }]), []);
+          const skipped = parsed.pins.length - added.length;
           pins = [...pins, ...added];
           if (newPts.length) {
             const mode = work.route.points.length ? pick.mode : "replace";
@@ -155,7 +174,7 @@
           } else {
             ctx.renderAll();
           }
-          A.setStatus(`Imported ${plural(newPts.length, "point")} and ${plural(added.length, "pin")}.`, "ok");
+          A.setStatus(`Imported ${plural(newPts.length, "point")} and ${plural(added.length, "pin")}.${skipped ? ` Skipped ${plural(skipped, "pin")} already on the map.` : ""}`, "ok");
           return true;
         }
       });

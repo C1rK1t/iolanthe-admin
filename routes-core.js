@@ -201,6 +201,7 @@
         const named = ENTITIES[e.toLowerCase()];
         return named === undefined ? match : named;
       })
+      .replace(/<[^>]*>/g, "") // tags that were entity-encoded (&lt;b&gt;) only appear once decoded
       .split("\n").map((line) => line.trim()).filter(Boolean).join("\n");
   }
 
@@ -271,11 +272,17 @@
   }
 
   // The smallest tolerance (5 m steps, up to 200 m) that brings the line to IMPORT_TARGET_POINTS points or fewer.
+  // The kept count only falls as the tolerance rises, so a binary search over the steps needs a few passes, not 41.
   function defaultTolerance(points) {
-    for (let t = 0; t <= MAX_TOLERANCE_M; t += TOLERANCE_STEP_M) {
-      if (simplify(points, t).length <= IMPORT_TARGET_POINTS) return t;
+    const fits = (step) => simplify(points, step * TOLERANCE_STEP_M).length <= IMPORT_TARGET_POINTS;
+    let lo = 0;
+    let hi = Math.floor(MAX_TOLERANCE_M / TOLERANCE_STEP_M);
+    if (!fits(hi)) return MAX_TOLERANCE_M;
+    while (lo < hi) {
+      const mid = Math.floor((lo + hi) / 2);
+      if (fits(mid)) hi = mid; else lo = mid + 1;
     }
-    return MAX_TOLERANCE_M;
+    return lo * TOLERANCE_STEP_M;
   }
 
   // Joins lines in file order. A line that starts within 50 m of where the previous one ended loses that duplicate point.
