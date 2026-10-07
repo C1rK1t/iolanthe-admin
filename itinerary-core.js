@@ -242,10 +242,67 @@
     return errors;
   }
 
+  // ---- times -----------------------------------------------------------------
+
+  function legHours(points, fromIndex, toIndex, routeSpeed) {
+    let nm = 0;
+    for (let i = fromIndex; i < toIndex; i += 1) nm += distNm(points[i], points[i + 1]);
+    const speed = cleanSpeed(points[fromIndex] && points[fromIndex].leg_speed_kn, routeSpeed);
+    return speed > 0 ? nm / speed : 0;
+  }
+  function timeToMinutes(time) {
+    const [h, m] = time.split(":").map(Number);
+    return h * 60 + m;
+  }
+  function minutesToTime(minutes) {
+    const m = ((Math.round(minutes) % 1440) + 1440) % 1440;
+    return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+  }
+
+  // Map stop id → { arrive: {time, estimated} | null, depart: {time, estimated} | null }.
+  function estimateTimes(itinerary) {
+    const it = toObj(itinerary);
+    const points = toObj(it.route).points || [];
+    const speed = toObj(it.route).speed_kn || DEFAULT_SPEED_KN;
+    const out = new Map();
+    let prevDepart = null;   // { minutes, index } of the previous stop's known departure
+    stopEntries(points).forEach((entry) => {
+      const p = entry.point;
+      let arrive = null;
+      let depart = null;
+      if (p.arrive && p.arrive.time) {
+        arrive = { time: p.arrive.time, estimated: false };
+      } else if (p.arrive && prevDepart) {
+        arrive = { time: minutesToTime(prevDepart.minutes + legHours(points, prevDepart.index, entry.index, speed) * 60), estimated: true };
+      }
+      const nights = p.arrive && p.depart ? p.depart.day - p.arrive.day : 0;
+      if (p.depart && p.depart.time) {
+        depart = { time: p.depart.time, estimated: false };
+      } else if (p.depart && nights === 0 && arrive) {
+        depart = { time: arrive.time, estimated: true };
+      }
+      out.set(p.id, { arrive, depart });
+      prevDepart = depart ? { minutes: timeToMinutes(depart.time), index: entry.index } : null;
+    });
+    return out;
+  }
+
+  // "Arr. ~15:45 · Dep. 08:30", "2 nights · Dep. 18:00", "Dep. 09:00", or "".
+  function stopTimesLabel(stop, times) {
+    const t = times || { arrive: null, depart: null };
+    const parts = [];
+    if (t.arrive) parts.push(`Arr. ${t.arrive.estimated ? "~" : ""}${t.arrive.time}`);
+    const nights = stop && stop.arrive && stop.depart ? stop.depart.day - stop.arrive.day : 0;
+    if (nights > 1) parts.push(`${nights} nights`);
+    if (t.depart) parts.push(`Dep. ${t.depart.estimated ? "~" : ""}${t.depart.time}`);
+    return parts.join(" · ");
+  }
+
   return {
     ITINERARY_VERSION, DEFAULT_SPEED_KN, MAX_TITLE_LENGTH, MAX_NOTES_LENGTH, TIME_RE,
     distM, distNm, newId, isStop, parseDateOnly, charterDayCount, dayDateLabel,
     normalizePoint, normalizeItinerary, itinerarySnapshot,
-    stopEntries, positionOf, stopSpan, deriveDays, validateItinerary
+    stopEntries, positionOf, stopSpan, deriveDays, validateItinerary,
+    legHours, timeToMinutes, minutesToTime, estimateTimes, stopTimesLabel
   };
 });

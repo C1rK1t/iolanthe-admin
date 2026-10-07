@@ -69,3 +69,55 @@ test("itinerarySnapshot: ignores revision and source, so a reload is not 'dirty'
   const c = sevenDays(); c.activities[0].title = "Changed";
   assert.notEqual(core.itinerarySnapshot(a), core.itinerarySnapshot(c));
 });
+
+test("dayDateLabel: weekday, day and month from the charter start", () => {
+  assert.equal(core.dayDateLabel(charter, 1), "Mon 12 Oct");
+  assert.equal(core.dayDateLabel(charter, 7), "Sun 18 Oct");
+  assert.equal(core.dayDateLabel({}, 1), "");
+});
+
+test("legHours: distance at the leg's own speed, else the route speed", () => {
+  const pts = [P(12, 120, { stop: true, leg_speed_kn: 4 }), P(12 + 1 / 60, 120), P(12 + 2 / 60, 120, { stop: true })];
+  assert.ok(Math.abs(core.legHours(pts, 0, 2, 8) - 0.5) < 0.01);
+});
+
+test("estimateTimes: set times upright, arrivals estimated from the previous departure, chain breaks at an overnight stop without a departure time", () => {
+  const times = core.estimateTimes(sevenDays());
+  assert.deepEqual(times.get("stp_subic1"), { arrive: null, depart: { time: "09:00", estimated: false } });
+  const anaw = times.get("stp_anaw");                      // ~5 nm at 8 kn from 09:00
+  assert.equal(anaw.arrive.estimated, true);
+  assert.match(anaw.arrive.time, /^09:[3-5]\d$/);
+  assert.deepEqual(anaw.depart, { time: "14:00", estimated: false });
+  const capo = times.get("stp_capo");                      // ~9 nm at 8 kn from 14:00 → about 15:07
+  assert.equal(capo.arrive.estimated, true);
+  assert.match(capo.arrive.time, /^15:[0-2]\d$/);
+  assert.deepEqual(capo.depart, { time: "08:30", estimated: false });
+  const herm = times.get("stp_herm");
+  assert.equal(herm.arrive.estimated, true);
+  assert.equal(herm.depart, null);                         // 1 night, no departure time set → unknown
+  const poti = times.get("stp_poti");
+  assert.equal(poti.arrive, null);                         // chain broken at Hermana
+  assert.deepEqual(poti.depart, { time: "18:00", estimated: false });
+  const hund = times.get("stp_hund");
+  assert.equal(hund.arrive.estimated, true);               // re-anchored by Potipot's 18:00; shown mod 24 h
+  assert.match(hund.arrive.time, /^\d\d:\d\d$/);
+});
+
+test("estimateTimes: a zero-night stop with no departure time leaves when it arrives", () => {
+  const it = sevenDays();
+  delete it.route.points[1].depart.time;                   // Anawangin: arrive ~09:40, depart estimated the same
+  const t = core.estimateTimes(it).get("stp_anaw");
+  assert.equal(t.depart.estimated, true);
+  assert.equal(t.depart.time, t.arrive.time);
+});
+
+test("stopTimesLabel: Arr./Dep. with ~ for estimates, nights when more than one", () => {
+  const it = sevenDays();
+  const times = core.estimateTimes(it);
+  const stops = core.stopEntries(it.route.points).map((e) => e.point);
+  assert.equal(core.stopTimesLabel(stops[0], times.get("stp_subic1")), "Dep. 09:00");
+  assert.match(core.stopTimesLabel(stops[2], times.get("stp_capo")), /^Arr\. ~15:[0-2]\d · Dep\. 08:30$/);
+  assert.equal(core.stopTimesLabel(stops[4], times.get("stp_poti")), "2 nights · Dep. 18:00");
+  assert.equal(core.stopTimesLabel(stops[3], times.get("stp_herm")).startsWith("Arr. ~"), true);
+  assert.equal(core.stopTimesLabel({ stop: true }, { arrive: null, depart: null }), "");
+});
