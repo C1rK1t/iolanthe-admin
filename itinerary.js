@@ -13,6 +13,76 @@
   let ctx = null;      // { charterId, charter, siteLibrary }
   let work = null;     // { itinerary, savedJson, baseRevision }
   let resizeBound = false;
+  let saving = false;
+  let guard = null;
+  const JSON_HEADERS = { "Content-Type": "application/json" };
+  const post = (path, body) => A().api(path, { method: "POST", headers: JSON_HEADERS, body: JSON.stringify(body) });
+  const status = (message, tone) => A().setStatus(message, tone);
+  const isDirty = () => Boolean(work) && core().itinerarySnapshot(work.itinerary) !== work.savedJson;
+
+  // Every edit goes through here: pure function in, new itinerary out, re-render.
+  function commit(next, opts) {
+    if (!next || next === work.itinerary) return false;
+    work.itinerary = next;
+    renderAll(opts);
+    return true;
+  }
+
+  async function save() {
+    if (!work || saving) return;
+    const n = dayCount();
+    const problems = core().validateItinerary(work.itinerary, n);
+    if (problems.length) { status(problems[0].message, "error"); return; }
+    const sent = core().itinerarySnapshot(work.itinerary);
+    const mine = panel;
+    saving = true;
+    renderHeader();
+    try {
+      const { itinerary } = await post(`/api/admin/charter/${encodeURIComponent(ctx.charterId)}/itinerary/save`, { itinerary: work.itinerary, base_revision: work.baseRevision });
+      if (panel !== mine || !mine.isConnected) return;
+      const saved = core().normalizeItinerary(itinerary);
+      // Keep edits made while the request was in flight: only adopt the server copy if nothing changed since we sent.
+      if (core().itinerarySnapshot(work.itinerary) === sent) work.itinerary = saved;
+      work.baseRevision = saved.revision;
+      work.savedJson = core().itinerarySnapshot(saved);
+      status(`Itinerary saved · revision ${saved.revision}`, "ok");
+      renderAll();
+    } catch (error) {
+      if (panel !== mine || !mine.isConnected) return;
+      if (error.status === 409) await handleClash(error);
+      else if (error && !error.loginRequired && error.message) status(error.message, "error");
+    } finally {
+      saving = false;
+      if (panel === mine && mine.isConnected && work) renderHeader();
+    }
+  }
+
+  async function handleClash(error) {
+    const reload = await A().showAdminConfirm({
+      title: "Itinerary changed elsewhere",
+      message: `${error.message} Reloading discards your changes; Cancel keeps them so you can copy anything you need.`,
+      confirmLabel: "Reload", cancelLabel: "Cancel", tone: "warning"
+    });
+    if (!reload) return;
+    await reloadFromServer();
+  }
+
+  async function reloadFromServer() {
+    const bundle = await A().api(`/api/admin/charter/${encodeURIComponent(ctx.charterId)}`);
+    const itinerary = core().normalizeItinerary(bundle["itinerary.json"]);
+    work = { itinerary, savedJson: core().itinerarySnapshot(itinerary), baseRevision: itinerary.revision };
+    renderAll();
+  }
+
+  async function cancelEdits() {
+    if (!isDirty()) return;
+    const ok = await A().showAdminConfirm({ title: "Discard changes?", message: "Your unsaved itinerary changes will be lost.", confirmLabel: "Discard", cancelLabel: "Keep editing", tone: "warning" });
+    if (ok) await reloadFromServer();
+  }
+
+  // Replaced by the Apply / Promote modals (plan 3 task 9).
+  function openApplyModal() {}
+  function openPromoteModal() {}
 
   const dayCount = () => core().charterDayCount(ctx.charter);
   const siteTitle = (id) => {
@@ -48,12 +118,18 @@
     const dates = c.start_date && c.end_date ? `${c.start_date} → ${c.end_date} · ${n} day${n === 1 ? "" : "s"}` : "Set the charter dates on Charter Info";
     panel.querySelector("#itinerary-dates").textContent = dates;
     const actions = panel.querySelector("#itinerary-actions");
+    const dirty = isDirty();
     actions.replaceChildren(
       el("button", { type: "button", class: "itinerary-action", "data-action": "edit-route", disabled: "" }, "Edit route"),
-      el("button", { type: "button", class: "itinerary-action", "data-action": "apply-route", disabled: "" }, "Apply library route…"),
-      el("button", { type: "button", class: "itinerary-action", "data-action": "promote", disabled: "" }, "Promote to library…")
+      el("button", { type: "button", class: "itinerary-action", "data-action": "apply-route", ...(dirty ? { disabled: "" } : {}) }, "Apply library route…"),
+      el("button", { type: "button", class: "itinerary-action", "data-action": "promote", ...(dirty || !core().stopEntries(work.itinerary.route.points).length ? { disabled: "" } : {}) }, "Promote to library…"),
+      el("button", { type: "button", class: "itinerary-action", "data-action": "cancel", ...(dirty && !saving ? {} : { disabled: "" }) }, "Cancel"),
+      el("button", { type: "button", class: "itinerary-action itinerary-action--primary", "data-action": "save", ...(dirty && !saving ? {} : { disabled: "" }) }, saving ? "Saving…" : "Save")
     );
-    // The buttons are enabled by plan 3 (Save, Apply, Promote) and plan 4 (Edit route).
+    actions.querySelector('[data-action="save"]').addEventListener("click", save);
+    actions.querySelector('[data-action="cancel"]').addEventListener("click", cancelEdits);
+    actions.querySelector('[data-action="apply-route"]').addEventListener("click", openApplyModal);
+    actions.querySelector('[data-action="promote"]').addEventListener("click", openPromoteModal);
   }
 
   function renderWelcome() {
@@ -211,6 +287,13 @@
     ctx = { charterId: opts.charterId, charter: opts.charter || {}, siteLibrary: opts.siteLibrary || { sites: [] } };
     const itinerary = core().normalizeItinerary(opts.itinerary);
     work = { itinerary, savedJson: core().itinerarySnapshot(itinerary), baseRevision: itinerary.revision };
+    guard = {
+      isDirty,
+      get confirmOptions() {
+        return { title: "Unsaved itinerary changes", message: "Leave this panel and discard your changes?", confirmLabel: "Discard", cancelLabel: "Stay", tone: "warning" };
+      }
+    };
+    A().setPageUnsavedGuard(guard);
     if (!resizeBound) {
       window.addEventListener("resize", () => { if (panel && panel.isConnected && work) drawLine(core().deriveDays(work.itinerary, dayCount())); });
       resizeBound = true;
