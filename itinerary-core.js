@@ -320,12 +320,73 @@
     return { shapes, top: shapes[0].y1, bottom: shapes[shapes.length - 1].y2 };
   }
 
+  // ---- editing: pure, immutable -------------------------------------------------
+
+  const clone = (value) => JSON.parse(JSON.stringify(value));
+
+  function replacePoint(itinerary, index, point) {
+    const points = itinerary.route.points.map((p, i) => (i === index ? point : p));
+    return { ...itinerary, route: { ...itinerary.route, points } };
+  }
+
+  // Activities of `stopId` whose day fell outside the stop's span move to the nearest day inside it.
+  function clampActivities(itinerary, stopId, dayCount) {
+    const stops = stopEntries(itinerary.route.points);
+    const i = stops.findIndex((e) => e.point.id === stopId);
+    if (i < 0) return itinerary;
+    const span = stopSpan(stops[i].point, positionOf(i, stops.length), dayCount);
+    const activities = itinerary.activities.map((a) => (a.stop_id !== stopId ? a : { ...a, day: Math.min(Math.max(a.day, span.from), span.to) }));
+    return { ...itinerary, activities: renumberActivities(activities) };
+  }
+
+  // One entry per edge d = 1..dayCount-1: { day, kind: "dwell"|"leg"|"none", stopId?, fromStopId?, toStopId?, stopIndex?, fromIndex? }
+  function edgeStates(itinerary, dayCount) {
+    const stops = stopEntries(toObj(toObj(itinerary).route).points);
+    const spans = stops.map((e, i) => stopSpan(e.point, positionOf(i, stops.length), dayCount));
+    const out = [];
+    for (let d = 1; d < dayCount; d += 1) {
+      let state = { day: d, kind: "none" };
+      for (let k = 0; k < stops.length; k += 1) {
+        if (spans[k].from <= d && spans[k].to >= d + 1) { state = { day: d, kind: "dwell", stopId: stops[k].point.id, stopIndex: k }; break; }
+        const next = stops[k + 1];
+        if (next && spans[k].to <= d && spans[k + 1].from >= d + 1) {
+          state = { day: d, kind: "leg", fromStopId: stops[k].point.id, toStopId: next.point.id, fromIndex: k };
+          break;
+        }
+      }
+      out.push(state);
+    }
+    return out;
+  }
+
+  // Spec §4.2 table. direction: "down" (later) | "up" (earlier). Returns a new itinerary, or null when refused.
+  function moveEdge(itinerary, edgeDay, direction, dayCount) {
+    const state = edgeStates(itinerary, dayCount)[edgeDay - 1];
+    if (!state || state.kind === "none") return null;
+    const stops = stopEntries(itinerary.route.points);
+    const change = (k, field, day) => {
+      const entry = stops[k];
+      const current = entry.point[field];
+      if (!current) return null;                       // origin has no arrive, terminus has no depart
+      const point = { ...entry.point, [field]: { ...current, day } };
+      return clampActivities(replacePoint(itinerary, entry.index, point), point.id, dayCount);
+    };
+    if (state.kind === "dwell") {
+      return direction === "down" ? change(state.stopIndex, "depart", edgeDay) : change(state.stopIndex, "arrive", edgeDay + 1);
+    }
+    return direction === "down" ? change(state.fromIndex + 1, "arrive", edgeDay) : change(state.fromIndex, "depart", edgeDay + 1);
+  }
+
+  // Replaced in Task 3 with the real renumbering.
+  function renumberActivities(activities) { return activities; }
+
   return {
     ITINERARY_VERSION, DEFAULT_SPEED_KN, MAX_TITLE_LENGTH, MAX_NOTES_LENGTH, TIME_RE,
     distM, distNm, newId, isStop, parseDateOnly, charterDayCount, dayDateLabel,
     normalizePoint, normalizeItinerary, itinerarySnapshot,
     stopEntries, positionOf, stopSpan, deriveDays, validateItinerary,
     legHours, timeToMinutes, minutesToTime, estimateTimes, stopTimesLabel,
-    lineGeometry
+    lineGeometry,
+    clampActivities, edgeStates, moveEdge
   };
 });

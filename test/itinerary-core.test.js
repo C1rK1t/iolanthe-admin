@@ -142,3 +142,66 @@ test("lineGeometry: a dot per single-day stop, a loop spanning a multi-day stop,
   assert.equal(geo.bottom, 460);
   assert.deepEqual(core.lineGeometry([], new Map()), { shapes: [], top: 0, bottom: 0 });
 });
+
+test("edgeStates: dwell edges name the stop, leg edges name both ends", () => {
+  const states = core.edgeStates(sevenDays(), 7);
+  assert.deepEqual(states.map((s) => [s.day, s.kind, s.stopId || `${s.fromStopId}>${s.toStopId}`]), [
+    [1, "dwell", "stp_capo"],
+    [2, "dwell", "stp_herm"],
+    [3, "dwell", "stp_poti"],
+    [4, "dwell", "stp_poti"],
+    [5, "leg", "stp_poti>stp_hund"],
+    [6, "dwell", "stp_hund"]
+  ]);
+  assert.deepEqual(core.edgeStates(core.normalizeItinerary({}), 3).map((s) => s.kind), ["none", "none"]);
+});
+
+test("moveEdge: the four transitions change exactly one field", () => {
+  const it = sevenDays();
+  const byId = (x, id) => core.stopEntries(x.route.points).map((e) => e.point).find((p) => p.id === id);
+
+  // dwell of Capones (edge 1), down → Capones leaves on day 1, the night is at sea
+  const a = core.moveEdge(it, 1, "down", 7);
+  assert.deepEqual(byId(a, "stp_capo").depart, { day: 1, time: "08:30" });
+  assert.equal(core.edgeStates(a, 7)[0].kind, "leg");
+  assert.deepEqual(byId(it, "stp_capo").depart, { day: 2, time: "08:30" });   // input untouched
+
+  // dwell of Capones (edge 1), up → Capones is reached on day 2
+  const b = core.moveEdge(it, 1, "up", 7);
+  assert.deepEqual(byId(b, "stp_capo").arrive, { day: 2 });
+
+  // leg Potipot→Hundred (edge 5), down → Hundred Islands reached on day 5
+  const c = core.moveEdge(it, 5, "down", 7);
+  assert.deepEqual(byId(c, "stp_hund").arrive, { day: 5 });
+
+  // leg (edge 5), up → one more night at Potipot
+  const d = core.moveEdge(it, 5, "up", 7);
+  assert.deepEqual(byId(d, "stp_poti").depart, { day: 6, time: "18:00" });
+
+  // every result stays valid
+  [a, b, c, d].forEach((x) => assert.deepEqual(core.validateItinerary(x, 7), []));
+});
+
+test("moveEdge: refused when it needs the origin's arrival or the terminus's departure, or on a 'none' edge", () => {
+  const it = sevenDays();
+  it.route.points[0].depart = { day: 2, time: "09:00" };   // origin stays at Subic for a night → edge 1 is inside its dwell
+  it.route.points[1].arrive = { day: 2 }; it.route.points[1].depart = { day: 2, time: "14:00" };
+  it.route.points[2].arrive = { day: 2 };
+  assert.equal(core.moveEdge(it, 1, "up", 7), null);        // would need origin.arrive
+  assert.notEqual(core.moveEdge(it, 1, "down", 7), null);  // origin leaves day 1 instead: fine
+  const end = sevenDays();
+  end.route.points[6].depart = { day: 6, time: "08:00" };
+  end.route.points[7].arrive = { day: 6 };                  // Subic reached day 6; edge 6 is inside the terminus dwell
+  assert.equal(core.moveEdge(end, 6, "down", 7), null);     // would need terminus.depart
+  assert.equal(core.moveEdge(core.normalizeItinerary({}), 1, "down", 3), null);
+});
+
+test("moveEdge: an activity pushed outside its stop's span is clamped to the nearest day inside", () => {
+  const it = sevenDays();   // Potipot act_3 on day 4; move edge 3 up?? no: shrink Potipot from the end: edge 4 (dwell Potipot) down → depart day 4
+  const out = core.moveEdge(it, 4, "down", 7);
+  const kayaks = out.activities.find((a) => a.id === "act_3");
+  assert.equal(kayaks.day, 4);
+  const again = core.moveEdge(out, 3, "down", 7);           // depart day 3 → Kayaks (day 4) clamps to 3
+  assert.equal(again.activities.find((a) => a.id === "act_3").day, 3);
+  assert.deepEqual(core.validateItinerary(again, 7), []);
+});
