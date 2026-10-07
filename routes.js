@@ -22,7 +22,7 @@
   let routeLines = [];
   let pointMarkers = [];
   let keyHandler = null; // document keydown listener (undo/redo), removed on the next bind
-  const ui = { mode: "select", layers: { sites: true, anchorages: true } };
+  const ui = { mode: "select", layers: { sites: true, anchorages: true, pins: true } };
   let places = null;     // IolantheRoutesPlaces instance, created fresh by each bind()
   let popup = null;      // IolantheRoutesPopup instance, created fresh by each bind()
   let lists = null;      // IolantheRoutesLists instance, created fresh by each bind()
@@ -123,9 +123,19 @@
     return { id: "", name: "", description: "", revision: 0, speed_kn: loadSpeed(), created_at: null, updated_at: null, source: { type: "planner" }, points: [] };
   }
 
+  const ROUTE_DISCARD = { title: "Unsaved route", message: "Discard your unsaved route changes?", confirmLabel: "Discard", cancelLabel: "Cancel", tone: "danger" };
+
+  // Leaving the panel loses unsaved route edits and the imported pins that weren't made into anchorages or sites.
+  function leaveConfirm() {
+    const n = io ? io.pinCount() : 0;
+    const pinText = n ? `${n} imported pin${n === 1 ? " hasn't" : "s haven't"} been made into an anchorage or site and will be lost.` : "";
+    const message = [isDirty() ? "Discard your unsaved route changes?" : "", pinText].filter(Boolean).join(" ");
+    return { ...ROUTE_DISCARD, title: isDirty() ? "Unsaved route" : "Imported pins", message };
+  }
+
   async function guardDiscard() {
     if (!isDirty()) return true;
-    const ok = await A().showAdminConfirm(guard.confirmOptions);
+    const ok = await A().showAdminConfirm(ROUTE_DISCARD);
     if (ok) setWork(routes.find((r) => r.id === work.route.id) || blankRoute());
     return ok;
   }
@@ -227,6 +237,7 @@
       b("plus", "New route", newRoute),
       b("saveAs", "Save As", () => saveAs(false), "", work.route.points.length < 2),
       b("join", "Add another route to this one", () => join.openJoin()),
+      b("import", "Import KML / GPX", () => io.openImport()),
       b("export", "Export GPX / KML", () => io.openExport(), "", work.route.points.length < 2),
       b("trash", "Delete route", deleteRoute, "", !hasId));
   }
@@ -245,7 +256,9 @@
     const item = (key, color, label) => el("label", {},
       el("input", { type: "checkbox", checked: ui.layers[key], onchange: (e) => { ui.layers[key] = e.target.checked; renderMap(); } }),
       el("span", { class: "dot", style: `background:${color}` }), label);
-    $("layers").replaceChildren(item("sites", "var(--site)", "Sites"), item("anchorages", "var(--stop)", "Anchorages"));
+    const pinCount = io ? io.pinCount() : 0;
+    $("layers").replaceChildren(item("sites", "var(--site)", "Sites"), item("anchorages", "var(--stop)", "Anchorages"),
+      item("pins", "var(--pin)", `Imported pins${pinCount ? ` (${pinCount})` : ""}`));
   }
 
   function applyModeClass() {
@@ -287,7 +300,7 @@
       maxZoom: 18, attribution: "Tiles &copy; Esri"
     }).addTo(map);
     L.control.scale({ imperial: false, position: "bottomleft" }).addTo(map);
-    ["tender", "sites", "anchorages", "route", "mids", "points"].forEach((k) => { groups[k] = L.layerGroup().addTo(map); });
+    ["tender", "sites", "anchorages", "pins", "route", "mids", "points"].forEach((k) => { groups[k] = L.layerGroup().addTo(map); });
     map.on("click", onMapClick);
     applyModeClass();
     const leafletMap = map;
@@ -325,6 +338,8 @@
         L.polyline([ll(p), ll(s)], { color: "#fff", weight: 1.5, opacity: 0.75, dashArray: "4 6", interactive: false }).addTo(groups.tender);
       }));
     }
+
+    if (io) io.drawPins(L, groups.pins, { show: ui.layers.pins, divIcon });
 
     routeLines = [
       L.polyline(pts.map(ll), { color: "#1d3540", weight: 6, opacity: 0.6, interactive: false }).addTo(groups.route),
@@ -687,8 +702,8 @@
     work = null;
     history = { undo: [], redo: [] };
     guard = {
-      isDirty,
-      confirmOptions: { title: "Unsaved route", message: "Discard your unsaved route changes?", confirmLabel: "Discard", cancelLabel: "Cancel", tone: "danger" }
+      isDirty: () => isDirty() || Boolean(io && io.pinCount()),
+      get confirmOptions() { return leaveConfirm(); }
     };
     A().setPageUnsavedGuard(guard);
     bindInputs();
@@ -741,7 +756,8 @@
       getMap: () => map,
       isDirty,
       editPoints,
-      renderAll
+      renderAll,
+      isCurrent: () => panel === mine && mine.isConnected && places === myPlaces
     });
     initMap(mine);
     loadLibrary(mine);

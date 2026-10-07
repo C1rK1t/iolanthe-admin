@@ -132,6 +132,7 @@
 .routes-panel .pop .nearby { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
 .routes-panel .pop .nearby .text-btn { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 34px; text-align: left; }
 .routes-panel .pop .nearby .d { font-weight: 400; opacity: .85; }
+.routes-panel .pop .pin-desc { white-space: pre-line; max-height: 7.5em; overflow: auto; font-size: 12px; color: var(--muted); margin-bottom: 8px; }
 .routes-panel .site-pick { max-height: 160px; overflow: auto; border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; }
 .routes-panel .site-pick label { display: flex; gap: 6px; align-items: center; padding: 3px 0; font-size: 12px; text-transform: none; letter-spacing: 0; color: var(--ink); font-weight: 400; margin: 0; cursor: pointer; }
 .routes-panel .site-pick label.near { font-weight: 700; }

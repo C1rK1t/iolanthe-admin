@@ -183,7 +183,7 @@
     }
 
     // Opens the admin's own Site Editor dialog (#dialog-modal). Resolves to the saved site, or null when the dialog
-    // closes without saving. opts: { name } pre-fills the title of a new site; pos gives its position.
+    // closes without saving. opts: { name, description } pre-fill a new site; pos gives its position.
     function openSiteModal(site, pos, opts) {
       return new Promise((resolve) => {
         const siteLibrary = ctx.getSiteLibrary();
@@ -197,7 +197,7 @@
           resolve(value);
           if (value) ctx.onChanged();
         };
-        const defaults = site ? undefined : { title: (opts && opts.name) || "", latitude: pos.latitude, longitude: pos.longitude, tags: [], images: [], media: [] };
+        const defaults = site ? undefined : { title: (opts && opts.name) || "", description: (opts && opts.description) || "", latitude: pos.latitude, longitude: pos.longitude, tags: [], images: [], media: [] };
         A.openSiteEditorModal(siteLibrary, site, async (saved) => {
           const next = A.normalizeSiteLibrary({
             ...siteLibrary,
