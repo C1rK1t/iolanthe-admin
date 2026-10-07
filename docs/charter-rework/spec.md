@@ -183,8 +183,11 @@ planned route, alternative active, empty days, day with stops but no site).
 
 Pure function `applyRoute(itinerary, libraryRoute, fromDay, dayCount)` in `lib/itinerary.js`:
 
-1. Keep every stop with `depart.day < fromDay` (or the origin when `fromDay === 1` keeps nothing) and the path
-   points up to and including the last kept stop. Keep their activities.
+1. Keep every stop already *reached* before `fromDay` (its span starts before `fromDay`; the origin always counts
+   when `fromDay > 1`) and the path points up to and including the last kept stop. If the last kept stop was still
+   there on `fromDay` (or was the terminus), it now departs on `fromDay`, keeping any set time, so the new route
+   starts from where the boat actually is. Kept stops keep their activities up to that departure day; activities
+   planned for later days are dropped with the stops they belonged to. (`fromDay === 1` keeps nothing.)
 2. Append the library route's points. The join is a straight leg from the last kept stop to the route's first
    point. If the route's first point is a stop and the last kept stop is at the same spot (route-planner
    `SAME_SPOT_M`), merge them keeping the kept stop's id.
