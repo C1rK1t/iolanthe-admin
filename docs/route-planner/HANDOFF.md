@@ -169,7 +169,7 @@ by turning the mockup's CSS (`:root` tokens, `.icon-btn`, `.stat`, `.banner`, `.
 ## Phase 2 (done, 2026-10-07)
 
 - **Merged** to `iolanthe-admin` `main` at `24d6568`. The plan is `docs/superpowers/plans/2026-10-07-routes-phase2-places.md`.
-  It goes live on the boat within 5 minutes (the cron).
+  **Live on the boat:** the VM is at `405aabe`, and `routes-places.js` is served.
 - **New file:** `routes-places.js` (anchorages and sites on the map, the anchorage modal, the Site Editor bridge).
   `routes-core.js` gained the places logic, and tests are now 28 (`node --test`). admin.js exposes
   `openSiteEditorModal` (with an optional `defaults` argument for a new site), `saveSitesLibrary` and
@@ -198,6 +198,10 @@ by turning the mockup's CSS (`:root` tokens, `.icon-btn`, `.stat`, `.banner`, `.
 
 ## Next: phase 3
 
+An agent is writing the plan to `docs/superpowers/plans/2026-10-07-routes-phase3-import-export.md`. It's not
+committed yet. Task 1 splits `routes.js` (the point popup moves to its own file) before import/export is added.
+
+
 From spec §5:
 - KML/GPX import in the browser: Simplify, temporary pins (Add to route / Make anchorage / Make site, "near X" flags)
 - GPX/KML export
@@ -225,9 +229,8 @@ From spec §5:
     then run successfully on 2026-10-07, and all five repos are current on the VM.
   - The SignalK block also has `ulimits: core: 0` now (`47c4002`). SignalK had written three ~2.8 GB core dumps,
     probably from heap exhaustion. The leak itself is not yet investigated.
-  - Not Route Planner work, and handled in a separate session: SignalK's cat-engine plugin has never loaded (no
-    engine data in SignalK). The plan is `iolanthe-signalk/docs/plans/2026-10-07-cat-engine-plugin-fix.md`
-    (`7a15438`). The cat-genset-analysis crash-loop was fixed and deployed (`f374845`).
+  - Not Route Planner work, handled in a separate session: SignalK's cat-engine plugin never loaded. It's **fixed
+    and live** (`iolanthe-signalk` `5ec38df`, plan `7a15438`), and SignalK now has `propulsion.*` engine data. The cat-genset-analysis crash-loop was fixed and deployed (`f374845`).
   - Server-only alternative:
     `cd /opt/projects/vessel && git -C iolanthe-server pull --ff-only && docker compose up -d --build iolanthe-server`
 - **Claude has direct SSH to the VM:** `ssh docker-vm` (an alias in `~/.ssh/config`, root, key
