@@ -5753,7 +5753,8 @@
     });
   }
 
-  function openSiteEditorModal(siteLibrary, site, onSave) {
+  // defaults: optional draft fields for a NEW site (e.g. { title, latitude, longitude } from the Routes map).
+  function openSiteEditorModal(siteLibrary, site, onSave, defaults) {
     const editing = Boolean(site);
     const openedLatitude = Number(site?.latitude);
     const openedLongitude = Number(site?.longitude);
@@ -5762,7 +5763,7 @@
     }
     const draft = {
       ...blankSite(),
-      ...(editing ? cloneData(site) : {})
+      ...(editing ? cloneData(site) : (defaults || {}))
     };
     const mediaItems = siteMediaEntries(draft);
     const pendingMedia = [];
@@ -15625,7 +15626,10 @@
     setPageUnsavedGuard,
     clearPageUnsavedGuard,
     loadLeaflet,
-    canManageCharterAdmin
+    canManageCharterAdmin,
+    openSiteEditorModal,
+    saveSitesLibrary,
+    normalizeSiteLibrary
   });
 
   loadBootstrap();
