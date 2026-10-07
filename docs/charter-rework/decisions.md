@@ -145,3 +145,8 @@ Started 2026-10-07. Each line is a decision David made during the brainstorm. Th
   live data volume: 6 charters converted (3 future ones were empty in v1 → 0 stops; csaba 8 stops / 24 activities;
   larry 3 / 3 but has no dates), all validate, backup and `.v1` copies written, live container untouched. Merge
   order when ready: server (then `./update.sh` on the vessel) → admin → guest.
+- **2026-10-07 server DEPLOYED.** PR iolanthe-server#1 merged as `a14009f`; `./update.sh` on the vessel rebuilt and
+  restarted `iolanthe-server`. Live migration v4 ran at startup: backup `data-before-migration-2026-10-07-104626`,
+  6 charters converted (same counts as the rehearsal), schema 4, `/api/charter` version 2, `/api/planned-route` 200.
+  The live admin (still old `main`) has an Itinerary panel that no longer matches the data until admin#5 merges;
+  the live guest shows the active `test` charter, which is empty anyway. Next: merge admin#5, then guest#1.
