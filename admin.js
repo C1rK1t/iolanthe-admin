@@ -2051,7 +2051,7 @@
     if (!Array.isArray(state.charters) || !state.charters.length) {
       return `<option value="">No charters available</option>`;
     }
-    return state.charters.map(charter => `<option value="${charter.id}" ${charter.id === state.selectedCharter ? "selected" : ""}>${escapeText(charter.name || charter.id)}</option>`).join("");
+    return state.charters.map(charter => `<option value="${charter.id}" ${charter.id === state.selectedCharter ? "selected" : ""}>${escapeHtml(charter.name || charter.id)}</option>`).join("");
   }
 
   function sectionToolbarHtml(section) {
@@ -4414,7 +4414,7 @@
           <input id="crew-add-position-order" type="number" min="1" step="1" value="${escapeAttribute(crewPositionOrderLabel(draft))}">
         </label>
         <label class="full">Description / Note
-          <textarea id="crew-add-description">${escapeText(draft.description || draft.note || "")}</textarea>
+          <textarea id="crew-add-description">${escapeHtml(draft.description || draft.note || "")}</textarea>
         </label>
       </form>
     `, { cardClass: "modal-welcome-message", hideClose: true, headerActionsHtml });
@@ -4845,7 +4845,7 @@
     const options = Array.isArray(siteLibrary?.sites) ? siteLibrary.sites : [];
     return `
       <option value="">Select site...</option>
-      ${options.map(site => `<option value="${site.id}" ${site.id === selectedId ? "selected" : ""}>${escapeText(site.title || site.id)}</option>`).join("")}
+      ${options.map(site => `<option value="${site.id}" ${site.id === selectedId ? "selected" : ""}>${escapeHtml(site.title || site.id)}</option>`).join("")}
     `;
   }
 
@@ -4972,7 +4972,7 @@
             <input id="charter-info-diving-guest-count" type="number" min="0" step="1" value="${escapeAttribute(normalizeNonNegativeInteger(charterInfo.diving_guest_count))}">
           </label>
           <label class="full">Primary Contact Phones
-            <textarea id="charter-info-primary-contact-phones" placeholder="One phone number per line">${escapeText(charterPhoneListText(charterInfo.primary_contact?.phones || []))}</textarea>
+            <textarea id="charter-info-primary-contact-phones" placeholder="One phone number per line">${escapeHtml(charterPhoneListText(charterInfo.primary_contact?.phones || []))}</textarea>
           </label>
           <p class="muted full"><strong>Preferences & Logistics</strong></p>
           <label class="inline-check">
@@ -4992,13 +4992,13 @@
             Dietary restrictions present
           </label>
           <label class="full">Charter Preference Notes
-            <textarea id="charter-info-charter-preference-notes">${escapeText(charterInfo.charter_preference_notes || "")}</textarea>
+            <textarea id="charter-info-charter-preference-notes">${escapeHtml(charterInfo.charter_preference_notes || "")}</textarea>
           </label>
           <label class="full">Drink Preferences Notes
-            <textarea id="charter-info-drink-preferences-notes">${escapeText(charterInfo.drink_preferences_notes || "")}</textarea>
+            <textarea id="charter-info-drink-preferences-notes">${escapeHtml(charterInfo.drink_preferences_notes || "")}</textarea>
           </label>
           <label class="full">Charter Notes
-            <textarea id="charter-info-notes">${escapeText(charterInfo.notes || "")}</textarea>
+            <textarea id="charter-info-notes">${escapeHtml(charterInfo.notes || "")}</textarea>
           </label>
         </form>
       </section>
@@ -5378,7 +5378,7 @@
         <label>Clone From Existing Charter
           <select id="clone-from">
             <option value="">Blank charter</option>
-            ${state.charters.map(charter => `<option value="${charter.id}">${escapeText(charter.name || charter.id)}</option>`).join("")}
+            ${state.charters.map(charter => `<option value="${charter.id}">${escapeHtml(charter.name || charter.id)}</option>`).join("")}
           </select>
         </label>
         <div class="full clone-panel">
@@ -5784,7 +5784,7 @@
         ${coordinateFieldsHtml("site-editor-longitude", "Longitude", "longitude", draft.longitude)}
         ${sitePickerButtonHtml("site-editor-pick-on-map")}
         <label class="full">Description
-          <textarea id="site-editor-description">${escapeText(draft.description || "")}</textarea>
+          <textarea id="site-editor-description">${escapeHtml(draft.description || "")}</textarea>
         </label>
         <label class="full">Tags
           <input id="site-editor-tags" placeholder="reef, whale sharks, beach" value="${escapeAttribute(Array.isArray(draft.tags) ? draft.tags.join(", ") : draft.tags || "")}"${datalistAttribute("site-editor-modal-tags-suggestions", tagSuggestions)}>
@@ -6720,7 +6720,7 @@
           <input id="itinerary-day-title" value="${escapeAttribute(draft.title || draft.title_override || "")}" data-autofocus>
         </label>
         <label class="full">Notes
-          <textarea id="itinerary-day-notes">${escapeText(draft.notes || "")}</textarea>
+          <textarea id="itinerary-day-notes">${escapeHtml(draft.notes || "")}</textarea>
         </label>
       </form>
       <div class="clone-panel">
@@ -6892,7 +6892,7 @@
           Include site notes
         </label>
         <label class="full">Notes
-          <textarea id="itinerary-stop-notes">${escapeText(stop.notes || "")}</textarea>
+          <textarea id="itinerary-stop-notes">${escapeHtml(stop.notes || "")}</textarea>
         </label>
       </form>
     `;
@@ -7224,10 +7224,10 @@
           <input id="guest-edit-last-dive-date" type="date" value="${lastDiveMode === "date" ? escapeAttribute(draft.date_of_last_dive) : ""}">
         </label>
         <label class="full">Medical Notes
-          <textarea id="guest-edit-medical-notes">${escapeText(draft.medical_notes || "")}</textarea>
+          <textarea id="guest-edit-medical-notes">${escapeHtml(draft.medical_notes || "")}</textarea>
         </label>
         <label class="full">Notes
-          <textarea id="guest-edit-notes">${escapeText(draft.notes || "")}</textarea>
+          <textarea id="guest-edit-notes">${escapeHtml(draft.notes || "")}</textarea>
         </label>
       </form>
     `, { cardClass: "modal-wide", hideClose: true, headerActionsHtml });
@@ -9012,7 +9012,7 @@
           <input id="menu-day-title" value="${escapeAttribute(menuDayModalTitleValue(draft, itineraryDay, menuIndex))}" data-autofocus>
         </label>
         <label class="full">Notes
-          <textarea id="menu-day-notes">${escapeText(menuDayNotesValue(draft))}</textarea>
+          <textarea id="menu-day-notes">${escapeHtml(menuDayNotesValue(draft))}</textarea>
         </label>
       </form>
       <div class="menu-day-modal-sections">
@@ -9389,7 +9389,7 @@
           <input id="menu-food-item-name" value="${escapeAttribute(item.name || "")}" required data-autofocus>
         </label>
         <label class="full">Description
-          <textarea id="menu-food-item-description">${escapeText(item.description || "")}</textarea>
+          <textarea id="menu-food-item-description">${escapeHtml(item.description || "")}</textarea>
         </label>
       </form>
     `, {
@@ -13036,7 +13036,7 @@
           <input id="drink-stock-variant" value="${escapeAttribute(draft.variant || "")}">
         </label>
         <label class="full">Description
-          <textarea id="drink-stock-description">${escapeText(draft.description)}</textarea>
+          <textarea id="drink-stock-description">${escapeHtml(draft.description)}</textarea>
         </label>
         <label>Category
           <select id="drink-stock-category">
@@ -15089,7 +15089,7 @@
           <input id="cocktail-item-name" value="${escapeAttribute(draft.name)}" required data-autofocus>
         </label>
         <label class="full">Description
-          <textarea id="cocktail-item-description">${escapeText(draft.description)}</textarea>
+          <textarea id="cocktail-item-description">${escapeHtml(draft.description)}</textarea>
         </label>
         <div class="full">
           <div class="card-header">
