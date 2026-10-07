@@ -16,8 +16,7 @@ overlays), after spec §7 Q3 is answered.
 - **Captain's link (boat LAN):** http://10.33.2.241/admin/docs/route-planner/planner-mockup.html
   - The admin server serves `/admin/*` files without the URL key.
   - It needs internet for Leaflet (unpkg) and the Esri satellite tiles.
-  - It updates within 5 minutes of a merge to `main` (the `update-vessel.sh` cron; see "Release process"). Claude has
-    no SSH key for the VM.
+  - It updates within 5 minutes of a merge to `main` (the `update-vessel.sh` cron; see "Release process").
 - **Locally:** start `route-planner-mockup` from the workspace-root `.claude/launch.json` (a Python static server on
   port 8766), or open the file in any browser that has internet access.
 - **Not a claude.ai artifact.** The artifact viewer blocks external map tiles and downloads, so the satellite map
@@ -134,10 +133,12 @@ by turning the mockup's CSS (`:root` tokens, `.icon-btn`, `.stat`, `.banner`, `.
       route was deleted, 500 if the file is unreadable), `POST routes/delete`, `GET /api/admin/anchorages` and
       `POST anchorages/save`
     - migration v3, which imports the charter routes
-  - **Live on the boat**: `/api/schema` shows `live_version` 3, with `import-charter-routes-into-library` applied. The
-    number of imported routes wasn't recorded; it's in `docker logs iolanthe-server`.
+  - **Live on the boat**: `/api/schema` shows `live_version` 3, with `import-charter-routes-into-library` applied.
+    Migration v3 imported **4 routes**: "11th Janaury 2027 — Primary", "Csaba - COMPLETED — Primary" and
+    "— Alternative", and "TEST — Primary" (119–130 points each). "Janaury" is the charter's own spelling.
 - **Plan B (admin Routes panel)** is merged to `iolanthe-admin` `main` at `91d679a` (plan:
-  `docs/superpowers/plans/2026-10-07-routes-panel-admin.md`). It goes live with the next 5-minute cron pull.
+  `docs/superpowers/plans/2026-10-07-routes-panel-admin.md`). **It's live on the boat**: the VM is at `3ee328f`, and
+  `/admin/routes.js` is served.
   - Files:
     - `routes-core.js`: pure logic, 14 tests with `node --test`
     - `routes.js`: the panel
@@ -187,8 +188,17 @@ From spec §5:
   ```
 
   It pulls all five repos and rebuilds the containers if anything changed. A rebuild without a pull rebuilds the old
-  code. Check what's live with `curl http://10.33.2.241/api/schema`. Claude can read David's SSH terminal tab but
-  can't type into it, so David runs this.
+  code. Check what's live with `curl http://10.33.2.241/api/schema`.
+  - `update.sh` used to fail at SignalK with a container-name conflict. **That was fixed on 2026-10-07.** SignalK now
+    runs from the vessel compose file, with `cap_add: NET_ADMIN, NET_RAW` for the CAN feed. The repo
+    (`iolanthe-signalk` `8ee2da0`) retired its standalone compose file and keeps a reference copy in
+    `vessel-compose-service.yml`, because `/opt/projects/vessel/docker-compose.yml` isn't in git. The VM picks that
+    commit up on the next `update.sh`.
+  - Server-only alternative:
+    `cd /opt/projects/vessel && git -C iolanthe-server pull --ff-only && docker compose up -d --build iolanthe-server`
+- **Claude has direct SSH to the VM:** `ssh docker-vm` (an alias in `~/.ssh/config`, root, key
+  `~/.ssh/id_claude_dockervm`). It's a live boat system: read-only checks are fine; confirm restarts, rebuilds and
+  edits with David first.
 - **Bump the CSS/JS version strings** in `index.html` whenever `admin.css` / `admin.js` (or the new `routes.js`)
   change, so browsers pick up the new code.
 - **Popups and forms**: green save and red cancel icon buttons top right. Clicking outside the popup cancels.
