@@ -20,7 +20,8 @@
   let routeLines = [];
   let pointMarkers = [];
   let keyHandler = null; // document keydown listener (undo/redo), removed on the next bind
-  const ui = { mode: "select" };
+  const ui = { mode: "select", layers: { sites: true, anchorages: true } };
+  let places = null;     // IolantheRoutesPlaces instance, created fresh by each bind()
 
   const ICONS = {
     check: '<path d="M5 12l5 5 9-10"/>',
@@ -112,6 +113,7 @@
         </aside>
         <div class="map-wrap">
           <div id="routes-map"></div>
+          <div class="layers" id="routes-layers"></div>
           <div class="map-toolbar">
             <div class="seg" id="routes-modes"></div>
           </div>
@@ -188,11 +190,10 @@
     let n = 0;
     const stops = pts.map((p, i) => ({ p, i })).filter(({ p }) => core().isStop(p)).map(({ p, i }) => {
       n += 1;
-      return el("div", { class: "stop-item", onclick: () => focusPoint(i) },
-        el("div", { class: "title" }, el("span", { class: "stop-num" }, n), p.name || "Stop"));
+      return stopItem(p, i, n);
     });
     $("count-stops").textContent = stops.length || "";
-    $("stops").replaceChildren(...(stops.length ? stops : [el("div", { class: "empty" }, "Stops arrive with anchorages in a later update.")]));
+    $("stops").replaceChildren(...(stops.length ? stops : [el("div", { class: "empty" }, "No stops yet. In Add mode, tap an anchorage to add one.")]));
 
     renderLegs();
 
@@ -202,6 +203,20 @@
     $("meta").textContent = r.id
       ? `Revision ${r.revision} · updated ${fmtDate(r.updated_at)} · source: ${srcText}${isDirty() ? " · unsaved changes" : ""}`
       : (isDirty() ? "Unsaved new route" : "");
+  }
+
+  // A stop row with anchorage depth, moved/deleted warnings and site chips (ids that no longer exist are dropped quietly).
+  function stopItem(p, i, n) {
+    const a = places ? places.findAnchorage(p.anchorage_id) : null;
+    const moved = places ? core().anchorageMovedM(p, a) : 0;
+    const siteChips = places ? (p.site_ids || []).map(places.findSite).filter(Boolean).map((s) => el("span", { class: "chip" }, s.title)) : [];
+    const deleted = places && p.anchorage_id && !a;
+    return el("div", { class: "stop-item", onclick: () => focusPoint(i) },
+      el("div", { class: "title" }, el("span", { class: "stop-num" }, n), p.name || "Stop",
+        a && a.depth_m ? el("span", { class: "meta", style: "font-weight:400" }, `${a.depth_m} m`) : null),
+      moved ? el("div", { class: "warn-text" }, `⚠ Anchorage moved ${Math.round(moved)} m since placed`) : null,
+      deleted ? el("div", { class: "warn-text" }, "⚠ Anchorage deleted. The stop keeps its position.") : null,
+      siteChips.length ? el("div", { class: "chips" }, siteChips) : el("div", { class: "empty", style: "margin-top:4px" }, "No sites linked"));
   }
 
   function currentLegs() {
@@ -273,6 +288,7 @@
     renderActions();
     renderStats();
     renderModes();
+    renderLayers();
     renderMap(o);
   }
 
@@ -306,6 +322,13 @@
       return btn;
     }));
     $("map-hint").textContent = MODES.find((m) => m.id === ui.mode).hint;
+  }
+
+  function renderLayers() {
+    const item = (key, color, label) => el("label", {},
+      el("input", { type: "checkbox", checked: ui.layers[key], onchange: (e) => { ui.layers[key] = e.target.checked; renderMap(); } }),
+      el("span", { class: "dot", style: `background:${color}` }), label);
+    $("layers").replaceChildren(item("sites", "var(--site)", "Sites"), item("anchorages", "var(--stop)", "Anchorages"));
   }
 
   function applyModeClass() {
@@ -347,7 +370,7 @@
       maxZoom: 18, attribution: "Tiles &copy; Esri"
     }).addTo(map);
     L.control.scale({ imperial: false, position: "bottomleft" }).addTo(map);
-    ["route", "mids", "points"].forEach((k) => { groups[k] = L.layerGroup().addTo(map); });
+    ["tender", "sites", "anchorages", "route", "mids", "points"].forEach((k) => { groups[k] = L.layerGroup().addTo(map); });
     map.on("click", onMapClick);
     applyModeClass();
     const leafletMap = map;
@@ -370,6 +393,22 @@
     const pts = work.route.points;
     const c = core();
 
+    if (places) {
+      places.draw(L, groups, {
+        mode: ui.mode,
+        layers: ui.layers,
+        usedAnchorageIds: new Set(pts.filter(c.isStop).map((p) => p.anchorage_id)),
+        divIcon,
+        onAnchorageClick,
+        onSiteClick,
+        onAnchorageDragEnd
+      });
+      // tender lines: each stop to every site it serves
+      pts.filter(c.isStop).forEach((p) => (p.site_ids || []).map(places.findSite).filter(Boolean).forEach((s) => {
+        L.polyline([ll(p), ll(s)], { color: "#fff", weight: 1.5, opacity: 0.75, dashArray: "4 6", interactive: false }).addTo(groups.tender);
+      }));
+    }
+
     routeLines = [
       L.polyline(pts.map(ll), { color: "#1d3540", weight: 6, opacity: 0.6, interactive: false }).addTo(groups.route),
       L.polyline(pts.map(ll), { color: getComputedStyle(panel).getPropertyValue("--route").trim() || "#ffd23f", weight: 3, interactive: false }).addTo(groups.route)
@@ -388,7 +427,12 @@
     let stopNo = 0;
     pts.forEach((p, i) => {
       let html;
-      if (c.isStop(p)) { stopNo += 1; html = `<div class="mk-stop">${stopNo}</div>`; }
+      if (c.isStop(p)) {
+        stopNo += 1;
+        const a = places && p.anchorage_id ? places.findAnchorage(p.anchorage_id) : null;
+        const flagged = places && p.anchorage_id && (!a || c.anchorageMovedM(p, a) > 0);
+        html = `<div class="mk-stop">${stopNo}</div>${flagged ? '<div class="mk-badge">!</div>' : ""}`;
+      }
       else html = `<div class="mk-wp ${p.name ? "named" : ""}"></div>`;
       const m = L.marker(ll(p), { icon: divIcon(html), draggable: ui.mode !== "delete", title: p.name || "Waypoint", zIndexOffset: c.isStop(p) ? 1100 : 1000 });
       m.on("click", () => onPointClick(i));
@@ -427,6 +471,11 @@
     const pos = { latitude: e.latlng.lat, longitude: e.latlng.lng };
     editPoints((pts) => [...pts, pos]);
   }
+
+  // Hook points for Tasks 4 and 5 (anchorage editing, site editing, anchorage drag). No-ops in this task.
+  function onAnchorageClick(anchorage) { /* Task 4 */ }
+  function onSiteClick(site) { /* Task 5 */ }
+  function onAnchorageDragEnd(anchorage, latlng) { /* Task 4 */ }
 
   function onPointClick(i) {
     if (ui.mode === "select") openPointPopup(i);
@@ -784,7 +833,7 @@
     document.addEventListener("keydown", keyHandler);
   }
 
-  function bind() {
+  function bind(opts) {
     if (closeModal) closeModal();
     document.querySelectorAll(".routes-modal").forEach((n) => n.remove());
     saving = false;
@@ -802,8 +851,25 @@
     A().setPageUnsavedGuard(guard);
     bindInputs();
     bindKeyboard();
+    const siteLibrary = (opts && opts.siteLibrary) || { sites: [] };
+    const myPlaces = window.IolantheRoutesPlaces.create({
+      A: A(),
+      core: core(),
+      el,
+      openModal,
+      getSiteLibrary: () => siteLibrary,
+      getRoutes: () => routes,
+      getWork: () => work,
+      onChanged: () => { if (work && panel === mine && places === myPlaces) renderAll(); }
+    });
+    places = myPlaces;
     initMap(mine);
     loadLibrary(mine);
+    myPlaces.load().then(() => {
+      if (panel === mine && mine.isConnected && places === myPlaces && work) renderAll();
+    }).catch((error) => {
+      if (panel === mine) A().setStatus(error.message, "error");
+    });
   }
 
   window.IolantheRoutes = Object.freeze({ render, bind });
