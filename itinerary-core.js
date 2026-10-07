@@ -561,6 +561,87 @@
     };
   }
 
+  // ---- Route panel charter mode (spec §5) -------------------------------------------
+
+  // Takes the saved itinerary and the point list edited on the map. Returns
+  // { itinerary, removed: [{ id, name, activities }], reseededFrom: name | null } with a valid itinerary.
+  function reconcileRoutePoints(itinerary, editedPoints, dayCount, random = Math.random) {
+    const oldStops = stopEntries(itinerary.route.points).map((e) => e.point);
+    const oldById = new Map(oldStops.map((p) => [p.id, p]));
+    let points = (editedPoints || []).map((p) => normalizePoint(p, random)).filter(Boolean);
+
+    // 1. New stops (no known id) get an id; everything else keeps what the map carried over.
+    const knownIds = new Set(oldStops.map((p) => p.id));
+    points = points.map((p) => (isStop(p) && !knownIds.has(p.id) ? { ...p, id: newId("stp", random), isNew: true } : p));
+
+    // 2. Removed stops take their activities.
+    const newIds = new Set(points.filter(isStop).map((p) => p.id));
+    const removed = oldStops.filter((p) => !newIds.has(p.id)).map((p) => ({
+      id: p.id,
+      name: p.name || "Stop",
+      activities: itinerary.activities.filter((a) => a.stop_id === p.id).sort((a, b) => a.day - b.day || a.order - b.order)
+    }));
+    const removedIds = new Set(removed.map((r) => r.id));
+    let activities = itinerary.activities.filter((a) => !removedIds.has(a.stop_id));
+
+    // 3. Days for new stops, origin/terminus rules, then order.
+    const entries = stopEntries(points);
+    const stops = entries.map((e) => ({ ...e.point }));
+    stops.forEach((s, i) => {
+      const prev = stops[i - 1];
+      const next = stops[i + 1];
+      if (s.isNew) {
+        if (i === 0) {
+          s.depart = { day: 1 };
+          if (next && !next.arrive) next.arrive = { day: 1 };                           // old origin becomes a middle stop
+        } else if (i === stops.length - 1) {
+          const prevDay = prev.depart ? prev.depart.day : (prev.arrive ? prev.arrive.day : 1);
+          if (!prev.depart) prev.depart = { day: prevDay };                              // old terminus becomes a middle stop
+          s.arrive = { day: Math.min(Math.max(prevDay, 1), dayCount || prevDay) };
+        } else {
+          const day = prev.depart ? prev.depart.day : (prev.arrive ? prev.arrive.day : 1);
+          s.arrive = { day };
+          s.depart = { day };
+        }
+      }
+      delete s.isNew;
+    });
+    if (stops.length) {
+      delete stops[0].arrive;
+      delete stops[stops.length - 1].depart;
+      for (let i = 1; i < stops.length - 1; i += 1) {
+        if (!stops[i].arrive) stops[i].arrive = { day: stops[i - 1].depart ? stops[i - 1].depart.day : 1 };
+        if (!stops[i].depart) stops[i].depart = { day: stops[i].arrive.day };
+      }
+      if (stops.length > 1 && !stops[0].depart) stops[0].depart = { day: 1 };
+      if (stops.length > 1 && !stops[stops.length - 1].arrive) stops[stops.length - 1].arrive = { day: stops[stops.length - 2].depart.day };
+    }
+
+    // 4. Days must not run backwards along the route. From the first stop that does, re-seed with zero nights.
+    let reseededFrom = null;
+    for (let i = 1; i < stops.length; i += 1) {
+      const prevDepart = stops[i - 1].depart ? stops[i - 1].depart.day : 1;
+      const arriveDay = stops[i].arrive ? stops[i].arrive.day : prevDepart;
+      if (arriveDay < prevDepart || reseededFrom) {
+        if (!reseededFrom) reseededFrom = stops[i].name || `stop ${i + 1}`;
+        const day = dayCount ? Math.min(prevDepart, dayCount) : prevDepart;
+        stops[i].arrive = { ...(stops[i].arrive || {}), day };
+        if (stops[i].depart) stops[i].depart = { ...stops[i].depart, day };
+      }
+    }
+    if (dayCount) {
+      stops.forEach((s) => {
+        if (s.arrive && s.arrive.day > dayCount) s.arrive.day = dayCount;
+        if (s.depart && s.depart.day > dayCount) s.depart.day = dayCount;
+      });
+    }
+
+    entries.forEach((e, i) => { points[e.index] = stops[i]; });
+    let next = { ...itinerary, route: { ...itinerary.route, points }, activities: renumberActivities(activities) };
+    stops.forEach((s) => { next = clampActivities(next, s.id, dayCount); });
+    return { itinerary: next, removed, reseededFrom };
+  }
+
   return {
     ITINERARY_VERSION, DEFAULT_SPEED_KN, MAX_TITLE_LENGTH, MAX_NOTES_LENGTH, TIME_RE,
     distM, distNm, newId, isStop, parseDateOnly, charterDayCount, dayDateLabel,
@@ -570,6 +651,7 @@
     lineGeometry,
     clampActivities, edgeStates, moveEdge,
     setStopDays, setStopTime, setStopSites, sitesByDistance,
-    renumberActivities, canDropActivity, moveActivity, addActivity, updateActivity, removeActivity, promoteRoute
+    renumberActivities, canDropActivity, moveActivity, addActivity, updateActivity, removeActivity, promoteRoute,
+    reconcileRoutePoints
   };
 });

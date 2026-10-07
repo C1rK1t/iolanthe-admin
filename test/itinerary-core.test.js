@@ -325,3 +325,76 @@ test("promoteRoute: strips charter fields, writes nights and depart_time, sets t
   const fresh = core.promoteRoute(it, { name: "Reyes family 2026" });
   assert.deepEqual([fresh.id, fresh.name, fresh.revision], ["", "Reyes family 2026", 0]);
 });
+
+const seqRandom2 = () => { let i = 0; return () => (i = (i + 11) % 36) / 36; };
+
+test("reconcileRoutePoints: unchanged points give the same stops and no notices", () => {
+  const it = sevenDays();
+  const out = core.reconcileRoutePoints(it, it.route.points, 7, seqRandom2());
+  assert.deepEqual(out.removed, []);
+  assert.equal(out.reseededFrom, null);
+  assert.deepEqual(core.stopEntries(out.itinerary.route.points).map((e) => e.point), core.stopEntries(it.route.points).map((e) => e.point));
+  assert.deepEqual(out.itinerary.activities, it.activities);
+});
+
+test("reconcileRoutePoints: a new stop between two stops gets an id and zero nights on the previous departure day", () => {
+  const it = sevenDays();
+  const pts = [...it.route.points];
+  pts.splice(3, 0, P(15.1, 119.9, { anchorage_id: "new-anch", name: "New anchorage" }));   // between Capones (dep 2) and Hermana (arr 2)
+  const out = core.reconcileRoutePoints(it, pts, 7, seqRandom2());
+  const added = core.stopEntries(out.itinerary.route.points).map((e) => e.point).find((p) => p.anchorage_id === "new-anch");
+  assert.match(added.id, /^stp_/);
+  assert.deepEqual([added.arrive, added.depart], [{ day: 2 }, { day: 2 }]);
+  assert.deepEqual(core.validateItinerary(out.itinerary, 7), []);
+});
+
+test("reconcileRoutePoints: a new stop before the origin becomes the origin; the old origin gains an arrival on day 1", () => {
+  const it = sevenDays();
+  const pts = [P(14.7, 120.3, { stop: true, name: "Marina" }), ...it.route.points];
+  const out = core.reconcileRoutePoints(it, pts, 7, seqRandom2());
+  const stops = core.stopEntries(out.itinerary.route.points).map((e) => e.point);
+  assert.equal(stops[0].name, "Marina");
+  assert.equal(stops[0].arrive, undefined);
+  assert.deepEqual(stops[0].depart, { day: 1 });
+  assert.deepEqual(stops[1].arrive, { day: 1 });                 // old origin Subic
+  assert.deepEqual(stops[1].depart, { day: 1, time: "09:00" });
+  assert.deepEqual(core.validateItinerary(out.itinerary, 7), []);
+});
+
+test("reconcileRoutePoints: a new stop after the terminus becomes the terminus", () => {
+  const it = sevenDays();
+  const pts = [...it.route.points, P(14.6, 120.4, { stop: true, name: "Fuel dock" })];
+  const out = core.reconcileRoutePoints(it, pts, 7, seqRandom2());
+  const stops = core.stopEntries(out.itinerary.route.points).map((e) => e.point);
+  assert.equal(stops[stops.length - 1].name, "Fuel dock");
+  assert.deepEqual(stops[stops.length - 1].arrive, { day: 7 });
+  assert.equal(stops[stops.length - 1].depart, undefined);
+  assert.deepEqual(stops[stops.length - 2].depart, { day: 7 });  // old terminus Subic gains a departure
+  assert.deepEqual(core.validateItinerary(out.itinerary, 7), []);
+});
+
+test("reconcileRoutePoints: a removed stop takes its activities and is reported", () => {
+  const it = sevenDays();
+  const pts = it.route.points.filter((p) => p.id !== "stp_capo");
+  const out = core.reconcileRoutePoints(it, pts, 7, seqRandom2());
+  assert.deepEqual(out.removed.map((r) => [r.name, r.activities.map((a) => a.title)]), [["Capones Is.", ["Lighthouse walk", "Sundowners"]]]);
+  assert.equal(out.itinerary.activities.some((a) => a.stop_id === "stp_capo"), false);
+  assert.deepEqual(core.validateItinerary(out.itinerary, 7), []);
+});
+
+test("reconcileRoutePoints: reordered stops re-seed days from the first out-of-order stop", () => {
+  const it = sevenDays();
+  const pts = [...it.route.points];
+  // Swap Hermana (idx 3) and Potipot (idx 4): Potipot (arr 3) now comes before Hermana (arr 2) → out of order at Hermana
+  [pts[3], pts[4]] = [pts[4], pts[3]];
+  const out = core.reconcileRoutePoints(it, pts, 7, seqRandom2());
+  assert.equal(out.reseededFrom, "Hermana Mayor");
+  const stops = core.stopEntries(out.itinerary.route.points).map((e) => e.point);
+  const herm = stops.find((p) => p.id === "stp_herm");
+  const poti = stops.find((p) => p.id === "stp_poti");
+  assert.deepEqual([poti.arrive.day, poti.depart.day], [3, 5]);     // unchanged, it is in order after Capones (dep 2)
+  assert.deepEqual([herm.arrive.day, herm.depart.day], [5, 5]);     // re-seeded: arrive when Potipot leaves, zero nights
+  const hund = stops.find((p) => p.id === "stp_hund");
+  assert.deepEqual([hund.arrive.day, hund.depart.day], [5, 5]);     // cascaded re-seed, zero nights, clamped within 7
+  assert.deepEqual(core.validateItinerary(out.itinerary, 7), []);
+});
