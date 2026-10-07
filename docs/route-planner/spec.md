@@ -302,7 +302,6 @@ Still open:
 | # | Question | Mockup today | Needed by |
 |---|---|---|---|
 | Q2 | Should a charter copy (§2.3) keep its stops, as an additive `stops: [{name, latitude, longitude, anchorage_id, site_ids, leg_speed_kn}]` per route? The guest app ignores unknown fields. Without it, opening or joining a copy loses the stops and leg speeds. | Coordinates only | Phase 4 |
-| Q3 | When a point is snapped onto an anchorage that is already the next or previous stop, should it merge, be blocked, or create a second stop? | Creates a second stop | Phase 2 |
 
 Decided (David, 2026-10-07):
 
@@ -310,4 +309,5 @@ Decided (David, 2026-10-07):
 |---|---|
 | Q1 | On narrow screens the map comes straight after the route picker, then the rest of the side panel (§4.1). |
 | Q4 | The default distances stand: sites are auto-linked within 2 nm, "Make stop at" is offered within 2 nm, the sites-served picker highlights sites within 5 nm, and snapping works within 24 px. |
+| Q3 | **Merge** (decided 2026-10-07). Making a point a stop at an anchorage that is already the next or previous stop (by snapping, "Make stop at", or Add mode on the last stop) removes that point instead of creating a second stop. |
 | Q5 | The route speed is saved with the route (`speed_kn`, §2.1). New routes start at the last speed used in that browser. |

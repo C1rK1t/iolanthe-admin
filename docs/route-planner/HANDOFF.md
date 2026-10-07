@@ -2,7 +2,7 @@
 
 Last updated 2026-10-07. **Phase 1 is complete and live.** The server route library is in `iolanthe-server`
 `2ac4b8d`, and the admin Routes panel is in `iolanthe-admin` `91d679a`. Next: **phase 2** (site and anchorage
-overlays), after spec §7 Q3 is answered.
+overlays). Q3 is decided (merge), so nothing blocks it.
 
 | File | What it is |
 |---|---|
@@ -103,14 +103,14 @@ Spec §7 lists the decided questions:
 - Q1: map after the picker on narrow screens
 - Q4: default distances stand
 - Q5: route speed saved with the route
+- Q3: merge (a point made into a stop at an anchorage that is already the next or previous stop is removed)
 
-Two questions are still open, and neither blocks phase 1:
+One question is still open:
 - Q2: should charter copies keep their stops? Needed by phase 4.
-- Q3: duplicate stop on snap. Needed by phase 2.
 
 ## Open items
 
-- **Spec §7 Q2 and Q3** still need answers, before phase 4 and phase 2 respectively.
+- **Spec §7 Q2** (stops in charter copies) still needs an answer before phase 4. Q3 was decided on 2026-10-07: **merge**.
 - Settings → "Route Track" gets renamed to "Track Logging" (phase 5). Confirm the name.
 - Optional extras for phase 5: OpenSeaMap seamark overlay, vendored Leaflet (the admin currently needs internet
   for Leaflet and tiles).
@@ -172,7 +172,7 @@ From spec §5:
 - site and anchorage overlays on the map: click a site to edit it; add a site as a waypoint; point → Make site
 - anchorages: add, edit, move and delete; Anchorage mode; stops; "Make stop at"; snap-to-anchorage; moved warnings
 - the sites-served picker on stops
-- first answer **spec §7 Q3**: what happens when you snap onto an anchorage that is already the next or previous stop
+- spec §7 Q3 is decided: **merge**
 - the mockup's JS is the working reference again; spec §4.1 has the details
 
 ## Release process and conventions
