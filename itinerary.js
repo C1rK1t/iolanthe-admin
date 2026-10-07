@@ -144,20 +144,82 @@
 
   function activityRow(activity) {
     const firstLine = (activity.notes || "").split("\n")[0];
-    return el("div", { class: `itinerary-activity${activity.site_id ? " itinerary-activity--site" : " itinerary-activity--free"}`, "data-activity-id": activity.id },
-      el("span", { class: "itinerary-activity__grip", "aria-hidden": "true" }, "⋮⋮"),
+    const row = el("div", { class: `itinerary-activity${activity.site_id ? " itinerary-activity--site" : " itinerary-activity--free"}`, "data-activity-id": activity.id, draggable: "false" },
+      el("span", { class: "itinerary-activity__grip", "aria-hidden": "true", title: "Drag to move" }, "⋮⋮"),
       el("span", { class: "itinerary-activity__title" }, activity.title || (activity.site_id ? siteTitle(activity.site_id) : "Untitled")),
-      activity.time ? el("span", { class: "itinerary-activity__time" }, activity.time) : null,
+      activity.time ? el("span", { class: "itinerary-activity__time" }, activity.time) : el("span"),
+      el("button", { type: "button", class: "itinerary-activity__remove", "aria-label": `Remove ${activity.title}` }, "×"),
       firstLine ? el("span", { class: "itinerary-activity__notes muted" }, firstLine) : null
     );
+    row.querySelector(".itinerary-activity__remove").addEventListener("click", (e) => { e.stopPropagation(); commit(core().removeActivity(work.itinerary, activity.id)); });
+    row.querySelector(".itinerary-activity__title").addEventListener("click", () => editActivity(row, activity));
+    row.querySelector(".itinerary-activity__grip").addEventListener("pointerdown", (e) => startActivityDrag(e, activity, row));   // Task 8
+    return row;
+  }
+
+  // Inline editor: title, time, notes. Enter / blur commits, Escape cancels.
+  function editActivity(row, activity) {
+    const title = el("input", { type: "text", class: "itinerary-edit__title", value: activity.title, maxlength: String(core().MAX_TITLE_LENGTH), placeholder: "Title" });
+    const time = el("input", { type: "time", class: "itinerary-edit__time", value: activity.time || "" });
+    const notes = el("textarea", { class: "itinerary-edit__notes", rows: "2", placeholder: "Notes for guests" }, activity.notes || "");
+    const form = el("div", { class: "itinerary-edit" }, title, time, notes);
+    const done = () => commit(core().updateActivity(work.itinerary, activity.id, { title: title.value, time: time.value, notes: notes.value })) || renderAll();
+    const cancel = () => renderAll();
+    [title, time, notes].forEach((input) => {
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") { e.preventDefault(); cancel(); }
+        if (e.key === "Enter" && input !== notes) { e.preventDefault(); done(); }
+      });
+    });
+    form.addEventListener("focusout", (e) => { if (!form.contains(e.relatedTarget)) done(); });
+    row.replaceChildren(form);
+    title.focus();
+    title.select();
+  }
+
+  let addMenu = null;
+  function closeAddMenu() { if (addMenu) { addMenu.remove(); addMenu = null; } }
+
+  // Three groups: sites served here (not yet on this day), other library sites (type-ahead), free text.
+  function openAddMenu(stop, day, anchor) {
+    closeAddMenu();
+    const point = core().stopEntries(work.itinerary.route.points).map((e) => e.point).find((p) => p.id === stop.id);
+    const onDay = new Set(work.itinerary.activities.filter((a) => a.stop_id === stop.id && a.day === day && a.site_id).map((a) => a.site_id));
+    const add = (fields) => { closeAddMenu(); const next = core().addActivity(work.itinerary, stop.id, day, fields); if (commit(next)) { const added = next.activities[next.activities.length - 1]; const row = panel.querySelector(`.itinerary-activity[data-activity-id="${added.id}"]`); if (row && !fields.site_id) editActivity(row, added); } };
+    const servedRows = (point.site_ids || []).filter((id) => !onDay.has(id)).map((id) => { const b = el("button", { type: "button", class: "itinerary-menu__item" }, siteTitle(id)); b.addEventListener("click", () => add({ title: siteTitle(id), site_id: id })); return b; });
+    const search = el("input", { type: "search", class: "itinerary-menu__search", placeholder: "Other site…" });
+    const results = el("div", { class: "itinerary-menu__results" });
+    const all = core().sitesByDistance(ctx.siteLibrary, point);
+    const showResults = () => {
+      const q = search.value.trim().toLowerCase();
+      results.replaceChildren(...all.filter((s) => !(point.site_ids || []).includes(s.id) && (!q || s.title.toLowerCase().includes(q))).slice(0, 8).map((s) => {
+        const b = el("button", { type: "button", class: "itinerary-menu__item" }, `${s.title} `, el("span", { class: "muted" }, `${s.nm.toFixed(1)} nm`));
+        b.addEventListener("click", () => add({ title: s.title, site_id: s.id }));
+        return b;
+      }));
+    };
+    search.addEventListener("input", showResults);
+    const free = el("button", { type: "button", class: "itinerary-menu__item itinerary-menu__item--free" }, "+ Free text activity");
+    free.addEventListener("click", () => add({ title: "" }));
+    addMenu = el("div", { class: "itinerary-menu", role: "menu" },
+      servedRows.length ? el("div", { class: "label" }, "Sites served here") : null, ...servedRows,
+      el("div", { class: "label" }, "Other sites"), search, results,
+      free
+    );
+    showResults();
+    anchor.closest(".itinerary-sub").append(addMenu);
+    setTimeout(() => document.addEventListener("pointerdown", (e) => { if (addMenu && !addMenu.contains(e.target) && e.target !== anchor) closeAddMenu(); }, { capture: true, once: true }), 0);
+    search.focus();
   }
 
   function subBox(stop, day) {
-    return el("div", { class: "itinerary-sub", "data-stop-id": stop.id, "data-day": String(day) },
+    const box = el("div", { class: "itinerary-sub", "data-stop-id": stop.id, "data-day": String(day) },
       el("div", { class: "itinerary-sub__gutter" },
-        el("button", { type: "button", class: "itinerary-sub__add", title: `Add a site or activity at ${stop.name}`, disabled: "" }, "+")),
+        el("button", { type: "button", class: "itinerary-sub__add", title: `Add a site or activity at ${stop.name}` }, "+")),
       el("div", { class: "itinerary-sub__activities" }, ...stop.activities.map(activityRow))
     );
+    box.querySelector(".itinerary-sub__add").addEventListener("click", (e) => openAddMenu(stop, day, e.currentTarget));
+    return box;
   }
 
   function dayBox(day) {

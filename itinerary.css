@@ -97,3 +97,20 @@
 .itinerary-pop__sites { margin-top: 8px; max-height: 180px; overflow: auto; }
 .itinerary-pop__site { display: block; padding: 2px 0; }
 .itinerary-pop__foot { margin-top: 8px; font-size: 11px; }
+
+.itinerary-activity__title { cursor: text; }
+.itinerary-activity__remove { border: none; background: transparent; opacity: 0.45; cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; }
+.itinerary-activity__remove:hover { opacity: 1; color: var(--danger, #a93d35); }
+.itinerary-activity { grid-template-columns: auto minmax(0, 1fr) auto auto; }
+.itinerary-activity__notes { grid-column: 2 / span 3; }
+.itinerary-edit { display: grid; grid-template-columns: minmax(0, 1fr) 90px; gap: 4px; grid-column: 1 / -1; }
+.itinerary-edit__notes { grid-column: 1 / -1; }
+.itinerary-edit input, .itinerary-edit textarea { font: inherit; font-size: 12.5px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 3px; }
+.itinerary-sub { position: relative; }
+.itinerary-menu { position: absolute; z-index: 6; left: 34px; top: 100%; width: 280px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); padding: 8px; display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; }
+.itinerary-menu .label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-top: 4px; }
+.itinerary-menu__item { text-align: left; border: 1px solid var(--line); background: #fff; border-radius: 4px; padding: 5px 8px; font: inherit; cursor: pointer; }
+.itinerary-menu__item:hover { border-color: var(--accent); }
+.itinerary-menu__item--free { border-style: dashed; }
+.itinerary-menu__search { font: inherit; padding: 4px 6px; border: 1px solid var(--line); border-radius: 4px; }
+.itinerary-menu__results { display: flex; flex-direction: column; gap: 4px; max-height: 200px; overflow: auto; }
