@@ -3,7 +3,7 @@
 (function () {
   "use strict";
 
-  // ctx: { A, core, places, getWork, speedKn(), defaultSpeed, maxSpeed, editPoints(fn), focusPoint(i), focusLeg(leg) }
+  // ctx: { A, core, places, getWork, speedKn(), defaultSpeed, maxSpeed, editPoints(fn), focusPoint(i), focusLeg(leg), stopMeta(point) (optional) }
   function create(ctx) {
     const { core: c, places } = ctx;
     const { el } = window.IolantheRoutesUi;
@@ -29,6 +29,7 @@
         el("div", { class: "title" }, el("span", { class: "stop-num" }, n), p.name || "Stop",
           a && a.depth_m ? el("span", { class: "meta", style: "font-weight:400" }, `${a.depth_m} m`) : null,
           p.anchorage_id ? null : el("span", { class: "meta", style: "font-weight:400" }, "Holding / drifting")),
+        ctx.stopMeta && ctx.stopMeta(p) ? el("div", { class: "stop-meta muted" }, ctx.stopMeta(p)) : null,
         moved ? el("div", { class: "warn-text" }, `⚠ Anchorage moved ${Math.round(moved)} m since placed`) : null,
         deleted ? el("div", { class: "warn-text" }, "⚠ Anchorage deleted. The stop keeps its position.") : null,
         siteChips.length ? el("div", { class: "chips" }, siteChips) : el("div", { class: "empty", style: "margin-top:4px" }, "No sites linked"));

@@ -13,6 +13,14 @@
   let panel = null;      // the #routes-panel element after bind()
   let routes = [];       // library from the server
   let work = null;       // { route, savedJson, baseRevision }
+  let subject = { type: "library" };   // or { type: "charter", charterId, charter, itinerary, focusStopId }
+  const isCharter = () => subject.type === "charter";
+  const charterEnded = () => {
+    if (!isCharter() || !subject.charter || !subject.charter.end_date) return false;
+    const end = window.IolantheItineraryCore.parseDateOnly(subject.charter.end_date);
+    return end !== null && Date.now() > end + 86400000;   // the day after the end date, UTC midnight
+  };
+  const readOnly = () => isCharter() && charterEnded();
   let history = { undo: [], redo: [] };
   let guard = null;      // page unsaved-changes guard
 
@@ -65,9 +73,17 @@
       <div class="planner">
         <aside class="side">
           <div class="field">
+            <label for="routes-subject">Working on</label>
+            <select id="routes-subject">
+              <option value="library">Library routes</option>
+              <option value="charter">This charter's route</option>
+            </select>
+          </div>
+          <div class="field" id="routes-picker-field">
             <label for="routes-picker">Route</label>
             <select id="routes-picker"></select>
           </div>
+          <div class="field" id="routes-charter-note" hidden></div>
           <div class="field">
             <label for="routes-name">Name</label>
             <input id="routes-name" type="text" autocomplete="off" placeholder="Route name">
@@ -122,6 +138,12 @@
     if (r) setWork(r);
   }
 
+  function charterRouteFromItinerary(itinerary) {
+    const it = window.IolantheItineraryCore.normalizeItinerary(itinerary);
+    const name = `${(subject.charter && subject.charter.name) || subject.charterId} route`;
+    return { id: "charter", name, description: "", revision: it.revision, speed_kn: it.route.speed_kn, source: it.route.source, points: it.route.points, created_at: null, updated_at: null };
+  }
+
   function blankRoute() {
     return { id: "", name: "", description: "", revision: 0, speed_kn: loadSpeed(), created_at: null, updated_at: null, source: { type: "planner" }, points: [] };
   }
@@ -141,12 +163,13 @@
   async function guardDiscard() {
     if (!isDirty()) return true;
     const ok = await A().showAdminConfirm(ROUTE_DISCARD);
-    if (ok) setWork(routes.find((r) => r.id === work.route.id) || blankRoute());
+    if (ok) setWork(isCharter() ? charterRouteFromItinerary(subject.itinerary) : (routes.find((r) => r.id === work.route.id) || blankRoute()));
     return ok;
   }
 
   // Every route-geometry edit goes through here so undo/redo stays consistent.
   function editPoints(fn, opts) {
+    if (readOnly()) { status("This charter has ended; the route is read-only.", "error"); return; }
     history.undo.push(work.route.points);
     history.redo = [];
     work.route = { ...work.route, points: fn(work.route.points) };
@@ -154,6 +177,7 @@
   }
   // Like editPoints, but leaves the map (and an open popup) alone. Used for name edits typed in the point popup.
   function editPointsQuiet(fn) {
+    if (readOnly()) { status("This charter has ended; the route is read-only.", "error"); return; }
     history.undo.push(work.route.points);
     history.redo = [];
     work.route = { ...work.route, points: fn(work.route.points) };
@@ -196,7 +220,9 @@
     const r = work.route;
     const src = r.source || {};
     const srcText = src.type === "charter" ? "migrated from a charter" : src.type === "kml" || src.type === "gpx" ? `imported from ${src.filename || src.type}` : "planner";
-    $("meta").textContent = r.id
+    $("meta").textContent = isCharter()
+      ? `Charter route · revision ${(subject.itinerary && subject.itinerary.revision) || 0}${isDirty() ? " · unsaved changes" : ""}`
+      : r.id
       ? `Revision ${r.revision} · updated ${fmtDate(r.updated_at)} · source: ${srcText}${isDirty() ? " · unsaved changes" : ""}`
       : (isDirty() ? "Unsaved new route" : "");
   }
@@ -232,6 +258,24 @@
       btn.innerHTML = svg(icon);
       return btn;
     };
+    if (isCharter()) {
+      const ro = readOnly();
+      const back = el("button", { type: "button", class: "icon-btn", title: "Back to days", "aria-label": "Back to days", onclick: () => A().showCharterPanel("itinerary") });
+      back.innerHTML = svg("undo");
+      back.append(" Days");
+      $("actions").replaceChildren(
+        back,
+        el("span", { class: "icon-sep" }),
+        b("check", "Save charter route", saveCharterRoute, "success", ro || saving || !dirty),
+        b("cancel", "Cancel (discard changes)", cancelChanges, "danger", ro || !dirty),
+        el("span", { class: "icon-sep" }),
+        b("undo", "Undo (Ctrl+Z)", undo, "", ro || !history.undo.length),
+        b("redo", "Redo (Ctrl+Y)", redo, "", ro || !history.redo.length),
+        el("span", { class: "icon-sep" }),
+        b("import", "Import KML / GPX", () => io.openImport(), "", ro),
+        b("export", "Export GPX / KML", () => io.openExport(), "", work.route.points.length < 2));
+      return;
+    }
     $("actions").replaceChildren(
       b("check", "Save", saveRoute, "success", saving || (!dirty && hasId)),
       b("cancel", "Cancel (discard changes)", cancelChanges, "danger", !dirty),
@@ -354,7 +398,7 @@
     if (ui.mode !== "delete") {
       pts.slice(1).forEach((p, k) => {
         const mid = { latitude: (pts[k].latitude + p.latitude) / 2, longitude: (pts[k].longitude + p.longitude) / 2 };
-        L.marker(ll(mid), { icon: divIcon('<div class="mk-mid"></div>', 24), draggable: true, title: "Drag to insert a point", zIndexOffset: 400 })
+        L.marker(ll(mid), { icon: divIcon('<div class="mk-mid"></div>', 24), draggable: !readOnly(), title: "Drag to insert a point", zIndexOffset: 400 })
           .on("click", () => editPoints((arr) => c.insertAt(arr, k + 1, mid)))
           .on("dragend", (e) => { const q = e.target.getLatLng(); editPoints((arr) => c.insertAt(arr, k + 1, { latitude: q.lat, longitude: q.lng })); })
           .addTo(groups.mids);
@@ -371,7 +415,7 @@
         html = `<div class="mk-stop${p.anchorage_id ? "" : " plain"}">${stopNo}</div>${flagged ? '<div class="mk-badge">!</div>' : ""}`;
       }
       else html = `<div class="mk-wp ${p.name ? "named" : ""}"></div>`;
-      const m = L.marker(ll(p), { icon: divIcon(html), draggable: ui.mode !== "delete", title: p.name || "Waypoint", zIndexOffset: c.isStop(p) ? 1100 : 1000 });
+      const m = L.marker(ll(p), { icon: divIcon(html), draggable: ui.mode !== "delete" && !readOnly(), title: p.name || "Waypoint", zIndexOffset: c.isStop(p) ? 1100 : 1000 });
       m.on("click", () => onPointClick(i));
       m.on("drag", (e) => {
         const q = e.target.getLatLng();
@@ -408,6 +452,7 @@
   }
 
   function onMapClick(e) {
+    if (readOnly()) return;
     if (!work) return;
     const pos = { latitude: e.latlng.lat, longitude: e.latlng.lng };
     if (ui.mode === "anchorage" && places) places.openAnchorageModal(null, pos);
@@ -415,6 +460,7 @@
   }
 
   function onAnchorageClick(anchorage) {
+    if (readOnly()) return;
     if (!work || !places) return;
     if (ui.mode === "add") {
       const result = core().appendStop(work.route.points, anchorage, places.sites());
@@ -426,6 +472,7 @@
     }
   }
   function onSiteClick(site) {
+    if (readOnly()) return;
     if (!work || !places) return;
     if (ui.mode === "add") {
       editPoints((pts) => [...pts, { latitude: site.latitude, longitude: site.longitude, site_id: site.id, name: site.title }]);
@@ -531,6 +578,42 @@
     }
   }
 
+  // Spec §5. Reconcile the edited points into the itinerary, confirm removed stops, save with the revision check.
+  async function saveCharterRoute() {
+    if (!work || saving) return;
+    if (readOnly()) { status("This charter has ended; the route is read-only.", "error"); return; }
+    const icore = window.IolantheItineraryCore;
+    const dayCount = icore.charterDayCount(subject.charter);
+    if (!dayCount) { status("Set the charter's start and end dates first.", "error"); return; }
+    const base = icore.normalizeItinerary(subject.itinerary);
+    const result = icore.reconcileRoutePoints({ ...base, route: { ...base.route, speed_kn: work.route.speed_kn || base.route.speed_kn } }, work.route.points, dayCount);
+    if (result.removed.length) {
+      const lines = result.removed.map((r) => `${r.name}${r.activities.length ? ` (${r.activities.length} activit${r.activities.length === 1 ? "y" : "ies"}: ${r.activities.map((a) => a.title).join(", ")})` : ""}`);
+      const ok = await A().showAdminConfirm({ title: "Remove stops?", message: `These stops leave the itinerary with their activities: ${lines.join("; ")}.`, confirmLabel: "Remove and save", cancelLabel: "Cancel", tone: "danger" });
+      if (!ok) return;
+    }
+    const mine = panel;
+    saving = true;
+    renderActions();
+    try {
+      const { itinerary } = await post(`/api/admin/charter/${encodeURIComponent(subject.charterId)}/itinerary/save`, { itinerary: result.itinerary, base_revision: base.revision });
+      if (panel !== mine || !mine.isConnected) return;
+      subject = { ...subject, itinerary };
+      setWork(charterRouteFromItinerary(itinerary), { fit: false });
+      afterPersist();
+      status(result.reseededFrom ? `Saved. Days were reset from ${result.reseededFrom}; fix them on the Itinerary panel.` : `Charter route saved · revision ${itinerary.revision}`, result.reseededFrom ? "" : "ok");
+    } catch (error) {
+      if (panel !== mine || !mine.isConnected) return;
+      if (error.status === 409) {
+        const reload = await A().showAdminConfirm({ title: "Itinerary changed elsewhere", message: `${error.message} Reload to see the latest? Your map changes will be lost.`, confirmLabel: "Reload", cancelLabel: "Cancel", tone: "warning" });
+        if (reload) await A().showCharterPanel("routes", { subject: "charter" });
+      } else reportError(error);
+    } finally {
+      saving = false;
+      if (panel === mine && mine.isConnected && work) renderActions();
+    }
+  }
+
   async function handleClash(error, id) {
     const reload = await A().showAdminConfirm({
       title: "Route changed elsewhere",
@@ -623,11 +706,17 @@
       title: "Discard changes?", message: "Go back to the last saved version of this route?",
       confirmLabel: "Discard", cancelLabel: "Cancel", tone: "danger"
     });
-    if (ok) setWork(routes.find((r) => r.id === work.route.id) || blankRoute());
+    if (ok) setWork(isCharter() ? charterRouteFromItinerary(subject.itinerary) : (routes.find((r) => r.id === work.route.id) || blankRoute()));
   }
 
   // ---------- wiring ----------
   function bindInputs() {
+    $("subject").addEventListener("change", async () => {
+      const next = $("subject").value;
+      if (next === subject.type) return;
+      if (!(await guardDiscard())) { $("subject").value = subject.type; return; }
+      await A().showCharterPanel("routes", { subject: next });
+    });
     $("picker").addEventListener("change", async (e) => {
       if (!work) return;
       const value = e.target.value;
@@ -677,7 +766,7 @@
       const data = await A().api("/api/admin/routes");
       if (panel !== mine || !mine.isConnected) return;
       routes = Array.isArray(data.routes) ? data.routes : [];
-      setWork(routes.length ? routes[0] : blankRoute());
+      if (!isCharter()) setWork(routes.length ? routes[0] : blankRoute());
     } catch (error) {
       A().setStatus(error.message, "error");
       if (panel === mine && mine.isConnected) showLoadError(error.message);
@@ -716,6 +805,7 @@
     bindInputs();
     bindKeyboard();
     const siteLibrary = (opts && opts.siteLibrary) || { sites: [] };
+    subject = (opts && opts.subject) || { type: "library" };
     const myPlaces = window.IolantheRoutesPlaces.create({
       A: A(),
       core: core(),
@@ -730,6 +820,7 @@
     popup = window.IolantheRoutesPopup.create({
       core: core(),
       places: myPlaces,
+      subjectType: subject.type,
       getWork: () => work,
       getMap: () => map,
       editPoints,
@@ -747,7 +838,13 @@
       maxSpeed: MAX_SPEED_KN,
       editPoints,
       focusPoint,
-      focusLeg
+      focusLeg,
+      stopMeta: (p) => {
+        if (!isCharter() || !p.arrive && !p.depart) return "";
+        const a = p.arrive ? p.arrive.day : 1;
+        const d = p.depart ? p.depart.day : a;
+        return a === d ? `Day ${a}` : `Days ${a}–${d}`;
+      }
     });
     join = window.IolantheRoutesJoin.create({
       core: core(),
@@ -768,7 +865,27 @@
       isCurrent: () => panel === mine && mine.isConnected && places === myPlaces
     });
     initMap(mine);
-    loadLibrary(mine);
+    if (isCharter()) {
+      $("subject").value = "charter";
+      $("picker-field").hidden = true;
+      $("name").closest(".field").hidden = true;
+      $("desc").closest(".field").hidden = true;
+      const note = $("charter-note");
+      note.hidden = false;
+      note.textContent = readOnly()
+        ? `${subject.charter.name || subject.charterId} has ended. The route is read-only.`
+        : `Stops you add here appear on the Itinerary panel with zero nights; set their days there.`;
+      work = null;
+      setWork(charterRouteFromItinerary(subject.itinerary));
+      loadLibrary(mine);   // still needed for Add another route's library list; harmless
+      if (subject.focusStopId) {
+        const idx = work.route.points.findIndex((p) => p.id === subject.focusStopId);
+        if (idx >= 0) setTimeout(() => focusPoint(idx), 300);
+      }
+    } else {
+      $("subject").value = "library";
+      loadLibrary(mine);
+    }
     myPlaces.load().then(() => {
       if (panel === mine && mine.isConnected && places === myPlaces && work) renderAll();
     }).catch((error) => {

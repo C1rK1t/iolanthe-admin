@@ -125,8 +125,47 @@ at S:~7060.
 - The plan switch is whole-day and "from today", behind a confirm dialog.
 - The route is a separate KML upload per plan, not tied to the itinerary's stops.
 
-**Not yet surveyed:** click counts for common tasks (add a day, add a stop, change a site) and the day modal's
-internals.
+### Click counts (surveyed 2026-10-07; admin.js is ~15,600 lines, so the A: numbers above run low)
+
+Counted from the Itinerary panel with the right day already showing (add 1 to click a day pill first).
+
+| Task | Path | Clicks |
+|---|---|---|
+| Add a day | **No control exists.** Days are generated from the charter's start/end dates (`normalizeItineraryDayList` ~A:3805). Workaround: Charter Info → End Date → Save → back to Itinerary. `swapItineraryRows` is dead code, so days can't be reordered either. | ~4, indirect |
+| Add a stop (existing site) | Edit day → + Add stop → pick site → Save stop → Save day | 5 (6 with notes) |
+| Change a stop's site | Edit day → Edit stop → pick site → Save stop → Save day | 5 |
+| New site from the stop editor | **Not possible.** The stop editor is a site dropdown only; the shared dialog means opening the site modal would replace the day modal (`openCreateSiteModal` is dead code). Workaround via the Site Editor tab → pick on map → back to Itinerary → add stop. | ~16–18 |
+| Move a stop 4 → 1 | Edit day → Move up ×3 → Save day | 5 |
+| Switch guests to Alternative from today | Button → confirm. Saves immediately. | 2 |
+| Edit title / notes / timing | Edit day → Title → Notes → Save. **No timing fields exist**; `stripItineraryTimingFields` (~A:6163) deletes `start_time`, `end_time`, `timing`, `timings` from every day and stop on each save. | 4 |
+
+### Day modal internals (`openItineraryDayModal` ~A:6698)
+
+- Fields: Primary Site (select, required if the library has sites → `site_id`), Day Title (→ `title` and
+  `title_override`), Notes (→ `notes`), Stops (list rows with Edit / Up / Down / Delete → `stops[]`). Picking a site
+  fills an empty title with the site name.
+- Edits go to a draft copy; nothing is written until Save day. Leaving dirty asks to confirm.
+- On Save: the live day object is mutated, then `persistItineraryAndRedraw` → `saveItinerary` runs
+  `syncItineraryPlanForSave` (mirrors the plan into `plans.*` and `alternative_days`), **always runs
+  `rebuildGuestVisibleItineraryDays`**, and whole-file saves `itinerary.json`. **The modal closes even if the save
+  fails**, with the in-memory day already changed.
+- Day ids are `${prefix}-${NNN}` (`day-001`, `alt-day-003`); `normalizeItineraryDayList` keeps ids, sorts by `order`,
+  pads blank days to the charter duration and renumbers `order` / `charter_day` / `day` 1..N.
+- Day fields: `id, order, charter_day, day, active, site_id, title, title_override, notes, stops[]`.
+- **Stop object:** `{site_id, notes, include_site_notes (default true), ...passthrough}`. **Stops have no id and no
+  title_override**; order is array position. Display name falls back to the site's name, then "Stop N".
+- **Drag and drop:** none anywhere in admin.js. Every list reorders with up/down swap buttons (stops, guests, menu
+  sections, food items, menu days, generic list). The only draggable is the Leaflet pin in the site picker map,
+  which is a *stacked* dialog (`openStackedDialogModal`) and so can sit over another modal.
+- **Routes panel:** no list reordering either; the Stops and Legs tabs are read-only cards. All editing is on the
+  map with draggable Leaflet markers and midpoint-insert markers, through `ctx.editPoints(fn)`. Unsaved state is a
+  snapshot comparison plus a page-level guard.
+- **Itinerary ↔ Routes:** fully independent. `routes.js` never mentions the itinerary and is only passed
+  `{siteLibrary}`. The only bridge is Route Upload, which warns when guests are on Alternative with no Alternative
+  route uploaded. `window.IolantheAdmin` exposes no itinerary helpers.
+- **Save path:** `saveCharterFile(file, data)` → `api()` → `POST /api/admin/charter/:id/save {file, data}`. No
+  revision or etag; last save wins. No autosave or debounce. The model to copy is `routes.js` `saveRoute`
+  (`{route, base_revision}`, 409 → Reload/Cancel prompt, and `applySaved` keeps in-flight edits).
 
 ## 3. Server endpoints
 
@@ -170,7 +209,68 @@ The router is a hand-written `if pathname ===` chain (`handleAdminApi`, S:7108).
     (S:7804).
 - **What guests see:** itinerary days, the planned route, live position and track, weather and the next-stop
   forecast, sites, menus, drinks, crew, notices and watches.
-- **Not yet surveyed:** how each day is rendered in detail, and what every time call does.
+### Every clock read in the guest app (surveyed 2026-10-07; guest.js is 8,293 lines, G: numbers above run ~3 low)
+
+**Headline:** the guest works out "today" itself from the browser clock; nothing comes from the server. Every
+charter-date decision funnels through two functions, so a preview date needs **one module-level override** used as
+the default in both:
+
+- `calculateCurrentCharterDayState` (G:765): `options.today ?? new Date()`. Nobody passes `today`.
+- `getCurrentDateKey` (G:890): `new Date()` → `YYYY-MM-DD`.
+
+| Class | Readers |
+|---|---|
+| CHARTER-DATE (must follow a preview date; all go via the two above) | `getSelectedMenuEntry` (menu of the day, G:958), `getGuestItineraryDateViewState` (pill status + default day, G:4147), `getDisplayedItineraryDayNumber` (G:3000), `normalizePlannedRouteData` (picks primary/alt route, G:3103), `renderItineraryTab` welcome message (G:7746), `getIdleItinerarySummary` (screensaver Today/Tomorrow, "Charter completed", G:5894) |
+| AMBIGUOUS | `updateIdleClock` (screensaver clock text, G:5780) |
+| WALL-CLOCK (stay real) | NMEA ETA/age/"live update" stamps, weather hour rows (server-driven `forecast.current.time`), tile-error window, idle throttle, weather refresh throttle |
+
+The client **ignores the server's chosen route plan** and picks one itself (G:3103), so overriding the client date
+is enough for the route to follow the preview. Weather location and moon phase follow the real server date.
+
+### How a day is rendered
+
+- `renderItineraryTab` (G:7744) → `renderDaySelector` (G:7756, a row of pill buttons; only one day shows at a time,
+  no scrolling or carousel) → `renderSelectedDay` (G:7794). Clicking a pill sets `selectedItineraryDayId` and
+  re-renders the panel. Default selection (`resolveGuestSelectedItineraryDay`, G:4182): today's day, else the last
+  day if all are past, else the first. The selection resets when the current day number changes.
+- `getItineraryDays` (G:2703) normalises raw days, reading `charter_day`/`day`/`order`, `id`, `site_id`,
+  `title_override`, `location`, `notes`/`summary`, `timing`, `date`/`start_date`, `stops[]`, `map_label`, `plan`,
+  `latitude`/`longitude`. Output: `{id, day:"Day N", dayNumber, date, area, summary, timing, hasExplicitStops,
+  stops}`. `area` = first of `title_override`, `location`, site title.
+- `resolveStop` (G:2723) reads `site_id`, `title_override`, `location`, `map_label`, `notes`, `plan`, `timing`,
+  lat/long (stop → stop site → day site), `include_site_notes`/`exclude_site_notes`. The stop text is the first
+  not-yet-used value of `notes`, `plan`, `timing`, site description (a dedupe set stops repeats). Images come from
+  the site. A day with no `stops[]` becomes one synthetic stop.
+- Site lookup: `getSiteById` (G:918), linear search of the library sent in the bundle. A missing site falls back
+  silently (`location` → `map_label` → day area → "Day N Stop k"); no error UI. Stops with neither text nor images
+  are hidden. An empty day shows "No itinerary has been added for this day."
+- Card: header (`day` + `area`), `summary`, then stops, each with a "Stop k" label, a camera button for the image
+  viewer, and the stop text. **Day-level `timing` is never displayed.** Pills carry `--past` (grey), `--current`
+  (dark border, cream), `--future` (plain).
+- Welcome message: `plans[planId].welcome_message` → `itinerary.welcome_message` → `itinerary.summary`.
+- Screensaver (`syncIdleItinerarySection`, G:6372) shows Today and Tomorrow using only `summary`.
+
+### Route and track on the guest side
+
+- Planned route: `refreshPlannedRouteData` (G:3214) runs at start and after every 30 s charter refresh. The whole
+  chosen plan is drawn as one dashed polyline. **No per-day leg, no today highlight.** `syncNavigationItineraryOverlay`
+  (G:3268) pins every stop of every day with no today emphasis.
+- Track: `/api/track` every 30 s, sorted and drawn as one polyline on both maps. No per-day filtering.
+
+### Where a preview mode could hook in
+
+- Globals (`itineraryData`, `charterBundleData`, `charterSitesData`, `plannedRouteData`, `navigationTrackData`, …)
+  live at G:238–360 in classic-script global scope. `applySavedCharterBundle` (G:8103) is the single writer.
+  `render()` (G:8218) boots everything; `refreshSavedCharterBundle` (G:8176) runs every 30 s while visible.
+- API URLs are constants at G:50–64, easy to parameterise. The only URL read today is `location.hash` for the tab.
+- **Iframe hazards:** `redirectToGuestLanding()` (G:367) navigates to `/` when idle mode starts below 700 px wide.
+  The service worker (`sw.js`, scope `/`) serves `guest.js`/`guest.css` cache-first (`STATIC_CACHE_NAME` v3), so a
+  preview sees stale JS until the cache name is bumped; `/api/*`, `/data/*` and `*.json` are network-only. The
+  server sets no `X-Frame-Options` or CSP, so a same-origin iframe works.
+- **Server side:** `localTodayDateValue` (S:4238) uses the Node process's local timezone (nothing sets `TZ`).
+  `buildCharterPayload(charterIdOverride)` already takes a charter id and uses no date; `/api/charter` just doesn't
+  pass the query string. `readPlannedRoute(charterId)` and `ensureTrackState(charterId)` take an id too. Only
+  `guestVisibleItineraryPlanForToday` needs a date parameter; weather needs both an id and a date.
 
 ## 5. Track logging (planned versus actual is possible)
 

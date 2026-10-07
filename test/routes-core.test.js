@@ -568,3 +568,29 @@ test("legsTsv keeps names on one cell and stops Excel reading them as formulas",
   assert.deepEqual(rows[1], ["1", "'=HYPERLINK(1)", "Bay one line", "1.0", "", "", ""]);
   assert.deepEqual(rows[2], ["Total", "", "", "1.0", "", "", ""]);
 });
+
+test("makeStopAt on an existing stop keeps its id, arrive and depart", () => {
+  const anchorage = { id: "capones", name: "Capones", latitude: 14.95, longitude: 120.11 };
+  const points = [P(14.8, 120.27, { stop: true }), P(14.94, 120.12, { stop: true, id: "stp_x", arrive: { day: 1 }, depart: { day: 2 }, leg_speed_kn: 7 }), P(15.3, 119.8, { stop: true })];
+  const { points: out, merged } = core.makeStopAt(points, 1, anchorage, []);
+  assert.equal(merged, false);
+  assert.equal(out[1].anchorage_id, "capones");
+  assert.equal(out[1].id, "stp_x");
+  assert.deepEqual(out[1].arrive, { day: 1 });
+  assert.deepEqual(out[1].depart, { day: 2 });
+  assert.equal(out[1].leg_speed_kn, 7);
+});
+
+test("removeStop strips id, arrive, depart, nights and depart_time with the other stop fields", () => {
+  const points = [P(1, 1), P(2, 2, { anchorage_id: "a", id: "stp_y", arrive: { day: 2 }, depart: { day: 3 }, nights: 1, depart_time: "08:00", site_ids: ["s"], name: "A" })];
+  const out = core.removeStop(points, 1);
+  assert.deepEqual(out[1], { latitude: 2, longitude: 2, name: "A" });
+});
+
+test("routeSnapshot changes when nights, depart_time, id, arrive or depart change", () => {
+  const base = { name: "r", description: "", speed_kn: 8, points: [P(1, 1, { stop: true, id: "stp_a", nights: 1 }), P(2, 2)] };
+  const a = core.routeSnapshot(base);
+  assert.notEqual(a, core.routeSnapshot({ ...base, points: [P(1, 1, { stop: true, id: "stp_a", nights: 2 }), P(2, 2)] }));
+  assert.notEqual(a, core.routeSnapshot({ ...base, points: [P(1, 1, { stop: true, id: "stp_a", nights: 1, depart_time: "09:00" }), P(2, 2)] }));
+  assert.notEqual(a, core.routeSnapshot({ ...base, points: [P(1, 1, { stop: true, id: "stp_a", nights: 1, depart: { day: 1 } }), P(2, 2)] }));
+});
