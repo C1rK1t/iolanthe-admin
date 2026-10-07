@@ -8,7 +8,7 @@
   const MAX_NEARBY_BUTTONS = 3;
   const SITES_NEAR_NM = 5;       // sites within this distance of a stop are grouped first in "Sites served"
 
-  // ctx: { core, places, getWork, getMap, editPoints(fn, opts), editPointsQuiet(fn), makeStopAtAnchorage(i, anchorage), status(message, tone) }
+  // ctx: { core, places, subjectType, getWork, getMap, editPoints(fn, opts), editPointsQuiet(fn), makeStopAtAnchorage(i, anchorage), status(message, tone) }
   function create(ctx) {
     const { core: c, places } = ctx;
     const { el, fmtPos } = window.IolantheRoutesUi;
@@ -50,6 +50,25 @@
         moved ? el("div", { class: "banner warn", style: "margin-bottom:8px" }, `The anchorage has moved ${Math.round(moved)} m since this stop was placed. `,
           el("button", { type: "button", class: "link-btn", onclick: () => ctx.editPoints((pts) => c.replaceAt(pts, i, { ...pts[i], latitude: anchorage.latitude, longitude: anchorage.longitude }), { popup: i }) }, "Move stop to anchorage")) : null,
         el("div", { class: "field" }, el("label", {}, "Name"), nameInput));
+      if (stop && ctx.subjectType !== "charter") {
+        // Template fields (spec A §2.2): used when this library route is applied to a charter.
+        const current = points()[i];
+        const nightsInput = el("input", { type: "number", min: "0", max: "60", step: "1", value: current.nights === undefined ? "" : String(current.nights), placeholder: current.anchorage_id ? "1" : "0", "aria-label": "Nights at this stop when applied" });
+        const departInput = el("input", { type: "time", value: current.depart_time || "", "aria-label": "Default departure time when applied" });
+        const commitTemplate = () => {
+          const p = points()[i];
+          const n = nightsInput.value === "" ? undefined : Math.max(0, Math.min(60, parseInt(nightsInput.value, 10) || 0));
+          const t = /^([01]\d|2[0-3]):[0-5]\d$/.test(departInput.value) ? departInput.value : undefined;
+          const { nights: _n, depart_time: _t, ...rest } = p;
+          ctx.editPointsQuiet((pts) => c.replaceAt(pts, i, { ...rest, ...(n === undefined ? {} : { nights: n }), ...(t ? { depart_time: t } : {}) }));
+        };
+        nightsInput.addEventListener("change", commitTemplate);
+        departInput.addEventListener("change", commitTemplate);
+        box.append(
+          el("div", { class: "field field-inline" }, el("label", {}, "Nights"), nightsInput),
+          el("div", { class: "field field-inline" }, el("label", {}, "Default departure"), departInput)
+        );
+      }
       if (stop && places) box.append(sitesServedPicker(i));
       box.append(el("div", { class: "actions" },
         !atAnchorage && places ? el("button", { type: "button", class: "text-btn secondary", onclick: () => makeAnchorageFromPoint(i) }, "Make anchorage") : null,

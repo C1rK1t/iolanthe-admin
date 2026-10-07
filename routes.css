@@ -132,6 +132,7 @@
 .routes-panel .pop h3 { margin: 0 0 4px; font-size: 15px; }
 .routes-panel .pop .sub { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
 .routes-panel .pop .field { margin-bottom: 8px; }
+.routes-panel .field-inline, .routes-modal .field-inline { display: grid; grid-template-columns: 1fr 110px; align-items: center; gap: 6px; }
 .routes-panel .pop .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .routes-panel .pop .text-btn { min-height: 30px; font-size: 12px; padding: 0 9px; }
 .routes-panel .pop .nearby { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
