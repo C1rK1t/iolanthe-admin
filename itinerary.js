@@ -211,12 +211,13 @@
     const actions = panel.querySelector("#itinerary-actions");
     const dirty = isDirty();
     actions.replaceChildren(
-      el("button", { type: "button", class: "itinerary-action", "data-action": "edit-route", disabled: "" }, "Edit route"),
+      el("button", { type: "button", class: "itinerary-action", "data-action": "edit-route" }, "Edit route"),
       el("button", { type: "button", class: "itinerary-action", "data-action": "apply-route", ...(dirty ? { disabled: "" } : {}) }, "Apply library route…"),
       el("button", { type: "button", class: "itinerary-action", "data-action": "promote", ...(dirty || !core().stopEntries(work.itinerary.route.points).length ? { disabled: "" } : {}) }, "Promote to library…"),
       el("button", { type: "button", class: "itinerary-action", "data-action": "cancel", ...(dirty && !saving ? {} : { disabled: "" }) }, "Cancel"),
       el("button", { type: "button", class: "itinerary-action itinerary-action--primary", "data-action": "save", ...(dirty && !saving ? {} : { disabled: "" }) }, saving ? "Saving…" : "Save")
     );
+    actions.querySelector('[data-action="edit-route"]').addEventListener("click", () => A().showCharterPanel("routes", { subject: "charter" }));
     actions.querySelector('[data-action="save"]').addEventListener("click", save);
     actions.querySelector('[data-action="cancel"]').addEventListener("click", cancelEdits);
     actions.querySelector('[data-action="apply-route"]').addEventListener("click", openApplyModal);
@@ -414,6 +415,7 @@
     svg.append(svgEl("path", { class: "itinerary-thumb__path", d: points.map((p, i) => `${i ? "L" : "M"} ${x(p).toFixed(1)} ${y(p).toFixed(1)}`).join(" ") }));
     points.filter(core().isStop).forEach((p) => svg.append(svgEl("circle", { class: "itinerary-thumb__stop", cx: x(p).toFixed(1), cy: y(p).toFixed(1), r: 3 })));
     box.append(svg);
+    box.onclick = () => A().showCharterPanel("routes", { subject: "charter" });
   }
 
   function renderAll(opts) {
@@ -630,7 +632,7 @@
       dayTimeRow("Departure", "depart"),
       el("div", { class: "itinerary-pop__row muted" }, `Nights: ${nights}`),
       el("div", { class: "itinerary-pop__sites" }, el("div", { class: "label" }, "Sites served"), ...(siteRows.length ? siteRows : [el("div", { class: "muted" }, "No sites within 5 nm")])),
-      el("div", { class: "itinerary-pop__foot muted" }, "Open on map arrives with the Route panel (plan 4).")
+      (() => { const b = el("button", { type: "button", class: "itinerary-action itinerary-action--small" }, "Open on map"); b.addEventListener("click", () => A().showCharterPanel("routes", { subject: "charter", focusStopId: stopId })); return el("div", { class: "itinerary-pop__foot" }, b); })()
     );
     popover.querySelector(".itinerary-pop__close").addEventListener("click", closePopover);
     panel.append(popover);
