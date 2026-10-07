@@ -79,8 +79,8 @@
           <div class="stats" id="routes-stats"></div>
           <div class="tabbox">
             <div class="tabs" role="tablist" aria-label="Stops and legs">
-              <button type="button" role="tab" id="routes-tab-stops" aria-controls="routes-panel-stops" aria-selected="true">Stops <span class="count" id="routes-count-stops"></span></button>
-              <button type="button" role="tab" id="routes-tab-legs" aria-controls="routes-panel-legs" aria-selected="false">Legs <span class="count" id="routes-count-legs"></span></button>
+              <button type="button" role="tab" id="routes-tab-stops" aria-controls="routes-panel-stops" aria-selected="true">Stops</button>
+              <button type="button" role="tab" id="routes-tab-legs" aria-controls="routes-panel-legs" aria-selected="false">Legs</button>
             </div>
             <div class="tab-panel" role="tabpanel" id="routes-panel-stops" aria-labelledby="routes-tab-stops">
               <div class="stops" id="routes-stops"></div>
@@ -185,10 +185,10 @@
     const stopCount = pts.filter(core().isStop).length;
     $("stats").replaceChildren(
       el("div", { class: "stat" }, el("b", {}, core().routeNm(pts).toFixed(1)), el("span", {}, "nm total")),
-      el("div", { class: "stat" }, el("b", {}, stopCount), el("span", {}, "stops")),
+      el("div", { class: "stat" }, el("b", {}, `${stopCount} / ${lists.legCount()}`), el("span", {}, "stops / legs")),
       lists.timeStat());
-    lists.renderStops($("stops"), $("count-stops"));
-    lists.renderLegs($("legs"), $("count-legs"));
+    lists.renderStops($("stops"));
+    lists.renderLegs($("legs"));
 
     const r = work.route;
     const src = r.source || {};

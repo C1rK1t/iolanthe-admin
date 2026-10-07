@@ -54,8 +54,6 @@
 .routes-panel .tabs button { flex: 1; border: 0; background: none; color: var(--muted); font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; padding: 10px 8px; cursor: pointer; border-bottom: 3px solid transparent; }
 .routes-panel .tabs button[aria-selected="true"] { color: var(--accent-dark); background: var(--panel); border-bottom-color: var(--accent); }
 .routes-panel .tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.routes-panel .tabs .count { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px; background: #dfe7ea; color: var(--ink); font-size: 11px; margin-left: 4px; letter-spacing: 0; }
-.routes-panel .tabs .count:empty { display: none; }
 .routes-panel .tab-panel { flex: 1; min-height: 0; overflow-y: auto; padding: 10px; background: #e9eef0; }
 .routes-panel .leg-item .title { font-weight: 700; }
 .routes-panel .leg-item .leg-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 12px; margin: 4px 0 0 30px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
