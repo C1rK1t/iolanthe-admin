@@ -74,3 +74,12 @@
 .itinerary-thumb { width: 160px; height: 110px; background: rgba(80, 180, 120, 0.10); border: 1px solid rgba(80, 180, 120, 0.6); border-radius: 6px; overflow: hidden; cursor: pointer; }
 .itinerary-thumb__path { fill: none; stroke: var(--route); stroke-width: 2; stroke-linejoin: round; }
 .itinerary-thumb__stop { fill: var(--route); stroke: #fff; stroke-width: 1; }
+
+.itinerary-board__edges { position: absolute; inset: 0; pointer-events: none; }
+.itinerary-edge { position: absolute; pointer-events: auto; width: 48px; height: 8px; margin-top: -4px; border: none; border-radius: 4px; background: rgba(120, 160, 255, 0.95); cursor: ns-resize; padding: 0; touch-action: none; }
+.itinerary-edge:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.itinerary-edge--leg { background: rgba(139, 0, 0, 0.75); }
+.itinerary-edge--none { background: var(--line); cursor: default; }
+.itinerary-edge--dragging { transform: scaleX(1.15); }
+.itinerary-edge--refused { animation: itinerary-shake 0.35s; background: var(--danger, #a93d35); }
+@keyframes itinerary-shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }

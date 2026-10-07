@@ -107,6 +107,7 @@
           <div class="itinerary-board__titles" id="itinerary-titles"></div>
           <svg class="itinerary-board__line" id="itinerary-line" aria-hidden="true"></svg>
           <div class="itinerary-board__days" id="itinerary-days"></div>
+          <div class="itinerary-board__edges" id="itinerary-edges"></div>
         </div>
       </section>`;
   }
@@ -211,12 +212,93 @@
     box.append(svg);
   }
 
-  function renderAll() {
+  function renderAll(opts) {
     renderHeader();
     renderThumb();
     renderWelcome();
     const days = renderDays();
-    requestAnimationFrame(() => drawLine(days));
+    requestAnimationFrame(() => {
+      drawLine(days);
+      positionEdges(days);
+      if (opts && opts.keepFocusEdge) {
+        const h = panel.querySelector(`.itinerary-edge[data-edge="${opts.keepFocusEdge}"]`);
+        if (h) h.focus({ preventScroll: true });
+      }
+    });
+  }
+
+  const EDGE_STEP_PX = 28;   // pointer travel per snap step
+
+  // One handle per edge, positioned at the boundary between day boxes. Called after every render.
+  function positionEdges(days) {
+    const board = panel.querySelector("#itinerary-board");
+    const daysEl = panel.querySelector("#itinerary-days");
+    const edgesEl = panel.querySelector("#itinerary-edges");
+    const boardRect = board.getBoundingClientRect();
+    const states = core().edgeStates(work.itinerary, dayCount());
+    const dayEls = [...panel.querySelectorAll(".itinerary-day")];
+    edgesEl.style.left = `${daysEl.offsetLeft}px`;
+    edgesEl.style.width = `${daysEl.offsetWidth}px`;
+    edgesEl.replaceChildren();
+    states.forEach((state) => {
+      const below = dayEls[state.day];                      // the day box that starts at this edge
+      if (!below) return;
+      const y = below.getBoundingClientRect().top - boardRect.top;
+      const handle = el("button", {
+        type: "button",
+        class: `itinerary-edge itinerary-edge--${state.kind}`,
+        "data-edge": String(state.day),
+        title: state.kind === "none" ? "Nothing to move here" : `Day ${state.day} / ${state.day + 1} edge. Drag or use the arrow keys.`,
+        "aria-label": `Edge between day ${state.day} and day ${state.day + 1}`,
+        ...(state.kind === "none" ? { disabled: "" } : {})
+      });
+      handle.style.top = `${y}px`;
+      handle.style.right = "12px";
+      handle.addEventListener("pointerdown", onEdgePointerDown);
+      handle.addEventListener("keydown", onEdgeKey);
+      edgesEl.append(handle);
+    });
+  }
+
+  function stepEdge(edgeDay, direction) {
+    const next = core().moveEdge(work.itinerary, edgeDay, direction, dayCount());
+    if (!next) { flashEdge(edgeDay); return false; }
+    return commit(next, { keepFocusEdge: edgeDay });
+  }
+
+  function flashEdge(edgeDay) {
+    const handle = panel.querySelector(`.itinerary-edge[data-edge="${edgeDay}"]`);
+    if (!handle) return;
+    handle.classList.add("itinerary-edge--refused");
+    setTimeout(() => handle.classList.remove("itinerary-edge--refused"), 350);
+  }
+
+  function onEdgeKey(event) {
+    const edgeDay = Number(event.currentTarget.dataset.edge);
+    if (event.key === "ArrowDown") { event.preventDefault(); stepEdge(edgeDay, "down"); }
+    if (event.key === "ArrowUp") { event.preventDefault(); stepEdge(edgeDay, "up"); }
+  }
+
+  function onEdgePointerDown(event) {
+    const handle = event.currentTarget;
+    const edgeDay = Number(handle.dataset.edge);
+    handle.setPointerCapture(event.pointerId);
+    handle.classList.add("itinerary-edge--dragging");
+    let anchorY = event.clientY;
+    const move = (e) => {
+      const dy = e.clientY - anchorY;
+      if (dy > EDGE_STEP_PX) { anchorY = e.clientY; stepEdge(edgeDay, "down"); }
+      else if (dy < -EDGE_STEP_PX) { anchorY = e.clientY; stepEdge(edgeDay, "up"); }
+    };
+    const up = () => {
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", up);
+      handle.removeEventListener("pointercancel", up);
+      handle.classList.remove("itinerary-edge--dragging");
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", up);
+    handle.addEventListener("pointercancel", up);
   }
 
   const SVG_NS = "http://www.w3.org/2000/svg";
@@ -295,7 +377,7 @@
     };
     A().setPageUnsavedGuard(guard);
     if (!resizeBound) {
-      window.addEventListener("resize", () => { if (panel && panel.isConnected && work) drawLine(core().deriveDays(work.itinerary, dayCount())); });
+      window.addEventListener("resize", () => { if (panel && panel.isConnected && work) { const days = core().deriveDays(work.itinerary, dayCount()); drawLine(days); positionEdges(days); } });
       resizeBound = true;
     }
     renderAll();
