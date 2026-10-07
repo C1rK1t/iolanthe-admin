@@ -1,8 +1,8 @@
 # Route Planner — handoff
 
-Last updated 2026-10-07, as of `main` at `274633d`. The brainstorm and spec (draft 2) are done. The captain has
-reviewed the mockup and is positive, and his changes are applied. **No product code has been written yet.** Next:
-**phase 1**. Nothing blocks it.
+Last updated 2026-10-07. **Phase 1 is complete and live.** The server route library is in `iolanthe-server`
+`2ac4b8d`, and the admin Routes panel is in `iolanthe-admin` `91d679a`. Next: **phase 2** (site and anchorage
+overlays), after spec §7 Q3 is answered.
 
 | File | What it is |
 |---|---|
@@ -16,8 +16,8 @@ reviewed the mockup and is positive, and his changes are applied. **No product c
 - **Captain's link (boat LAN):** http://10.33.2.241/admin/docs/route-planner/planner-mockup.html
   - The admin server serves `/admin/*` files without the URL key.
   - It needs internet for Leaflet (unpkg) and the Esri satellite tiles.
-  - It updates when the docker VM's scheduled job pulls `main`. To update it now, run `git pull` in
-    `/opt/projects/vessel/iolanthe-admin`; no restart is needed. Claude has no SSH key for `dev@10.33.2.241`.
+  - It updates within 5 minutes of a merge to `main` (the `update-vessel.sh` cron; see "Release process"). Claude has
+    no SSH key for the VM.
 - **Locally:** start `route-planner-mockup` from the workspace-root `.claude/launch.json` (a Python static server on
   port 8766), or open the file in any browser that has internet access.
 - **Not a claude.ai artifact.** The artifact viewer blocks external map tiles and downloads, so the satellite map
@@ -124,50 +124,71 @@ the button styles, the type and the uppercase field labels. Do it after the Rout
 by turning the mockup's CSS (`:root` tokens, `.icon-btn`, `.stat`, `.banner`, `.field`, `.text-btn`, `.seg`,
 `.tabbox`, `.stop-item`, modal card) into shared `admin.css` classes.
 
-## Phase 1 progress
+## Phase 1 (done, 2026-10-07)
 
-- **Plan A (server) is done and merged** to `iolanthe-server` `main` at `2ac4b8d` (2026-10-07). The plan is
-  `iolanthe-server/docs/superpowers/plans/2026-10-07-route-library-server.md`.
+- **Plan A (server)** is merged to `iolanthe-server` `main` at `2ac4b8d` (plan:
+  `iolanthe-server/docs/superpowers/plans/2026-10-07-route-library-server.md`).
   - What it added:
     - `lib/route-library.js`, with 22 unit tests (`npm test`)
     - the endpoints `GET /api/admin/routes`, `POST routes/save` (`{route, base_revision}`, 409 on a clash, 404 if the
-      route was deleted), `POST routes/delete`, `GET /api/admin/anchorages` and `POST anchorages/save`
+      route was deleted, 500 if the file is unreadable), `POST routes/delete`, `GET /api/admin/anchorages` and
+      `POST anchorages/save`
     - migration v3, which imports the charter routes
-  - It was verified by unit tests, a smoke test on throwaway data, and a logged-in browser check of every endpoint.
-  - **Not yet live on the boat.** After the VM pulls, run
-    `cd /opt/projects/vessel && docker compose up -d --build iolanthe-server`. Confirm that the log shows
-    `Route library: imported N charter route(s).` and record N here.
-- **Next: Plan B (admin Routes panel).** It hasn't been written yet. Findings from planning it:
-  - admin.js exposes nothing on `window`. Plan B must add a small `window.IolantheAdmin` with `api`, `setStatus`,
-    `showAdminConfirm`, `setPageUnsavedGuard`, `loadLeaflet`, `iconButtonHtml`, the escape helpers and so on.
-  - Add a `routes` entry to the panels array in `renderCharter()`. It then hooks into `charterPanelContent` and
-    `bindCharterPanel`.
-  - There's no toast in the admin; use `setStatus`. Route Upload is only gated when it saves, not hidden.
-  - Pure logic (legs, distances, joining) can go in a `routes-core.js` that is unit-tested with `node --test`.
+  - **Live on the boat**: `/api/schema` shows `live_version` 3, with `import-charter-routes-into-library` applied. The
+    number of imported routes wasn't recorded; it's in `docker logs iolanthe-server`.
+- **Plan B (admin Routes panel)** is merged to `iolanthe-admin` `main` at `91d679a` (plan:
+  `docs/superpowers/plans/2026-10-07-routes-panel-admin.md`). It goes live with the next 5-minute cron pull.
+  - Files:
+    - `routes-core.js`: pure logic, 14 tests with `node --test`
+    - `routes.js`: the panel
+    - `routes.css`: the mockup style, scoped under `.routes-panel` / `.routes-modal`
+    - small hooks at the end of `admin.js`: `window.IolantheAdmin`, the `routes` panel entry and its dispatch
+  - What the panel does:
+    - route picker, name, description and route speed
+    - nm / stops / time tiles
+    - Stops / Legs tabs, with stop-to-stop leg cards and per-leg speeds
+    - a satellite map with Select / Add / Delete, drag, midpoint insert, a point popup and undo/redo
+    - Save (409 → "Route changed elsewhere"), Save As, Delete, New, Cancel and Add another route
+    - the unsaved-changes guard
+    - Route Upload stays alongside
+  - **Not in phase 1:** creating stops (it needs anchorages, phase 2), sites and anchorages on the map, import and
+    export (phase 3), and charter copies / Itinerary assignment (phase 4).
+  - **Known behaviour:** a blank route speed saves as the server default, 8 kn.
+- **How it was built:** subagent-driven, one agent at a time, with a spec and quality review after every task.
+  Reviews caught several issues, all fixed before merge:
+  - a corrupt `routes.json` could have been read as empty and overwritten
+  - edits made while a save was in flight were lost
+  - the map view reset after every save
+  - deleting a route that was already gone left it in the picker
+  - a Save As regression kept the old name on the new copy
+- **Local dev server for the admin:** `routes-admin-dev` in the workspace `.claude/launch.json` (port 8124, data in
+  `iolanthe-server/data-local/routes-dev`). The Charter Admin test password is at `admin.passwords.charter` in that
+  folder's `settings.json`.
 
-## Next step: phase 1
+## Next: phase 2
 
 From spec §5:
-- **iolanthe-server** (`iolanthe/iolanthe-server` in the workspace):
-  - `library/routes.json` and `library/anchorages.json` storage
-  - `GET/POST /api/admin/routes[/save|/delete]` and `GET/POST /api/admin/anchorages[/save]`, with bridge-only
-    Charter Admin on writes and a revision check (409) on route save
-  - the one-off migration of existing `planned-route.json` routes into the library
-- **iolanthe-admin**:
-  - a new `routes.js` loaded after `admin.js`, with a hook in `admin.js` for a **Routes** panel
-  - the panel: route list, map editing (add / insert via midpoint / move / delete, undo/redo), name, description,
-    stats, Stops / Legs tabs, Save / Save As / Delete
-  - "Route Upload" stays alongside until phase 3
-- The mockup's JS is a working reference for the editing logic: undo history, midpoint insert, snapping,
-  stop-to-stop legs, Douglas-Peucker simplify, KML/GPX parsing and export, and joining.
+- site and anchorage overlays on the map: click a site to edit it; add a site as a waypoint; point → Make site
+- anchorages: add, edit, move and delete; Anchorage mode; stops; "Make stop at"; snap-to-anchorage; moved warnings
+- the sites-served picker on stops
+- first answer **spec §7 Q3**: what happens when you snap onto an anchorage that is already the next or previous stop
+- the mockup's JS is the working reference again; spec §4.1 has the details
 
 ## Release process and conventions
 
-- **Merging to `main` releases it.** A scheduled job on the docker VM (10.33.2.241, login `dev`) pulls the repos
-  from GitHub. Admin lives at `/opt/projects/vessel/iolanthe-admin` and is bind-mounted, so static files need no
-  restart.
-  - Not yet verified: `iolanthe-server` runs `server.js` in a container. Server changes will probably need
-    `docker compose up -d --build iolanthe-server` (or a restart) after the pull. Check that before relying on it.
+- **Admin, guest and crew: merging to `main` releases them.** Root's cron on the docker VM runs
+  `/opt/projects/vessel/update-vessel.sh` every 5 minutes. It pulls those three static repos, and the bind mounts
+  serve the files with no restart.
+- **The server is manual, by design (David, 2026-10-07).** `iolanthe-server` and `iolanthe-signalk` never
+  auto-update. After merging server changes, run this on the VM:
+
+  ```bash
+  cd /opt/projects/vessel && ./update.sh
+  ```
+
+  It pulls all five repos and rebuilds the containers if anything changed. A rebuild without a pull rebuilds the old
+  code. Check what's live with `curl http://10.33.2.241/api/schema`. Claude can read David's SSH terminal tab but
+  can't type into it, so David runs this.
 - **Bump the CSS/JS version strings** in `index.html` whenever `admin.css` / `admin.js` (or the new `routes.js`)
   change, so browsers pick up the new code.
 - **Popups and forms**: green save and red cancel icon buttons top right. Clicking outside the popup cancels.
