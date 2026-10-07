@@ -112,8 +112,63 @@
     return JSON.stringify({ name: route.name, description: route.description, speed_kn: speed, points });
   }
 
+  const AUTO_LINK_NM = 2;    // spec §7 Q4: anchorage stops auto-link sites within 2 nm
+  const MOVED_WARN_M = 50;   // a stop more than this from its anchorage shows "moved"
+
+  function sitesWithin(sites, pos, nm) {
+    return (sites || []).filter((site) => distNm(pos, site) <= nm).map((site) => site.id);
+  }
+
+  function nearbyAnchorages(anchorages, pos, nm) {
+    return (anchorages || [])
+      .map((anchorage) => ({ anchorage, nm: distNm(pos, anchorage) }))
+      .filter((x) => x.nm <= nm)
+      .sort((x, y) => x.nm - y.nm);
+  }
+
+  function stopAt(anchorage, sites) {
+    return {
+      latitude: anchorage.latitude,
+      longitude: anchorage.longitude,
+      anchorage_id: anchorage.id,
+      name: anchorage.name,
+      site_ids: sitesWithin(sites, anchorage, AUTO_LINK_NM)
+    };
+  }
+
+  const sameStop = (point, anchorage) => Boolean(point && point.anchorage_id && point.anchorage_id === anchorage.id);
+
+  // Spec §7 Q3: making a point a stop at the anchorage already used by the stop before or after it merges
+  // (the point is removed) instead of creating a second stop there.
+  function makeStopAt(points, index, anchorage, sites) {
+    if (sameStop(points[index - 1], anchorage) || sameStop(points[index + 1], anchorage)) {
+      return { points: removeAt(points, index), merged: true };
+    }
+    return { points: replaceAt(points, index, stopAt(anchorage, sites)), merged: false };
+  }
+
+  function appendStop(points, anchorage, sites) {
+    if (sameStop(points[points.length - 1], anchorage)) {
+      return { points, merged: true };
+    }
+    return { points: [...points, stopAt(anchorage, sites)], merged: false };
+  }
+
+  function anchorageMovedM(point, anchorage) {
+    if (!point || !point.anchorage_id || !anchorage) {
+      return 0;
+    }
+    const metres = distM(point, anchorage);
+    return metres > MOVED_WARN_M ? metres : 0;
+  }
+
+  function routesUsingAnchorage(routes, anchorageId) {
+    return (routes || []).filter((route) => (route.points || []).some((p) => p.anchorage_id === anchorageId));
+  }
+
   return {
     METRES_PER_NM, distM, distNm, routeNm, fmtHm, isStop, replaceAt, insertAt, removeAt,
-    stopLegs, totalHours, setLegSpeed, joinPoints, joinGapNm, routeSnapshot
+    stopLegs, totalHours, setLegSpeed, joinPoints, joinGapNm, routeSnapshot,
+    sitesWithin, nearbyAnchorages, stopAt, makeStopAt, appendStop, anchorageMovedM, routesUsingAnchorage
   };
 });

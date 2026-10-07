@@ -104,3 +104,77 @@ test("routeSnapshot ignores point key order, undefined values and null speed", (
   const b = { name: "A", description: "", speed_kn: null, points: [{ name: "X", longitude: 2, latitude: 1 }] };
   assert.equal(core.routeSnapshot(a), core.routeSnapshot(b));
 });
+
+const SITES = [
+  { id: "near", title: "Near", latitude: 12.01, longitude: 120 },   // ~0.6 nm from A
+  { id: "far", title: "Far", latitude: 12.2, longitude: 120 }        // ~12 nm
+];
+const ANCH = { id: "a", name: "Alpha", latitude: 12, longitude: 120 };
+const ANCH_B = { id: "b", name: "Bravo", latitude: 12.02, longitude: 120 };
+
+test("sitesWithin returns ids within the range", () => {
+  assert.deepEqual(core.sitesWithin(SITES, P(12, 120), 2), ["near"]);
+});
+
+test("nearbyAnchorages sorts by distance and respects the range", () => {
+  const out = core.nearbyAnchorages([ANCH_B, ANCH], P(12.001, 120), 2);
+  assert.deepEqual(out.map((x) => x.anchorage.id), ["a", "b"]);
+  assert.ok(out[0].nm < out[1].nm);
+  assert.deepEqual(core.nearbyAnchorages([ANCH], P(13, 120), 2), []);
+});
+
+test("stopAt builds a stop on the anchorage and auto-links sites within 2 nm", () => {
+  assert.deepEqual(core.stopAt(ANCH, SITES), { latitude: 12, longitude: 120, anchorage_id: "a", name: "Alpha", site_ids: ["near"] });
+});
+
+test("makeStopAt replaces the point with a stop", () => {
+  const pts = [P(11.9, 120), P(12.001, 120.001), P(12.1, 120)];
+  const { points, merged } = core.makeStopAt(pts, 1, ANCH, SITES);
+  assert.equal(merged, false);
+  assert.equal(points[1].anchorage_id, "a");
+  assert.equal(points.length, 3);
+});
+
+test("makeStopAt merges into an identical neighbouring stop (spec Q3)", () => {
+  const prevStop = { ...P(12, 120), anchorage_id: "a", name: "Alpha" };
+  const before = [P(11.9, 120), prevStop, P(12.001, 120.001), P(12.1, 120)];
+  const r1 = core.makeStopAt(before, 2, ANCH, SITES);
+  assert.equal(r1.merged, true);
+  assert.deepEqual(r1.points, [before[0], prevStop, before[3]]);
+  const after = [P(11.9, 120), P(12.001, 120.001), prevStop];
+  const r2 = core.makeStopAt(after, 1, ANCH, SITES);
+  assert.equal(r2.merged, true);
+  assert.deepEqual(r2.points, [after[0], prevStop]);
+});
+
+test("makeStopAt does not merge with a stop at a different anchorage", () => {
+  const otherStop = { ...P(12.02, 120), anchorage_id: "b", name: "Bravo" };
+  const { merged, points } = core.makeStopAt([otherStop, P(12.001, 120)], 1, ANCH, SITES);
+  assert.equal(merged, false);
+  assert.equal(points.length, 2);
+});
+
+test("appendStop adds a stop at the end, or merges when the last point is the same anchorage", () => {
+  const r1 = core.appendStop([P(11.9, 120)], ANCH, SITES);
+  assert.equal(r1.merged, false);
+  assert.equal(r1.points.length, 2);
+  const r2 = core.appendStop(r1.points, ANCH, SITES);
+  assert.equal(r2.merged, true);
+  assert.equal(r2.points.length, 2);
+});
+
+test("anchorageMovedM is 0 within 50 m and the distance beyond", () => {
+  const stop = { ...P(12, 120), anchorage_id: "a" };
+  assert.equal(core.anchorageMovedM(stop, { ...ANCH, latitude: 12.0002 }), 0);
+  assert.ok(core.anchorageMovedM(stop, { ...ANCH, latitude: 12.005 }) > 500);
+  assert.equal(core.anchorageMovedM(P(12, 120), ANCH), 0);
+  assert.equal(core.anchorageMovedM(stop, null), 0);
+});
+
+test("routesUsingAnchorage lists the routes with a stop there", () => {
+  const routes = [
+    { id: "r1", name: "One", points: [{ ...P(1, 1), anchorage_id: "a" }] },
+    { id: "r2", name: "Two", points: [P(1, 1)] }
+  ];
+  assert.deepEqual(core.routesUsingAnchorage(routes, "a").map((r) => r.id), ["r1"]);
+});
