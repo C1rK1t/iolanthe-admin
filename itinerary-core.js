@@ -298,11 +298,34 @@
     return parts.join(" · ");
   }
 
+  // ---- line geometry ----------------------------------------------------------
+
+  // days: deriveDays() output. centres: Map "stopId:day" → y (px). Returns shapes in route order.
+  function lineGeometry(days, centres) {
+    const byStop = new Map();   // stopId → { index, ys: [] }
+    (days || []).forEach((d) => (d.stops || []).forEach((s) => {
+      const y = centres.get(`${s.id}:${d.day}`);
+      if (!Number.isFinite(y)) return;
+      if (!byStop.has(s.id)) byStop.set(s.id, { index: s.index, ys: [] });
+      byStop.get(s.id).ys.push(y);
+    }));
+    const ordered = [...byStop.entries()].sort((a, b) => a[1].index - b[1].index);
+    const shapes = ordered.map(([stopId, entry], i) => {
+      const y1 = Math.min(...entry.ys);
+      const y2 = Math.max(...entry.ys);
+      const terminal = ordered.length > 1 && i === 0 ? "origin" : (ordered.length > 1 && i === ordered.length - 1 ? "terminus" : null);
+      return { stopId, kind: entry.ys.length > 1 ? "loop" : "dot", y1, y2, terminal };
+    });
+    if (!shapes.length) return { shapes: [], top: 0, bottom: 0 };
+    return { shapes, top: shapes[0].y1, bottom: shapes[shapes.length - 1].y2 };
+  }
+
   return {
     ITINERARY_VERSION, DEFAULT_SPEED_KN, MAX_TITLE_LENGTH, MAX_NOTES_LENGTH, TIME_RE,
     distM, distNm, newId, isStop, parseDateOnly, charterDayCount, dayDateLabel,
     normalizePoint, normalizeItinerary, itinerarySnapshot,
     stopEntries, positionOf, stopSpan, deriveDays, validateItinerary,
-    legHours, timeToMinutes, minutesToTime, estimateTimes, stopTimesLabel
+    legHours, timeToMinutes, minutesToTime, estimateTimes, stopTimesLabel,
+    lineGeometry
   };
 });

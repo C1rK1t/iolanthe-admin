@@ -121,3 +121,24 @@ test("stopTimesLabel: Arr./Dep. with ~ for estimates, nights when more than one"
   assert.equal(core.stopTimesLabel(stops[3], times.get("stp_herm")).startsWith("Arr. ~"), true);
   assert.equal(core.stopTimesLabel({ stop: true }, { arrive: null, depart: null }), "");
 });
+
+test("lineGeometry: a dot per single-day stop, a loop spanning a multi-day stop, terminus flags, line extent", () => {
+  const days = core.deriveDays(sevenDays(), 7);
+  // Fake measurements: sub-box centre y per "stopId:day", 40px apart in render order.
+  const centres = new Map();
+  let y = 20;
+  days.forEach((d) => d.stops.forEach((s) => { centres.set(`${s.id}:${d.day}`, y); y += 40; }));
+  const geo = core.lineGeometry(days, centres);
+  assert.deepEqual(geo.shapes.map((s) => [s.stopId, s.kind, s.y1, s.y2, s.terminal]), [
+    ["stp_subic1", "dot", 20, 20, "origin"],
+    ["stp_anaw", "dot", 60, 60, null],
+    ["stp_capo", "loop", 100, 140, null],
+    ["stp_herm", "loop", 180, 220, null],
+    ["stp_poti", "loop", 260, 340, null],
+    ["stp_hund", "loop", 380, 420, null],
+    ["stp_subic2", "dot", 460, 460, "terminus"]
+  ]);
+  assert.equal(geo.top, 20);
+  assert.equal(geo.bottom, 460);
+  assert.deepEqual(core.lineGeometry([], new Map()), { shapes: [], top: 0, bottom: 0 });
+});
