@@ -180,7 +180,7 @@
 
   // KML <coordinates>: whitespace-separated "lon,lat[,alt]" tuples. Invalid tuples are dropped.
   function parseKmlCoordinates(text) {
-    return String(text || "").trim().split(/\s+/).filter(Boolean)
+    return String(text || "").trim().replace(/\s*,\s*/g, ",").split(/\s+/).filter(Boolean)
       .map((tuple) => tuple.split(",").map((part) => (part.trim() === "" ? NaN : Number(part))))
       .map(([longitude, latitude]) => ({ latitude, longitude }))
       .filter(validPos);
@@ -306,8 +306,9 @@
     return candidates[0] || null;
   }
 
+  const XML_INVALID_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g; // not allowed in XML 1.0, even escaped
   const XML_ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" };
-  const xmlEscape = (s) => String(s === undefined || s === null ? "" : s).replace(/[&<>"']/g, (ch) => XML_ESCAPES[ch]);
+  const xmlEscape = (s) => String(s === undefined || s === null ? "" : s).replace(XML_INVALID_CHARS, "").replace(/[&<>"']/g, (ch) => XML_ESCAPES[ch]);
   const fix6 = (n) => Number(n).toFixed(6);
 
   function slugify(name) {

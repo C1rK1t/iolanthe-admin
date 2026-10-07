@@ -261,7 +261,7 @@ function denseTrack() {
 
 test("parseKmlCoordinates reads lon,lat[,alt] tuples and drops invalid ones", () => {
   assert.deepEqual(core.parseKmlCoordinates(" 120.1,12.0,0\n\t120.2,12.1 "), [P(12, 120.1), P(12.1, 120.2)]);
-  assert.deepEqual(core.parseKmlCoordinates("abc,def 200,10 120.1 ,12 120.3,12.3"), [P(12.3, 120.3)]);
+  assert.deepEqual(core.parseKmlCoordinates("abc,def 200,10 120.1 120.3,12.3"), [P(12.3, 120.3)]);
   assert.deepEqual(core.parseKmlCoordinates(""), []);
   assert.deepEqual(core.parseKmlCoordinates(undefined), []);
 });
@@ -417,4 +417,14 @@ test("exportBaseName uses the route id, else a slug of the name, else 'route'", 
   assert.equal(core.exportBaseName(EXPORT_ROUTE), "coron-loop");
   assert.equal(core.exportBaseName({ id: "", name: "Coron loop (copy)" }), "coron-loop-copy");
   assert.equal(core.exportBaseName({ id: "", name: "" }), "route");
+});
+
+test("parseKmlCoordinates tolerates spaces after the commas", () => {
+  assert.deepEqual(core.parseKmlCoordinates("120.1, 12.1, 0 120.2, 12.2, 0"), [P(12.1, 120.1), P(12.2, 120.2)]);
+});
+
+test("xmlEscape strips control characters that XML 1.0 forbids but keeps tab, LF and CR", () => {
+  assert.equal(core.xmlEscape("A\u0008B\u000BC\u0000D\uFFFEE"), "ABCDE");
+  assert.equal(core.xmlEscape("a\tb\nc\rd"), "a\tb\nc\rd");
+  assert.ok(core.toGpx({ id: "x", name: "A\u0008B", points: [P(1, 1), P(2, 2)] }).includes("<name>AB</name>"));
 });
