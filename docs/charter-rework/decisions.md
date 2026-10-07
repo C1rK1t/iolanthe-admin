@@ -140,3 +140,8 @@ Started 2026-10-07. Each line is a decision David made during the brainstorm. Th
 - **State at end of 2026-10-07:** all five plans executed on `feat/itinerary-v2` branches in server, admin and guest.
   Nothing merged to any `main` (admin and guest mains auto-deploy). Open: merge/PR decision, Docker-VM migration
   rehearsal, deploy order server → admin → guest, then plan 5 Task 8 cleanup; specs B and C still to brainstorm.
+- **2026-10-07 PRs opened and rehearsal done.** PRs: server C1rK1t/iolanthe-server#1, admin C1rK1t/iolanthe-admin#5,
+  guest C1rK1t/iolanthe-guest#1. Migration rehearsed on docker-vm in a throwaway container against a copy of the
+  live data volume: 6 charters converted (3 future ones were empty in v1 → 0 stops; csaba 8 stops / 24 activities;
+  larry 3 / 3 but has no dates), all validate, backup and `.v1` copies written, live container untouched. Merge
+  order when ready: server (then `./update.sh` on the vessel) → admin → guest.
