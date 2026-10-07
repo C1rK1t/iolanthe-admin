@@ -131,3 +131,12 @@ Started 2026-10-07. Each line is a decision David made during the brainstorm. Th
   activities gone; subject switch back to library mode shows the unchanged library actions; Back to days re-derives
   the itinerary. Extra fixes: Galley day count now from charter dates (not the v1 normaliser); charter-mode header
   meta; every admin asset tag at `admin-itin-v2`.
+- **2026-10-07 plan 5 (guest) done** on guest `feat/itinerary-v2` (8 commits, 7 tests), verified in the browser against
+  the dev server: nine day pills, stop blocks with activities and notes, v2 module drives `getItineraryDays`. Fixes
+  made during execution: one pin per stop; idle map shows stops only; camera button normalises site media as v1 did.
+  Not verifiable locally: map pins (no vessel position) — check on the boat. **Deploy caution:** `guest.js` has no
+  `?v=` cache-buster and the server sends no cache headers, so a tablet can keep a stale `guest.js` until its service
+  worker updates; plan 5 Task 8 (one release later) is the moment to add a `?v=` to the guest script tags too.
+- **State at end of 2026-10-07:** all five plans executed on `feat/itinerary-v2` branches in server, admin and guest.
+  Nothing merged to any `main` (admin and guest mains auto-deploy). Open: merge/PR decision, Docker-VM migration
+  rehearsal, deploy order server → admin → guest, then plan 5 Task 8 cleanup; specs B and C still to brainstorm.
