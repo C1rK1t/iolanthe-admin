@@ -27,10 +27,18 @@ URL access also requires `?key=<settings.admin.urlKey>`.
 
 - Plain HTML, CSS, JavaScript — no build step, no framework
 - `admin.css` — all styles
-- `admin.js` — all client-side logic (~15k lines, IIFE)
+- `admin.js` — all client-side logic (~13.6k lines, IIFE)
 - `assets/icons/admin/` — favicons and department login icons
-- `routes-core.js` — Route Planner pure logic (also a Node module; tests in `test/`, run `node --test`)
-- `routes.js` / `routes.css` — Charter → Routes panel: state, side panel, header, map, saving and wiring. It uses the
+- `routes-core.js` — Route Planner pure logic (also a Node module)
+- `itinerary-core.js` — itinerary pure logic (also a Node module): normalisation, `deriveDays`, `charterDayCount`,
+  validation and the line-geometry helpers
+- `itinerary.js` / `itinerary.css` — Charter → Itinerary panel: the route-derived day-by-day view (days follow the
+  charter's route, with per-stop activities and times). Styles use the `itinerary-` prefix
+- `node --test` runs the tests in `test/`, which cover `routes-core` and `itinerary-core`
+- `routes.js` / `routes.css` — the Route panel (Charter → Route): state, side panel, header, map, saving and wiring. A
+  "Working on" selector gives it two subjects: the library routes (the route library, saved through
+  `/api/admin/routes/*`) and this charter's route (the route stored in the charter's `itinerary.json`, saved through
+  `/api/admin/charter/<id>/itinerary/save`; read-only once the charter has ended). It uses the
   `window.IolantheAdmin` helpers exposed at the end of `admin.js`, and its styles are scoped under `.routes-panel` /
   `.routes-modal`. Helper files, each created per bind with a `ctx` from routes.js:
   - `routes-ui.js` — `el()`, icons, `fmtPos` and the modal shell (`openModal`)
