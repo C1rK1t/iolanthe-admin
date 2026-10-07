@@ -7769,7 +7769,7 @@
       return renderCharterInfoPanel(charterInfo);
     }
     if (activePanel === "itinerary") {
-      return renderItineraryPanel(itinerary, charterInfo);
+      return window.IolantheItinerary ? window.IolantheItinerary.render() : placeholderCard("Itinerary");
     }
     if (activePanel === "crew") {
       return renderCrewPanel();
@@ -7789,7 +7789,9 @@
       return;
     }
     if (activePanel === "itinerary") {
-      bindItineraryPanel(charterInfo, itinerary, siteLibrary);
+      if (window.IolantheItinerary) {
+        window.IolantheItinerary.bind({ charterId: state.selectedCharter, charter: charterInfo, itinerary, siteLibrary });
+      }
       return;
     }
     if (activePanel === "crew") {
@@ -7838,7 +7840,7 @@
         loadSites()
       ]);
       const charterInfo = normalizeCharterInfo(bundle["charter.json"]);
-      const itinerary = normalizeItineraryForCharter(charterInfo, bundle["itinerary.json"]);
+      const itinerary = bundle["itinerary.json"] || {};
       const guestList = normalizeGuestList(bundle["guest_list.json"]);
       const crewList = normalizeCrewEditorList(bundle["crew_list.json"]);
       const content = charterPanelContent(activePanel, charterInfo, itinerary, guestList, crewList, siteLibrary);
