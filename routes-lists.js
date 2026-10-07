@@ -51,8 +51,8 @@
       const useRoute = el("input", { type: "checkbox", checked: !leg.own, "aria-label": "Use the route speed for this leg" });
       // Unticking starts the leg at the route speed so the time doesn't jump; reticking clears the leg's own speed.
       useRoute.addEventListener("change", () => setLegSpeed(leg, useRoute.checked ? 0 : (global || ctx.defaultSpeed)));
-      const row = el("div", { class: "leg-speed", onclick: (e) => e.stopPropagation() },
-        el("label", {}, useRoute, global ? `Route speed (${global} kn)` : "Route speed"));
+      const row = el("span", { class: "leg-speed", onclick: (e) => e.stopPropagation() },
+        el("label", {}, useRoute, "Route speed"));
       if (leg.own) {
         const input = el("input", { type: "number", min: "0.5", max: String(ctx.maxSpeed), step: "0.5", value: String(leg.own), "aria-label": "Speed for this leg in knots" });
         input.addEventListener("change", () => {
@@ -60,7 +60,7 @@
           if (!(v > 0 && v <= ctx.maxSpeed)) { ctx.A.setStatus(`Enter a speed between 0.5 and ${ctx.maxSpeed} kn.`, "error"); input.value = String(leg.own); return; }
           setLegSpeed(leg, v);
         });
-        row.append(el("label", {}, input, "kn for this leg"));
+        row.append(el("label", {}, input, "kn"));
       }
       return row;
     }
@@ -74,9 +74,10 @@
       box.replaceChildren(
         ...legs.map((l, k) => el("div", { class: `stop-item leg-item${l.own ? " custom" : ""}`, title: "Show this leg on the map", onclick: () => ctx.focusLeg(l) },
           el("div", { class: "title" }, el("span", { class: "stop-num" }, k + 1), `${l.from} → ${l.to}`),
-          el("div", { class: "leg-meta" }, `${l.nm.toFixed(1)} nm`,
-            l.hours !== null ? el("span", {}, " · ", el("b", {}, c.fmtHm(l.hours)), ` at ${l.speed} kn`) : null),
-          legSpeedControl(l))),
+          el("div", { class: "leg-meta" },
+            el("span", {}, `${l.nm.toFixed(1)} nm`,
+              l.hours !== null ? el("span", {}, " · ", el("b", {}, c.fmtHm(l.hours)), ` at ${l.speed} kn`) : null),
+            legSpeedControl(l)))),
         el("div", { class: "leg-total" }, el("span", {}, "Total"), el("span", {}, `${total.toFixed(1)} nm${hours !== null ? ` · ${c.fmtHm(hours)}` : ""}`)));
     }
 
