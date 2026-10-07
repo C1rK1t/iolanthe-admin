@@ -1,5 +1,5 @@
 // Routes panel: places (anchorages and sites) on the map. Used by routes.js; pure logic is in routes-core.js.
-// Task 3 is display only. Editing hooks (openAnchorageModal, deleteAnchorage, moveAnchorage, openSiteModal) arrive in Tasks 4 and 5.
+// Display, plus anchorage editing (modal, move, delete). Site editing (openSiteModal) arrives in Task 5.
 (function () {
   "use strict";
 
@@ -8,8 +8,9 @@
   const ANCHOR_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true">${ANCHOR_PATH}</svg>`;
 
   function create(ctx) {
-    const { A, core } = ctx;
+    const { A, core, el } = ctx;
     let anchorageList = [];
+    let loaded = false; // true once load() has stored the list; until then "no such anchorage" means "not known yet"
     let shownLayers = { sites: true, anchorages: true };
 
     const ll = (p) => [p.latitude, p.longitude];
@@ -22,6 +23,7 @@
     async function load() {
       const data = await A.api("/api/admin/anchorages");
       anchorageList = Array.isArray(data.anchorages) ? data.anchorages : [];
+      loaded = true;
       return anchorageList;
     }
 
@@ -63,7 +65,113 @@
       return hits.length ? hits[0].a : null;
     }
 
-    return { ctx, core, load, anchorages, sites, findAnchorage, findSite, draw, anchorageUnder };
+    // Saves the WHOLE library; the server derives a new anchorage's id from its name. Replaces the local list.
+    async function saveLibrary(next) {
+      const data = await A.api("/api/admin/anchorages/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ anchorages: next })
+      });
+      anchorageList = Array.isArray(data.anchorages) ? data.anchorages : [];
+      loaded = true;
+      return anchorageList;
+    }
+
+    const routeNames = (routes) => routes.map((r) => r.name).join(", ");
+
+    // Create (anchorage null, pos given) or edit an anchorage. Resolves to the saved anchorage, or null on cancel.
+    // opts: { name } pre-fills a new anchorage's name.
+    function openAnchorageModal(anchorage, pos, opts) {
+      return new Promise((resolve) => {
+        const isNew = !anchorage;
+        const src = anchorage || { name: (opts && opts.name) || "", latitude: pos.latitude, longitude: pos.longitude, depth_m: "", notes: "" };
+        const f = {
+          name: el("input", { type: "text", value: src.name, maxlength: "80" }),
+          lat: el("input", { type: "number", step: "0.0001", value: src.latitude.toFixed(5) }),
+          lon: el("input", { type: "number", step: "0.0001", value: src.longitude.toFixed(5) }),
+          depth: el("input", { type: "number", step: "0.5", min: "0", value: src.depth_m === undefined || src.depth_m === null ? "" : src.depth_m }),
+          notes: el("textarea", { maxlength: "500" })
+        };
+        f.notes.value = src.notes || "";
+        const users = anchorage ? core.routesUsingAnchorage(ctx.getRoutes(), anchorage.id) : [];
+        let settled = false;
+        const finish = (value) => { if (!settled) { settled = true; resolve(value); } };
+        let modal = null;
+        const body = el("div", {},
+          el("div", { class: "field" }, el("label", {}, "Name"), f.name),
+          el("div", { class: "grid2" },
+            el("div", { class: "field" }, el("label", {}, "Latitude"), f.lat),
+            el("div", { class: "field" }, el("label", {}, "Longitude"), f.lon)),
+          el("div", { class: "field" }, el("label", {}, "Depth (m, optional)"), f.depth),
+          el("div", { class: "field" }, el("label", {}, "Notes (max 500 characters)"), f.notes),
+          users.length ? el("p", { class: "meta" }, `Used as a stop on: ${routeNames(users)}.`) : null,
+          anchorage ? el("div", {}, el("button", { type: "button", class: "text-btn danger-text", onclick: () => { modal.close(); deleteAnchorage(anchorage); } }, "Delete anchorage")) : null);
+        modal = ctx.openModal({
+          title: isNew ? "New anchorage" : "Edit anchorage",
+          saveTitle: "Save anchorage",
+          body,
+          onClose: () => finish(null),
+          onSave: async () => {
+            const name = f.name.value.trim();
+            const latitude = parseFloat(f.lat.value);
+            const longitude = parseFloat(f.lon.value);
+            if (!name) { A.setStatus("Name is required.", "error"); return false; }
+            if (!(Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180)) { A.setStatus("Enter a valid latitude and longitude.", "error"); return false; }
+            const entry = { ...(anchorage || {}), name, latitude, longitude, notes: f.notes.value.slice(0, 500) };
+            if (f.depth.value === "") delete entry.depth_m; else entry.depth_m = parseFloat(f.depth.value);
+            const next = isNew ? [...anchorageList, entry] : anchorageList.map((a) => (a.id === anchorage.id ? entry : a));
+            try {
+              const saved = await saveLibrary(next);
+              const result = isNew ? saved[saved.length - 1] : saved.find((a) => a.id === anchorage.id);
+              A.setStatus(isNew ? "Anchorage created." : "Anchorage saved.", "ok");
+              finish(result || null);
+              ctx.onChanged();
+              return true;
+            } catch (error) {
+              A.setStatus(error.message, "error");
+              return false;
+            }
+          }
+        });
+      });
+    }
+
+    // Confirms (listing the routes that use it), then saves the library without it. Resolves true when deleted.
+    async function deleteAnchorage(anchorage) {
+      const users = core.routesUsingAnchorage(ctx.getRoutes(), anchorage.id);
+      const message = users.length
+        ? `Delete "${anchorage.name}"? It is a stop on: ${routeNames(users)}. Those stops keep their position and name.`
+        : `Delete "${anchorage.name}"?`;
+      const ok = await A.showAdminConfirm({ title: "Delete anchorage?", message, confirmLabel: "Delete", cancelLabel: "Cancel", tone: "danger" });
+      if (!ok) return false;
+      try {
+        await saveLibrary(anchorageList.filter((a) => a.id !== anchorage.id));
+      } catch (error) {
+        A.setStatus(error.message, "error");
+        return false;
+      }
+      A.setStatus("Anchorage deleted.", "ok");
+      ctx.onChanged();
+      return true;
+    }
+
+    // Saves a new position (after a drag). On failure the marker is redrawn at its old position.
+    async function moveAnchorage(anchorage, latlng) {
+      const moved = { ...anchorage, latitude: latlng.lat, longitude: latlng.lng };
+      try {
+        await saveLibrary(anchorageList.map((a) => (a.id === anchorage.id ? moved : a)));
+      } catch (error) {
+        A.setStatus(error.message, "error");
+        ctx.onChanged();
+        return false;
+      }
+      const users = core.routesUsingAnchorage(ctx.getRoutes(), anchorage.id).length;
+      A.setStatus(`Anchorage moved and saved.${users ? ` Stops on ${users} route${users === 1 ? "" : "s"} stay put and show a warning.` : ""}`, "ok");
+      ctx.onChanged();
+      return true;
+    }
+
+    return { ctx, core, load, isLoaded: () => loaded, anchorages, sites, findAnchorage, findSite, draw, anchorageUnder, openAnchorageModal, deleteAnchorage, moveAnchorage };
   }
 
   window.IolantheRoutesPlaces = Object.freeze({ create });

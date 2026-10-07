@@ -33,6 +33,7 @@
     redo: '<path d="M15 14l5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/>',
     select: '<path d="M5 3l14 7-6 2-2 6z"/>',
     add: '<path d="M4 20l4-1L19 8l-3-3L5 16z"/><path d="M14 7l3 3"/>',
+    anchor: '<circle cx="12" cy="5" r="2"/><path d="M12 7v14M5 13a7 7 0 0 0 14 0M8 10h8"/>',
     erase: '<path d="M7 21h10M5 15l9-9 5 5-9 9H8z"/>',
     join: '<circle cx="5" cy="6" r="2"/><circle cx="5" cy="18" r="2"/><path d="M7 6h3a4 4 0 0 1 4 4v0a4 4 0 0 0 4 4h3M7 18h3a4 4 0 0 0 4-4"/><path d="M18 11l3 3-3 3"/>'
   };
@@ -41,6 +42,7 @@
   const MODES = [
     { id: "select", label: "Select", icon: "select", hint: "Tap a point to inspect it. Drag a point to move it, or drag a faint midpoint to insert one." },
     { id: "add", label: "Add", icon: "add", hint: "Tap the map to add a point at the end." },
+    { id: "anchorage", label: "Anchorage", icon: "anchor", hint: "Tap the map to create an anchorage. Tap one to edit it, or drag it to move it." },
     { id: "delete", label: "Delete", icon: "erase", hint: "Tap a route point to delete it." }
   ];
 
@@ -210,7 +212,7 @@
     const a = places ? places.findAnchorage(p.anchorage_id) : null;
     const moved = places ? core().anchorageMovedM(p, a) : 0;
     const siteChips = places ? (p.site_ids || []).map(places.findSite).filter(Boolean).map((s) => el("span", { class: "chip" }, s.title)) : [];
-    const deleted = places && p.anchorage_id && !a;
+    const deleted = places && places.isLoaded() && p.anchorage_id && !a;
     return el("div", { class: "stop-item", onclick: () => focusPoint(i) },
       el("div", { class: "title" }, el("span", { class: "stop-num" }, n), p.name || "Stop",
         a && a.depth_m ? el("span", { class: "meta", style: "font-weight:400" }, `${a.depth_m} m`) : null),
@@ -430,7 +432,7 @@
       if (c.isStop(p)) {
         stopNo += 1;
         const a = places && p.anchorage_id ? places.findAnchorage(p.anchorage_id) : null;
-        const flagged = places && p.anchorage_id && (!a || c.anchorageMovedM(p, a) > 0);
+        const flagged = places && p.anchorage_id && ((!a && places.isLoaded()) || c.anchorageMovedM(p, a) > 0);
         html = `<div class="mk-stop">${stopNo}</div>${flagged ? '<div class="mk-badge">!</div>' : ""}`;
       }
       else html = `<div class="mk-wp ${p.name ? "named" : ""}"></div>`;
@@ -467,15 +469,27 @@
   }
 
   function onMapClick(e) {
-    if (!work || ui.mode !== "add") return;
+    if (!work) return;
     const pos = { latitude: e.latlng.lat, longitude: e.latlng.lng };
-    editPoints((pts) => [...pts, pos]);
+    if (ui.mode === "anchorage" && places) places.openAnchorageModal(null, pos);
+    else if (ui.mode === "add") editPoints((pts) => [...pts, pos]);
   }
 
-  // Hook points for Tasks 4 and 5 (anchorage editing, site editing, anchorage drag). No-ops in this task.
-  function onAnchorageClick(anchorage) { /* Task 4 */ }
+  function onAnchorageClick(anchorage) {
+    if (!work || !places) return;
+    if (ui.mode === "add") {
+      const result = core().appendStop(work.route.points, anchorage, places.sites());
+      if (result.merged) status(`Already the last stop: ${anchorage.name}`, "");
+      else editPoints(() => result.points);
+    } else if (ui.mode === "select" || ui.mode === "anchorage") {
+      map.closePopup();
+      places.openAnchorageModal(anchorage);
+    }
+  }
   function onSiteClick(site) { /* Task 5 */ }
-  function onAnchorageDragEnd(anchorage, latlng) { /* Task 4 */ }
+  function onAnchorageDragEnd(anchorage, latlng) {
+    if (ui.mode === "anchorage" && places) places.moveAnchorage(anchorage, latlng);
+  }
 
   function onPointClick(i) {
     if (ui.mode === "select") openPointPopup(i);
@@ -520,7 +534,7 @@
   }
 
   // ---------- modals (house rules: green save + red cancel top right, outside click and Escape cancel) ----------
-  function openModal({ title, body, onSave, saveTitle, wide }) {
+  function openModal({ title, body, onSave, saveTitle, wide, onClose }) {
     if (closeModal) closeModal();
     const backdrop = el("div", { class: "routes-modal modal-backdrop" });
     let busy = false;
@@ -528,6 +542,7 @@
       backdrop.remove();
       document.removeEventListener("keydown", onKey);
       if (closeModal === close) closeModal = null;
+      if (onClose) onClose();
     };
     const save = async () => {
       if (busy) return;
