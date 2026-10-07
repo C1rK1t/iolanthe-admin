@@ -122,7 +122,7 @@
 
   // What counts as "unsaved changes": the editable fields only.
   function routeSnapshot(route) {
-    const keys = ["latitude", "longitude", "name", "anchorage_id", "site_id", "site_ids", "leg_speed_kn", "stop"];
+    const keys = ["latitude", "longitude", "name", "anchorage_id", "site_id", "site_ids", "leg_speed_kn", "stop", "id", "arrive", "depart", "nights", "depart_time"];
     const points = (route.points || []).map((p) => {
       const out = {};
       keys.forEach((k) => { if (p[k] !== undefined) out[k] = p[k]; });
@@ -164,9 +164,12 @@
     if (sameStop(points[index - 1], anchorage) || sameStop(points[index + 1], anchorage)) {
       return { points: removeAt(points, index), merged: true };
     }
-    const old = points[index];
+    const old = points[index] || {};
     const stop = stopAt(anchorage, sites);
-    const next = old && old.leg_speed_kn ? { ...stop, leg_speed_kn: old.leg_speed_kn } : stop;
+    // Keep what belongs to this stop in a charter itinerary (id, days) and its leg speed; the position comes from the anchorage.
+    const carried = {};
+    ["leg_speed_kn", "id", "arrive", "depart", "nights", "depart_time"].forEach((key) => { if (old[key] !== undefined) carried[key] = old[key]; });
+    const next = { ...stop, ...carried };
     return { points: replaceAt(points, index, next), merged: false };
   }
 
@@ -207,7 +210,7 @@
     if (!point) {
       return points;
     }
-    const { anchorage_id: _a, stop: _s, site_ids: _ids, leg_speed_kn: speed, ...rest } = point;
+    const { anchorage_id: _a, stop: _s, site_ids: _ids, id: _id, arrive: _arr, depart: _dep, nights: _n, depart_time: _dt, leg_speed_kn: speed, ...rest } = point;
     return replaceAt(points, index, index === 0 && speed ? { ...rest, leg_speed_kn: speed } : rest);
   }
 
