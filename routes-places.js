@@ -1,5 +1,5 @@
 // Routes panel: places (anchorages and sites) on the map. Used by routes.js; pure logic is in routes-core.js.
-// Display, plus anchorage editing (modal, move, delete). Site editing (openSiteModal) arrives in Task 5.
+// Display, plus anchorage editing (modal, move, delete) and the Site Editor bridge (openSiteModal).
 (function () {
   "use strict";
 
@@ -65,16 +65,23 @@
       return hits.length ? hits[0].a : null;
     }
 
-    // Saves the WHOLE library; the server derives a new anchorage's id from its name. Replaces the local list.
-    async function saveLibrary(next) {
-      const data = await A.api("/api/admin/anchorages/save", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ anchorages: next })
+    // Saves run one at a time, each building its library from the latest list, so overlapping saves cannot revert each other.
+    let chain = Promise.resolve();
+    const enqueue = (fn) => (chain = chain.then(fn, fn));
+
+    // Saves the WHOLE library: buildNext(currentList) returns the new list. The server derives a new anchorage's id
+    // from its name. Replaces the local list; rejects to the caller on failure.
+    function saveLibrary(buildNext) {
+      return enqueue(async () => {
+        const data = await A.api("/api/admin/anchorages/save", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ anchorages: buildNext(anchorageList) })
+        });
+        anchorageList = Array.isArray(data.anchorages) ? data.anchorages : [];
+        loaded = true;
+        return anchorageList;
       });
-      anchorageList = Array.isArray(data.anchorages) ? data.anchorages : [];
-      loaded = true;
-      return anchorageList;
     }
 
     const routeNames = (routes) => routes.map((r) => r.name).join(", ");
@@ -119,10 +126,15 @@
             if (!(Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180)) { A.setStatus("Enter a valid latitude and longitude.", "error"); return false; }
             const entry = { ...(anchorage || {}), name, latitude, longitude, notes: f.notes.value.slice(0, 500) };
             if (f.depth.value === "") delete entry.depth_m; else entry.depth_m = parseFloat(f.depth.value);
-            const next = isNew ? [...anchorageList, entry] : anchorageList.map((a) => (a.id === anchorage.id ? entry : a));
+            let beforeIds = new Set();
             try {
-              const saved = await saveLibrary(next);
-              const result = isNew ? saved[saved.length - 1] : saved.find((a) => a.id === anchorage.id);
+              const saved = await saveLibrary((list) => {
+                beforeIds = new Set(list.map((a) => a.id));
+                return isNew ? [...list, entry] : list.map((a) => (a.id === anchorage.id ? entry : a));
+              });
+              const result = isNew
+                ? saved.find((a) => !beforeIds.has(a.id)) || saved.find((a) => a.name === name)
+                : saved.find((a) => a.id === anchorage.id);
               A.setStatus(isNew ? "Anchorage created." : "Anchorage saved.", "ok");
               finish(result || null);
               ctx.onChanged();
@@ -145,7 +157,7 @@
       const ok = await A.showAdminConfirm({ title: "Delete anchorage?", message, confirmLabel: "Delete", cancelLabel: "Cancel", tone: "danger" });
       if (!ok) return false;
       try {
-        await saveLibrary(anchorageList.filter((a) => a.id !== anchorage.id));
+        await saveLibrary((list) => list.filter((a) => a.id !== anchorage.id));
       } catch (error) {
         A.setStatus(error.message, "error");
         return false;
@@ -157,9 +169,8 @@
 
     // Saves a new position (after a drag). On failure the marker is redrawn at its old position.
     async function moveAnchorage(anchorage, latlng) {
-      const moved = { ...anchorage, latitude: latlng.lat, longitude: latlng.lng };
       try {
-        await saveLibrary(anchorageList.map((a) => (a.id === anchorage.id ? moved : a)));
+        await saveLibrary((list) => list.map((a) => (a.id === anchorage.id ? { ...a, latitude: latlng.lat, longitude: latlng.lng } : a)));
       } catch (error) {
         A.setStatus(error.message, "error");
         ctx.onChanged();
@@ -171,7 +182,40 @@
       return true;
     }
 
-    return { ctx, core, load, isLoaded: () => loaded, anchorages, sites, findAnchorage, findSite, draw, anchorageUnder, openAnchorageModal, deleteAnchorage, moveAnchorage };
+    // Opens the admin's own Site Editor dialog (#dialog-modal). Resolves to the saved site, or null when the dialog
+    // closes without saving. opts: { name } pre-fills the title of a new site; pos gives its position.
+    function openSiteModal(site, pos, opts) {
+      return new Promise((resolve) => {
+        const siteLibrary = ctx.getSiteLibrary();
+        if (!siteLibrary) { resolve(null); return; }
+        let observer = null;
+        let settled = false;
+        const finish = (value) => {
+          if (settled) return;
+          settled = true;
+          if (observer) observer.disconnect();
+          resolve(value);
+          if (value) ctx.onChanged();
+        };
+        const defaults = site ? undefined : { title: (opts && opts.name) || "", latitude: pos.latitude, longitude: pos.longitude, tags: [], images: [], media: [] };
+        A.openSiteEditorModal(siteLibrary, site, async (saved) => {
+          const next = A.normalizeSiteLibrary({
+            ...siteLibrary,
+            sites: site ? siteLibrary.sites.map((s) => (s.id === site.id ? saved : s)) : [...siteLibrary.sites, saved]
+          });
+          await A.saveSitesLibrary(next, site ? "Site saved." : "Site created.");
+          // saveSitesLibrary updates next.sites; copy the result back so the panel's library object stays current
+          siteLibrary.sites = next.sites;
+          finish(site ? next.sites.find((s) => s.id === site.id) || saved : next.sites[next.sites.length - 1] || saved);
+        }, defaults);
+        const dialog = document.getElementById("dialog-modal");
+        if (!dialog) { finish(null); return; }
+        observer = new MutationObserver(() => { if (dialog.classList.contains("hidden")) finish(null); });
+        observer.observe(dialog, { attributes: true, attributeFilter: ["class"] });
+      });
+    }
+
+    return { ctx, core, load, isLoaded: () => loaded, anchorages, sites, findAnchorage, findSite, draw, anchorageUnder, openAnchorageModal, deleteAnchorage, moveAnchorage, openSiteModal };
   }
 
   window.IolantheRoutesPlaces = Object.freeze({ create });

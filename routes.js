@@ -7,6 +7,9 @@
   const core = () => window.IolantheRoutesCore;
   const DEFAULT_SPEED_KN = 8;
   const MAX_SPEED_KN = 30;
+  const NEARBY_ANCHORAGE_NM = 2; // "Make stop at" offers anchorages within this distance of a waypoint
+  const MAX_NEARBY_BUTTONS = 3;
+  const SITES_NEAR_NM = 5;       // sites within this distance of a stop are grouped first in "Sites served"
   const SPEED_KEY = "routePlanner.speed"; // last route speed used in this browser; seeds new routes only
   let panel = null;      // the #routes-panel element after bind()
   let routes = [];       // library from the server
@@ -445,6 +448,8 @@
       });
       m.on("dragend", (e) => {
         const q = e.target.getLatLng();
+        const anchorage = places ? places.anchorageUnder(map, q) : null;
+        if (anchorage) { makeStopAtAnchorage(i, anchorage, { snapped: true }); return; }
         editPoints((arr) => c.replaceAt(arr, i, { ...arr[i], latitude: q.lat, longitude: q.lng }));
       });
       m.addTo(groups.points);
@@ -486,7 +491,25 @@
       places.openAnchorageModal(anchorage);
     }
   }
-  function onSiteClick(site) { /* Task 5 */ }
+  function onSiteClick(site) {
+    if (!work || !places) return;
+    if (ui.mode === "add") {
+      editPoints((pts) => [...pts, { latitude: site.latitude, longitude: site.longitude, site_id: site.id, name: site.title }]);
+      status(`Added waypoint at ${site.title}`, "");
+    } else if (ui.mode === "select") {
+      map.closePopup();
+      places.openSiteModal(site);
+    }
+  }
+
+  // Turns point i into a stop at the anchorage (or merges it into the adjacent stop there, spec Q3).
+  // Reopens the point's popup afterwards unless the point was merged away or the change came from a drag.
+  function makeStopAtAnchorage(i, anchorage, opts) {
+    const result = core().makeStopAt(work.route.points, i, anchorage, places.sites());
+    map.closePopup();
+    editPoints(() => result.points, result.merged || (opts && opts.snapped) ? undefined : { popup: i });
+    status(result.merged ? `Merged into the existing stop at ${anchorage.name}` : `${anchorage.name} is now a stop`, "");
+  }
   function onAnchorageDragEnd(anchorage, latlng) {
     if (ui.mode === "anchorage" && places) places.moveAnchorage(anchorage, latlng);
   }
@@ -525,12 +548,72 @@
     };
     nameInput.addEventListener("change", commitName);
     nameInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); commitName(); nameInput.blur(); } });
-    return el("div", { class: "pop" },
+    const stop = c.isStop(p);
+    const anchorage = stop && places ? places.findAnchorage(p.anchorage_id) : null;
+    const moved = places ? c.anchorageMovedM(p, anchorage) : 0;
+    const nearby = !stop && places ? c.nearbyAnchorages(places.anchorages(), p, NEARBY_ANCHORAGE_NM).slice(0, MAX_NEARBY_BUTTONS) : [];
+    const sub = `${fmtPos(p)}${anchorage && anchorage.depth_m ? ` · ${anchorage.depth_m} m` : ""}`;
+    const box = el("div", { class: "pop" },
       heading,
-      el("div", { class: "sub" }, fmtPos(p)),
-      el("div", { class: "field" }, el("label", {}, "Name"), nameInput),
-      el("div", { class: "actions" },
-        el("button", { type: "button", class: "text-btn danger-text", onclick: () => { map.closePopup(); editPoints((pts) => c.removeAt(pts, i)); } }, "Delete")));
+      el("div", { class: "sub" }, sub),
+      nearby.length ? el("div", { class: "nearby" },
+        nearby.map((n) => el("button", { type: "button", class: "text-btn", onclick: () => makeStopAtAnchorage(i, n.anchorage) },
+          `Make stop at ${n.anchorage.name}`, el("span", { class: "d" }, `${n.nm.toFixed(1)} nm`)))) : null,
+      moved ? el("div", { class: "banner warn", style: "margin-bottom:8px" }, `The anchorage has moved ${Math.round(moved)} m since this stop was placed. `,
+        el("button", { type: "button", class: "link-btn", onclick: () => editPoints((pts) => c.replaceAt(pts, i, { ...pts[i], latitude: anchorage.latitude, longitude: anchorage.longitude }), { popup: i }) }, "Move stop to anchorage")) : null,
+      el("div", { class: "field" }, el("label", {}, "Name"), nameInput));
+    if (stop && places) box.append(sitesServedPicker(i));
+    box.append(el("div", { class: "actions" },
+      !stop && places ? el("button", { type: "button", class: "text-btn secondary", onclick: () => makeAnchorageFromPoint(i) }, "Make anchorage") : null,
+      places ? el("button", { type: "button", class: "text-btn secondary", onclick: () => makeSiteFromPoint(i) }, "Make site") : null,
+      el("button", { type: "button", class: "text-btn danger-text", onclick: () => { map.closePopup(); editPoints((pts) => c.removeAt(pts, i)); } }, "Delete")));
+    return box;
+  }
+
+  async function makeAnchorageFromPoint(i) {
+    const p = work.route.points[i];
+    map.closePopup();
+    const saved = await places.openAnchorageModal(null, p, { name: p.name });
+    if (saved && work.route.points[i]) makeStopAtAnchorage(i, saved);
+  }
+
+  async function makeSiteFromPoint(i) {
+    const p = work.route.points[i];
+    map.closePopup();
+    const saved = await places.openSiteModal(null, p, { name: p.name });
+    if (!saved || !work.route.points[i]) return;
+    editPoints((pts) => {
+      const current = pts[i];
+      const next = { ...current, name: current.name || saved.title };
+      if (!core().isStop(current)) next.site_id = saved.id;
+      return core().replaceAt(pts, i, next);
+    }, { popup: i });
+  }
+
+  // Tick list of sites a stop serves: those within SITES_NEAR_NM first, then the rest. Each tick re-opens the popup.
+  function sitesServedPicker(i) {
+    const c = core();
+    const p = work.route.points[i];
+    const chosen = new Set(p.site_ids || []);
+    const sorted = places.sites().map((s) => ({ s, d: c.distNm(p, s) })).sort((x, y) => x.d - y.d);
+    const row = ({ s, d }) => el("label", { class: d <= SITES_NEAR_NM ? "near" : "" },
+      el("input", {
+        type: "checkbox", checked: chosen.has(s.id),
+        onchange: (e) => {
+          const ticked = e.target.checked;
+          editPoints((pts) => {
+            const current = pts[i];
+            const ids = ticked ? [...(current.site_ids || []).filter((x) => x !== s.id), s.id] : (current.site_ids || []).filter((x) => x !== s.id);
+            return c.replaceAt(pts, i, { ...current, site_ids: ids });
+          }, { popup: i });
+        }
+      }), s.title || s.id, el("span", { class: "d" }, `${d.toFixed(1)} nm`));
+    const near = sorted.filter((x) => x.d <= SITES_NEAR_NM);
+    const far = sorted.filter((x) => x.d > SITES_NEAR_NM);
+    return el("div", { class: "field" }, el("label", {}, "Sites served"),
+      el("div", { class: "site-pick" },
+        near.length ? el("div", { class: "grp" }, `Within ${SITES_NEAR_NM} nm`) : null, near.map(row),
+        far.length ? el("div", { class: "grp" }, "Further away") : null, far.map(row)));
   }
 
   // ---------- modals (house rules: green save + red cancel top right, outside click and Escape cancel) ----------
@@ -840,7 +923,7 @@
     keyHandler = (e) => {
       if (!panel || !panel.isConnected || !work) return;
       if (/^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || "")) return;
-      if (document.querySelector(".routes-modal, .admin-decision-backdrop")) return;
+      if (document.querySelector(".routes-modal, .admin-decision-backdrop, #dialog-modal:not(.hidden)")) return;
       const key = (e.key || "").toLowerCase();
       if ((e.ctrlKey || e.metaKey) && key === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
       else if ((e.ctrlKey || e.metaKey) && (key === "y" || (key === "z" && e.shiftKey))) { e.preventDefault(); redo(); }
