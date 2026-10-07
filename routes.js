@@ -1,5 +1,7 @@
 // Routes panel (Charter → Routes). Uses window.IolantheAdmin (admin.js) and window.IolantheRoutesCore.
-// Ported from docs/route-planner/planner-mockup.html. Saving and modals are added in a later task.
+// Ported from docs/route-planner/planner-mockup.html. Split into: routes-ui.js (el, icons, modal shell),
+// routes-popup.js (point popup), routes-lists.js (Stops / Legs lists), routes-join.js (Add another route),
+// routes-places.js (anchorages, sites).
 (function () {
   "use strict";
 
@@ -7,9 +9,6 @@
   const core = () => window.IolantheRoutesCore;
   const DEFAULT_SPEED_KN = 8;
   const MAX_SPEED_KN = 30;
-  const NEARBY_ANCHORAGE_NM = 2; // "Make stop at" offers anchorages within this distance of a waypoint
-  const MAX_NEARBY_BUTTONS = 3;
-  const SITES_NEAR_NM = 5;       // sites within this distance of a stop are grouped first in "Sites served"
   const SPEED_KEY = "routePlanner.speed"; // last route speed used in this browser; seeds new routes only
   let panel = null;      // the #routes-panel element after bind()
   let routes = [];       // library from the server
@@ -25,22 +24,11 @@
   let keyHandler = null; // document keydown listener (undo/redo), removed on the next bind
   const ui = { mode: "select", layers: { sites: true, anchorages: true } };
   let places = null;     // IolantheRoutesPlaces instance, created fresh by each bind()
+  let popup = null;      // IolantheRoutesPopup instance, created fresh by each bind()
+  let lists = null;      // IolantheRoutesLists instance, created fresh by each bind()
+  let join = null;       // IolantheRoutesJoin instance, created fresh by each bind()
 
-  const ICONS = {
-    check: '<path d="M5 12l5 5 9-10"/>',
-    cancel: '<path d="M6 6l12 12M18 6L6 18"/>',
-    plus: '<path d="M12 5v14M5 12h14"/>',
-    saveAs: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
-    trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
-    undo: '<path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/>',
-    redo: '<path d="M15 14l5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/>',
-    select: '<path d="M5 3l14 7-6 2-2 6z"/>',
-    add: '<path d="M4 20l4-1L19 8l-3-3L5 16z"/><path d="M14 7l3 3"/>',
-    anchor: '<circle cx="12" cy="5" r="2"/><path d="M12 7v14M5 13a7 7 0 0 0 14 0M8 10h8"/>',
-    erase: '<path d="M7 21h10M5 15l9-9 5 5-9 9H8z"/>',
-    join: '<circle cx="5" cy="6" r="2"/><circle cx="5" cy="18" r="2"/><path d="M7 6h3a4 4 0 0 1 4 4v0a4 4 0 0 0 4 4h3M7 18h3a4 4 0 0 0 4-4"/><path d="M18 11l3 3-3 3"/>'
-  };
-  const svg = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
+  const { el, svg, openModal, closeModal } = window.IolantheRoutesUi;
 
   const MODES = [
     { id: "select", label: "Select", icon: "select", hint: "Tap a point to inspect it. Drag a point to move it, or drag a faint midpoint to insert one." },
@@ -50,25 +38,12 @@
   ];
 
   let saving = false;    // a save request is in flight
-  let closeModal = null; // closes the open routes modal, if any
   const JSON_HEADERS = { "Content-Type": "application/json" };
   const post = (path, body) => A().api(path, { method: "POST", headers: JSON_HEADERS, body: JSON.stringify(body) });
 
   // ---------- helpers ----------
-  function el(tag, attrs, ...children) {
-    const node = document.createElement(tag);
-    Object.entries(attrs || {}).forEach(([k, v]) => {
-      if (v === null || v === undefined || v === false) return;
-      if (k === "class") node.className = v;
-      else if (k.startsWith("on")) node.addEventListener(k.slice(2), v);
-      else node.setAttribute(k, v === true ? "" : v);
-    });
-    children.flat().forEach((c) => { if (c !== null && c !== undefined && c !== false) node.append(c.nodeType ? c : String(c)); });
-    return node;
-  }
   const $ = (id) => panel.querySelector(`#routes-${id}`);
   const fmtDate = (iso) => (iso || "").slice(0, 10);
-  const fmtPos = (p) => `${p.latitude.toFixed(4)}, ${p.longitude.toFixed(4)}`;
   const speedKn = () => (work && work.route.speed_kn) || 0;
 
   function loadSpeed() {
@@ -161,6 +136,14 @@
     work.route = { ...work.route, points: fn(work.route.points) };
     renderAll(opts);
   }
+  // Like editPoints, but leaves the map (and an open popup) alone. Used for name edits typed in the point popup.
+  function editPointsQuiet(fn) {
+    history.undo.push(work.route.points);
+    history.redo = [];
+    work.route = { ...work.route, points: fn(work.route.points) };
+    renderActions();
+    renderStats();
+  }
   function undo() {
     if (!history.undo.length) return;
     history.redo.push(work.route.points);
@@ -190,17 +173,9 @@
     $("stats").replaceChildren(
       el("div", { class: "stat" }, el("b", {}, core().routeNm(pts).toFixed(1)), el("span", {}, "nm total")),
       el("div", { class: "stat" }, el("b", {}, stopCount), el("span", {}, "stops")),
-      timeStat(pts));
-
-    let n = 0;
-    const stops = pts.map((p, i) => ({ p, i })).filter(({ p }) => core().isStop(p)).map(({ p, i }) => {
-      n += 1;
-      return stopItem(p, i, n);
-    });
-    $("count-stops").textContent = stops.length || "";
-    $("stops").replaceChildren(...(stops.length ? stops : [el("div", { class: "empty" }, "No stops yet. In Add mode, tap an anchorage to add one.")]));
-
-    renderLegs();
+      lists.timeStat());
+    lists.renderStops($("stops"), $("count-stops"));
+    lists.renderLegs($("legs"), $("count-legs"));
 
     const r = work.route;
     const src = r.source || {};
@@ -208,71 +183,6 @@
     $("meta").textContent = r.id
       ? `Revision ${r.revision} · updated ${fmtDate(r.updated_at)} · source: ${srcText}${isDirty() ? " · unsaved changes" : ""}`
       : (isDirty() ? "Unsaved new route" : "");
-  }
-
-  // A stop row with anchorage depth, moved/deleted warnings and site chips (ids that no longer exist are dropped quietly).
-  function stopItem(p, i, n) {
-    const a = places ? places.findAnchorage(p.anchorage_id) : null;
-    const moved = places ? core().anchorageMovedM(p, a) : 0;
-    const siteChips = places ? (p.site_ids || []).map(places.findSite).filter(Boolean).map((s) => el("span", { class: "chip" }, s.title)) : [];
-    const deleted = places && places.isLoaded() && p.anchorage_id && !a;
-    return el("div", { class: "stop-item", onclick: () => focusPoint(i) },
-      el("div", { class: "title" }, el("span", { class: "stop-num" }, n), p.name || "Stop",
-        a && a.depth_m ? el("span", { class: "meta", style: "font-weight:400" }, `${a.depth_m} m`) : null),
-      moved ? el("div", { class: "warn-text" }, `⚠ Anchorage moved ${Math.round(moved)} m since placed`) : null,
-      deleted ? el("div", { class: "warn-text" }, "⚠ Anchorage deleted. The stop keeps its position.") : null,
-      siteChips.length ? el("div", { class: "chips" }, siteChips) : el("div", { class: "empty", style: "margin-top:4px" }, "No sites linked"));
-  }
-
-  function currentLegs() {
-    const pts = work.route.points;
-    return pts.length < 2 ? [] : core().stopLegs(pts, speedKn());
-  }
-
-  function timeStat(pts) {
-    const legs = pts.length < 2 ? [] : core().stopLegs(pts, speedKn());
-    const hours = core().totalHours(legs);
-    const anyOwn = legs.some((l) => l.own);
-    const label = hours === null ? "set a speed" : (anyOwn ? "h:mm underway" : `h:mm at ${speedKn()} kn`);
-    return el("div", { class: "stat" }, el("b", {}, hours === null ? "—" : core().fmtHm(hours)), el("span", {}, label));
-  }
-
-  function setLegSpeed(leg, value) {
-    editPoints((pts) => core().setLegSpeed(pts, leg.fromIndex, value));
-  }
-
-  function legSpeedControl(leg) {
-    const global = speedKn();
-    const useRoute = el("input", { type: "checkbox", checked: !leg.own, "aria-label": "Use the route speed for this leg" });
-    // Unticking starts the leg at the route speed so the time doesn't jump; reticking clears the leg's own speed.
-    useRoute.addEventListener("change", () => setLegSpeed(leg, useRoute.checked ? 0 : (global || DEFAULT_SPEED_KN)));
-    const row = el("div", { class: "leg-speed", onclick: (e) => e.stopPropagation() },
-      el("label", {}, useRoute, global ? `Route speed (${global} kn)` : "Route speed"));
-    if (leg.own) {
-      const input = el("input", { type: "number", min: "0.5", max: String(MAX_SPEED_KN), step: "0.5", value: String(leg.own), "aria-label": "Speed for this leg in knots" });
-      input.addEventListener("change", () => {
-        const v = parseFloat(input.value);
-        if (!(v > 0 && v <= MAX_SPEED_KN)) { A().setStatus(`Enter a speed between 0.5 and ${MAX_SPEED_KN} kn.`, "error"); input.value = String(leg.own); return; }
-        setLegSpeed(leg, v);
-      });
-      row.append(el("label", {}, input, "kn for this leg"));
-    }
-    return row;
-  }
-
-  function renderLegs() {
-    const legs = currentLegs();
-    $("count-legs").textContent = legs.length || "";
-    if (!legs.length) { $("legs").replaceChildren(el("div", { class: "empty" }, "Add at least two points to see legs.")); return; }
-    const total = legs.reduce((sum, l) => sum + l.nm, 0);
-    const hours = core().totalHours(legs);
-    $("legs").replaceChildren(
-      ...legs.map((l, k) => el("div", { class: `stop-item leg-item${l.own ? " custom" : ""}`, title: "Show this leg on the map", onclick: () => focusLeg(l) },
-        el("div", { class: "title" }, el("span", { class: "stop-num" }, k + 1), `${l.from} → ${l.to}`),
-        el("div", { class: "leg-meta" }, `${l.nm.toFixed(1)} nm`,
-          l.hours !== null ? el("span", {}, " · ", el("b", {}, core().fmtHm(l.hours)), ` at ${l.speed} kn`) : null),
-        legSpeedControl(l))),
-      el("div", { class: "leg-total" }, el("span", {}, "Total"), el("span", {}, `${total.toFixed(1)} nm${hours !== null ? ` · ${core().fmtHm(hours)}` : ""}`)));
   }
 
   function showTab(name) {
@@ -315,7 +225,7 @@
       el("span", { class: "icon-sep" }),
       b("plus", "New route", newRoute),
       b("saveAs", "Save As", () => saveAs(false), "", work.route.points.length < 2),
-      b("join", "Add another route to this one", openJoin),
+      b("join", "Add another route to this one", () => join.openJoin()),
       b("trash", "Delete route", deleteRoute, "", !hasId));
   }
 
@@ -525,135 +435,7 @@
     const m = pointMarkers[i];
     if (!m) return;
     m.unbindPopup();
-    m.bindPopup(pointPopup(i), { minWidth: 250, maxWidth: 300, autoPanPadding: [20, 60] }).openPopup();
-  }
-
-  function pointPopup(i) {
-    const p = work.route.points[i];
-    const c = core();
-    const stopIndex = work.route.points.slice(0, i + 1).filter(c.isStop).length;
-    const nameInput = el("input", { type: "text", value: p.name || "", placeholder: "Optional label" });
-    const heading = el("h3", {});
-    const headingText = (q) => (c.isStop(q) ? `Stop ${stopIndex} · ${q.name || "Stop"}` : (q.name ? `Waypoint · ${q.name}` : "Waypoint"));
-    heading.textContent = headingText(p);
-    // Commit on Enter or blur without rebuilding the map, so the popup (and a Delete click) is not disturbed.
-    const commitName = () => {
-      const name = nameInput.value.trim();
-      const current = work.route.points[i];
-      if (!current || name === (current.name || "")) return;
-      history.undo.push(work.route.points);
-      history.redo = [];
-      work.route = { ...work.route, points: c.replaceAt(work.route.points, i, { ...current, name: name || undefined }) };
-      heading.textContent = headingText(work.route.points[i]);
-      renderActions();
-      renderStats();
-    };
-    nameInput.addEventListener("change", commitName);
-    nameInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); commitName(); nameInput.blur(); } });
-    const stop = c.isStop(p);
-    const anchorage = stop && places ? places.findAnchorage(p.anchorage_id) : null;
-    const moved = places ? c.anchorageMovedM(p, anchorage) : 0;
-    const nearby = !stop && places ? c.nearbyAnchorages(places.anchorages(), p, NEARBY_ANCHORAGE_NM).slice(0, MAX_NEARBY_BUTTONS) : [];
-    const sub = `${fmtPos(p)}${anchorage && anchorage.depth_m ? ` · ${anchorage.depth_m} m` : ""}`;
-    const box = el("div", { class: "pop" },
-      heading,
-      el("div", { class: "sub" }, sub),
-      nearby.length ? el("div", { class: "nearby" },
-        nearby.map((n) => el("button", { type: "button", class: "text-btn", onclick: () => makeStopAtAnchorage(i, n.anchorage) },
-          `Make stop at ${n.anchorage.name}`, el("span", { class: "d" }, `${n.nm.toFixed(1)} nm`)))) : null,
-      moved ? el("div", { class: "banner warn", style: "margin-bottom:8px" }, `The anchorage has moved ${Math.round(moved)} m since this stop was placed. `,
-        el("button", { type: "button", class: "link-btn", onclick: () => editPoints((pts) => c.replaceAt(pts, i, { ...pts[i], latitude: anchorage.latitude, longitude: anchorage.longitude }), { popup: i }) }, "Move stop to anchorage")) : null,
-      el("div", { class: "field" }, el("label", {}, "Name"), nameInput));
-    if (stop && places) box.append(sitesServedPicker(i));
-    box.append(el("div", { class: "actions" },
-      !stop && places ? el("button", { type: "button", class: "text-btn secondary", onclick: () => makeAnchorageFromPoint(i) }, "Make anchorage") : null,
-      places ? el("button", { type: "button", class: "text-btn secondary", onclick: () => makeSiteFromPoint(i) }, "Make site") : null,
-      el("button", { type: "button", class: "text-btn danger-text", onclick: () => { map.closePopup(); editPoints((pts) => c.removeAt(pts, i)); } }, "Delete")));
-    return box;
-  }
-
-  async function makeAnchorageFromPoint(i) {
-    const p = work.route.points[i];
-    map.closePopup();
-    const saved = await places.openAnchorageModal(null, p, { name: p.name });
-    if (saved && work.route.points[i]) makeStopAtAnchorage(i, saved);
-  }
-
-  async function makeSiteFromPoint(i) {
-    const p = work.route.points[i];
-    map.closePopup();
-    const saved = await places.openSiteModal(null, p, { name: p.name });
-    if (!saved || !work.route.points[i]) return;
-    editPoints((pts) => {
-      const current = pts[i];
-      const next = { ...current, name: current.name || saved.title };
-      if (!core().isStop(current)) next.site_id = saved.id;
-      return core().replaceAt(pts, i, next);
-    }, { popup: i });
-  }
-
-  // Tick list of sites a stop serves: those within SITES_NEAR_NM first, then the rest. Each tick re-opens the popup.
-  function sitesServedPicker(i) {
-    const c = core();
-    const p = work.route.points[i];
-    const chosen = new Set(p.site_ids || []);
-    const sorted = places.sites().map((s) => ({ s, d: c.distNm(p, s) })).sort((x, y) => x.d - y.d);
-    const row = ({ s, d }) => el("label", { class: d <= SITES_NEAR_NM ? "near" : "" },
-      el("input", {
-        type: "checkbox", checked: chosen.has(s.id),
-        onchange: (e) => {
-          const ticked = e.target.checked;
-          editPoints((pts) => {
-            const current = pts[i];
-            const ids = ticked ? [...(current.site_ids || []).filter((x) => x !== s.id), s.id] : (current.site_ids || []).filter((x) => x !== s.id);
-            return c.replaceAt(pts, i, { ...current, site_ids: ids });
-          }, { popup: i });
-        }
-      }), s.title || s.id, el("span", { class: "d" }, `${d.toFixed(1)} nm`));
-    const near = sorted.filter((x) => x.d <= SITES_NEAR_NM);
-    const far = sorted.filter((x) => x.d > SITES_NEAR_NM);
-    return el("div", { class: "field" }, el("label", {}, "Sites served"),
-      el("div", { class: "site-pick" },
-        near.length ? el("div", { class: "grp" }, `Within ${SITES_NEAR_NM} nm`) : null, near.map(row),
-        far.length ? el("div", { class: "grp" }, "Further away") : null, far.map(row)));
-  }
-
-  // ---------- modals (house rules: green save + red cancel top right, outside click and Escape cancel) ----------
-  function openModal({ title, body, onSave, saveTitle, wide, onClose }) {
-    if (closeModal) closeModal();
-    const backdrop = el("div", { class: "routes-modal modal-backdrop" });
-    let busy = false;
-    const close = () => {
-      backdrop.remove();
-      document.removeEventListener("keydown", onKey);
-      if (closeModal === close) closeModal = null;
-      if (onClose) onClose();
-    };
-    const save = async () => {
-      if (busy) return;
-      busy = true;
-      try { if ((await onSave()) !== false) close(); } finally { busy = false; }
-    };
-    const onKey = (e) => { if (e.key === "Escape") close(); };
-    const iconBtn = (icon, label, cls, onclick) => {
-      const btn = el("button", { type: "button", class: `icon-btn ${cls}`, title: label, "aria-label": label, onclick });
-      btn.innerHTML = svg(icon);
-      return btn;
-    };
-    const card = el("div", { class: "modal-card", role: "dialog", "aria-modal": "true", style: wide ? "width:min(640px,100%)" : null },
-      el("div", { class: "card-header" },
-        el("h2", {}, title),
-        el("div", { class: "icon-row" },
-          onSave ? iconBtn("check", saveTitle || "Save", "success", save) : null,
-          iconBtn("cancel", "Cancel", "danger", close))),
-      el("div", { class: "modal-body" }, body));
-    backdrop.append(card);
-    backdrop.addEventListener("mousedown", (e) => { if (e.target === backdrop) close(); });
-    document.addEventListener("keydown", onKey);
-    document.body.append(backdrop);
-    closeModal = close;
-    setTimeout(() => { const f = card.querySelector(".modal-body input, .modal-body select, .modal-body textarea"); if (f) f.focus(); }, 0);
-    return { close, card };
+    m.bindPopup(popup.pointPopup(i), { minWidth: 250, maxWidth: 300, autoPanPadding: [20, 60] }).openPopup();
   }
 
   // ---------- saving against the server ----------
@@ -822,48 +604,6 @@
     if (ok) setWork(routes.find((r) => r.id === work.route.id) || blankRoute());
   }
 
-  // ---------- add another route to this one ----------
-  function openJoin() {
-    if (!work) return;
-    const others = routes.filter((r) => r.id !== work.route.id);
-    if (!others.length) { status("There are no other routes to add.", ""); return; }
-    const c = core();
-    const sel = el("select", {}, others.map((r) => el("option", { value: r.id }, `${r.name} · ${c.routeNm(r.points).toFixed(0)} nm`)));
-    const opts = { atStart: false, reverse: false };
-    const preview = el("div", { class: "banner info" });
-    const update = () => {
-      const other = others.find((r) => r.id === sel.value);
-      const joined = c.joinPoints(work.route.points, other.points, opts);
-      const gap = c.joinGapNm(work.route.points, other.points, opts);
-      const dropped = joined.length < work.route.points.length + other.points.length || !work.route.points.length || !other.points.length;
-      preview.textContent = `${work.route.name || "This route"} becomes ${c.routeNm(joined).toFixed(1)} nm with ${joined.filter(c.isStop).length} stops.`
-        + (dropped ? " They share a stop or meet within 50 m, so the duplicate point is dropped." : ` The ${gap.toFixed(1)} nm gap between them becomes a straight leg; check it on the map.`);
-    };
-    sel.addEventListener("change", update);
-    const radio = (name, checked, label, on) => el("label", {}, el("input", { type: "radio", name, checked, onchange: () => { on(); update(); } }), label);
-    const body = el("div", { class: "modal-body" },
-      el("p", {}, "Add a whole route to the one that is open, to build a longer route from ones you already have. The routes you add from are not changed."),
-      el("div", { class: "field" }, el("label", {}, "Route to add"), sel),
-      el("div", { class: "field" }, el("label", {}, "Where"), el("div", { class: "radio-list" },
-        radio("where", true, "After the end of this route", () => { opts.atStart = false; }),
-        radio("where", false, "Before the start of this route", () => { opts.atStart = true; }))),
-      el("div", { class: "field" }, el("label", {}, "Direction"), el("div", { class: "radio-list" },
-        radio("dir", true, "As saved", () => { opts.reverse = false; }),
-        radio("dir", false, "Reversed", () => { opts.reverse = true; }))),
-      preview,
-      work.route.id ? el("p", { class: "meta" }, `Tip: use Save As afterwards to keep "${work.route.name}" as it is and save the joined route under a new name.`) : null);
-    update();
-    openModal({
-      title: "Add another route", body, wide: true, saveTitle: "Add route",
-      onSave: () => {
-        const other = others.find((r) => r.id === sel.value);
-        editPoints((pts) => c.joinPoints(pts, other.points.map((p) => ({ ...p })), opts), { fit: true });
-        status(`Added ${other.name}.`, "ok");
-        return true;
-      }
-    });
-  }
-
   // ---------- wiring ----------
   function bindInputs() {
     $("picker").addEventListener("change", async (e) => {
@@ -934,7 +674,7 @@
   }
 
   function bind(opts) {
-    if (closeModal) closeModal();
+    closeModal();
     document.querySelectorAll(".routes-modal").forEach((n) => n.remove());
     saving = false;
     destroyMap();
@@ -963,6 +703,34 @@
       onChanged: () => { if (work && panel === mine && places === myPlaces) renderAll(); }
     });
     places = myPlaces;
+    popup = window.IolantheRoutesPopup.create({
+      core: core(),
+      places: myPlaces,
+      getWork: () => work,
+      getMap: () => map,
+      editPoints,
+      editPointsQuiet,
+      makeStopAtAnchorage
+    });
+    lists = window.IolantheRoutesLists.create({
+      A: A(),
+      core: core(),
+      places: myPlaces,
+      getWork: () => work,
+      speedKn,
+      defaultSpeed: DEFAULT_SPEED_KN,
+      maxSpeed: MAX_SPEED_KN,
+      editPoints,
+      focusPoint,
+      focusLeg
+    });
+    join = window.IolantheRoutesJoin.create({
+      core: core(),
+      getWork: () => work,
+      getRoutes: () => routes,
+      editPoints,
+      status
+    });
     initMap(mine);
     loadLibrary(mine);
     myPlaces.load().then(() => {
