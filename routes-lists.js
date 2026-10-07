@@ -81,7 +81,27 @@
         el("div", { class: "leg-total" }, el("span", {}, "Total"), el("span", {}, `${total.toFixed(1)} nm${hours !== null ? ` · ${c.fmtHm(hours)}` : ""}`)));
     }
 
-    return { timeStat, renderStops, renderLegs, legCount: () => legsFor(points()).length };
+    function copyText(text) {
+      if (window.isSecureContext && navigator.clipboard) return navigator.clipboard.writeText(text).then(() => true, () => false);
+      const area = el("textarea", { readonly: true, style: "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0" });
+      area.value = text;
+      document.body.append(area);
+      area.select();
+      let ok = false;
+      try { ok = document.execCommand("copy"); } catch (error) { ok = false; }
+      area.remove();
+      return Promise.resolve(ok);
+    }
+
+    function copyLegs() {
+      const legs = legsFor(points());
+      if (!legs.length) { ctx.A.setStatus("Add at least two points to copy legs.", "error"); return; }
+      copyText(c.legsTsv(legs)).then((ok) => ctx.A.setStatus(ok
+        ? `Copied ${legs.length} ${legs.length === 1 ? "leg" : "legs"}. Paste into Excel.`
+        : "Couldn't copy to the clipboard in this browser.", ok ? "" : "error"));
+    }
+
+    return { timeStat, renderStops, renderLegs, copyLegs, legCount: () => legsFor(points()).length };
   }
 
   window.IolantheRoutesLists = Object.freeze({ create });
