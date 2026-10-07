@@ -1,7 +1,8 @@
 # Route Planner — handoff
 
 Last updated 2026-10-07. **Phases 1, 2 and 3 are complete and live** (phase 3 merged at `9828511`, with the
-server at `0e68d98`). Next: **phase 4** (assign routes to charters). Spec Q2 is still open and is needed first.
+server at `0e68d98`). Two captain style tweaks followed (live at `ff53ea8`, see "After phase 3"). Next: **phase 4**
+(assign routes to charters). Spec Q2 is still open and is needed first.
 
 | File | What it is |
 |---|---|
@@ -121,6 +122,8 @@ David wants the mockup's visual style used across the **whole Admin site**. That
 the button styles, the type and the uppercase field labels. Do it after the Routes phases or alongside them. Start
 by turning the mockup's CSS (`:root` tokens, `.icon-btn`, `.stat`, `.banner`, `.field`, `.text-btn`, `.seg`,
 `.tabbox`, `.stop-item`, modal card) into shared `admin.css` classes.
+- The captain asked for **muted whites** on the Routes panel (2026-10-07). Its `--card-bg` / `--panel` colours in
+  `routes.css` are a good starting point for the admin-wide palette. Check with David whether every panel should get them.
 
 ## Phase 1 (done, 2026-10-07)
 
@@ -216,6 +219,15 @@ by turning the mockup's CSS (`:root` tokens, `.icon-btn`, `.stat`, `.banner`, `.
     duplicate names, ignoring case.
   - **Plain stops** (hold position / drift): `stop: true` on a point with no anchorage. Waypoints get "Make stop here";
     every stop gets "Remove stop". Plain stops have a dashed-ring marker and show "Holding / drifting" in the Stops tab.
+- **After phase 3, more captain tweaks (2026-10-07, merged and pulled on the VM straight away):**
+  - **Muted whites** (`c646130`): the Routes panel background is a slightly darker blue-grey (`--card-bg: #dfe6e9`)
+    instead of the admin's white card. Inputs, the route dropdown, stop/leg cards and the active tab use a muted
+    off-white (`--panel: #f4f6f7`), and the Stops/Legs list area is `#e9eef0`. It's scoped to `.routes-panel`, so the
+    rest of the admin is still white. This is a pointer for the style rollout below.
+  - **Counts moved** (`ff53ea8`): the Stops / Legs tab titles no longer have count pills. The middle stat tile reads
+    "11 / 10" with the label "stops / legs" (`lists.legCount()`).
+  - Version strings are now mixed: `routes.css` v5, `routes.js` and `routes-lists.js` v4, everything else v3. Bump
+    only the files you change.
 - **Reviews caught and fixed:**
   - **Security:** every admin `<textarea>` and three `<option>`s filled HTML through `escapeText`, which escapes nothing.
     An imported pin description could inject script via Make site. They now use `escapeHtml`. `htmlToText` also
