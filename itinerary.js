@@ -122,7 +122,66 @@
   }
 
   // Filled in by Task 5.
-  function drawLine() {}
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  const svgEl = (tag, attrs) => {
+    const node = document.createElementNS(SVG_NS, tag);
+    Object.entries(attrs || {}).forEach(([k, v]) => node.setAttribute(k, String(v)));
+    return node;
+  };
+  const LINE_X = 20;        // x of the line inside the 40px middle column
+  const LOOP_W = 18;        // loop (dwell) width
+  const DOT_R = 7;
+
+  // Measures each sub-box, asks core for the geometry, then draws the SVG and places the titles.
+  function drawLine(days) {
+    const board = panel.querySelector("#itinerary-board");
+    const daysEl = panel.querySelector("#itinerary-days");
+    const svg = panel.querySelector("#itinerary-line");
+    const titles = panel.querySelector("#itinerary-titles");
+    const boardTop = board.getBoundingClientRect().top;
+    const centres = new Map();
+    daysEl.querySelectorAll(".itinerary-sub").forEach((node) => {
+      const r = node.getBoundingClientRect();
+      centres.set(`${node.dataset.stopId}:${node.dataset.day}`, r.top + r.height / 2 - boardTop);
+    });
+    const height = Math.max(daysEl.offsetHeight, 1);
+    svg.setAttribute("viewBox", `0 0 40 ${height}`);
+    svg.setAttribute("width", "40");
+    svg.setAttribute("height", String(height));
+    svg.replaceChildren();
+    titles.replaceChildren();
+    titles.style.height = `${height}px`;
+
+    const geo = core().lineGeometry(days, centres);
+    if (!geo.shapes.length) return;
+
+    const stopsById = new Map(core().stopEntries(work.itinerary.route.points).map((e) => [e.point.id, e.point]));
+    const times = core().estimateTimes(work.itinerary);
+
+    // The trunk line runs from the first shape to the last.
+    svg.append(svgEl("line", { class: "itinerary-line__trunk", x1: LINE_X, y1: geo.top, x2: LINE_X, y2: geo.bottom }));
+
+    geo.shapes.forEach((shape) => {
+      if (shape.terminal === "origin") {
+        // Underground-style open loop: a U open at the top with the stem continuing down.
+        svg.append(svgEl("path", { class: "itinerary-line__terminal", d: `M ${LINE_X - 9} ${shape.y1 - 14} V ${shape.y1} A 9 9 0 0 0 ${LINE_X + 9} ${shape.y1} V ${shape.y1 - 14}` }));
+      } else if (shape.terminal === "terminus") {
+        svg.append(svgEl("path", { class: "itinerary-line__terminal", d: `M ${LINE_X - 9} ${shape.y2 + 14} V ${shape.y2} A 9 9 0 0 1 ${LINE_X + 9} ${shape.y2} V ${shape.y2 + 14}` }));
+      } else if (shape.kind === "loop") {
+        svg.append(svgEl("rect", { class: "itinerary-line__loop", x: LINE_X - LOOP_W / 2, y: shape.y1 - 9, width: LOOP_W, height: shape.y2 - shape.y1 + 18, rx: 9 }));
+      } else {
+        svg.append(svgEl("circle", { class: "itinerary-line__dot", cx: LINE_X, cy: shape.y1, r: DOT_R }));
+      }
+      const stop = stopsById.get(shape.stopId);
+      if (!stop) return;
+      const title = el("div", { class: "itinerary-stop-title", "data-stop-id": shape.stopId },
+        el("div", { class: "itinerary-stop-title__name" }, stop.name || "Stop"),
+        el("div", { class: `itinerary-stop-title__times muted${/~/.test(core().stopTimesLabel(stop, times.get(shape.stopId))) ? " itinerary-stop-title__times--est" : ""}` }, core().stopTimesLabel(stop, times.get(shape.stopId)))
+      );
+      title.style.top = `${(shape.y1 + shape.y2) / 2}px`;
+      titles.append(title);
+    });
+  }
 
   function bind(opts) {
     panel = document.getElementById("itinerary-panel");
