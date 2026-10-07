@@ -1,2 +1,5 @@
 node_modules/
 .env
+
+# brainstorming visual companion sessions
+.superpowers/
