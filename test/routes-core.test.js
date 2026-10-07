@@ -474,3 +474,78 @@ test("uniqueName matches case-insensitively, works for any name and pads to two 
 test("uniqueName ignores blank and missing names in the list", () => {
   assert.equal(core.uniqueName("Stop", [undefined, null, "", "Stop"]), "Stop #02");
 });
+
+test("isStop: an anchorage stop or a plain stop (stop: true), nothing else", () => {
+  assert.equal(core.isStop(P(1, 1, { anchorage_id: "a" })), true);
+  assert.equal(core.isStop(P(1, 1, { stop: true })), true);
+  assert.equal(core.isStop(P(1, 1, { stop: "yes" })), false);
+  assert.equal(core.isStop(P(1, 1, { name: "x" })), false);
+  assert.equal(core.isStop(null), false);
+});
+
+test("stopLegs split at plain stops and use a plain stop's own leg speed", () => {
+  const pts = [P(12, 120), P(12 + 1 / 60, 120, { stop: true, name: "Drift", leg_speed_kn: 4 }), P(12 + 2 / 60, 120)];
+  const legs = core.stopLegs(pts, 8);
+  assert.equal(legs.length, 2);
+  assert.equal(legs[0].to, "Drift");
+  assert.equal(legs[1].from, "Drift");
+  assert.equal(legs[1].speed, 4);
+});
+
+test("routeSnapshot notices the stop flag", () => {
+  const r = { name: "A", points: [P(1, 1)] };
+  assert.notEqual(core.routeSnapshot(r), core.routeSnapshot({ ...r, points: [P(1, 1, { stop: true })] }));
+});
+
+test("makeStopAt turns a plain stop into an anchorage stop and drops the stop flag", () => {
+  const pts = [P(0, 0), P(12.001, 120.001, { stop: true, name: "Drift", leg_speed_kn: 5 }), P(1, 1)];
+  const { points } = core.makeStopAt(pts, 1, { id: "anc", name: "Anc", latitude: 12, longitude: 120 }, []);
+  assert.equal(points[1].anchorage_id, "anc");
+  assert.equal(points[1].stop, undefined);
+  assert.equal(points[1].leg_speed_kn, 5);
+});
+
+test("makeStopAt does not merge a plain stop with a neighbouring plain stop", () => {
+  const pts = [P(12, 120, { stop: true }), P(12, 120)];
+  const { merged } = core.makeStopAt(pts, 1, { id: "anc", name: "Anc", latitude: 12, longitude: 120 }, []);
+  assert.equal(merged, false);
+});
+
+test("makePlainStop sets stop: true, keeps the position and an existing name", () => {
+  const pts = [P(0, 0), P(1, 1, { name: "Reef edge", site_id: "s1" }), P(2, 2)];
+  const out = core.makePlainStop(pts, 1);
+  assert.deepEqual(out[1], P(1, 1, { name: "Reef edge", site_id: "s1", stop: true }));
+  assert.equal(pts[1].stop, undefined);
+  assert.equal(out[0], pts[0]);
+});
+
+test("makePlainStop names an unnamed point Stop, numbered against the route's other stop names", () => {
+  assert.equal(core.makePlainStop([P(0, 0), P(1, 1)], 1)[1].name, "Stop");
+  const pts = [P(0, 0, { stop: true, name: "Stop" }), P(1, 1, { anchorage_id: "a", name: "Stop #02" }), P(2, 2, { name: "Stop #07" }), P(3, 3)];
+  assert.equal(core.makePlainStop(pts, 3)[3].name, "Stop #03");
+});
+
+test("makePlainStop leaves a point that is already a stop alone", () => {
+  const pts = [P(0, 0, { anchorage_id: "a", name: "A" })];
+  assert.equal(core.makePlainStop(pts, 0), pts);
+});
+
+test("removeStop turns a stop back into a waypoint, keeping its name and position", () => {
+  const pts = [P(0, 0), P(1, 1, { anchorage_id: "a", name: "Anc", site_ids: ["s"], leg_speed_kn: 5, site_id: "x" }), P(2, 2, { stop: true, name: "Drift", site_ids: [] })];
+  const out = core.removeStop(core.removeStop(pts, 1), 2);
+  assert.deepEqual(out[1], P(1, 1, { name: "Anc", site_id: "x" }));
+  assert.deepEqual(out[2], P(2, 2, { name: "Drift" }));
+  assert.equal(core.isStop(out[1]) || core.isStop(out[2]), false);
+  assert.equal(pts[1].anchorage_id, "a");
+});
+
+test("removeStop keeps the first point's leg speed (it still starts the first leg)", () => {
+  const pts = [P(0, 0, { stop: true, leg_speed_kn: 6 }), P(1, 1)];
+  assert.deepEqual(core.removeStop(pts, 0)[0], P(0, 0, { leg_speed_kn: 6 }));
+});
+
+test("plain stops export as named GPX waypoints and KML pins", () => {
+  const route = { id: "r", name: "R", points: [P(1, 1), P(2, 2, { stop: true, name: "Drift" }), P(3, 3)] };
+  assert.ok(core.toGpx(route).includes("<wpt lat=\"2.000000\" lon=\"2.000000\"><name>Drift</name></wpt>"));
+  assert.ok(core.toKml(route).includes("<Placemark><name>Drift</name><Point>"));
+});

@@ -1,5 +1,6 @@
-// Routes panel: the point popup (Select mode). Heading, "Make stop at", the moved warning, Name, Sites served,
-// Make anchorage / Make site and Delete. Created once per bind() by routes.js; route state stays in routes.js.
+// Routes panel: the point popup (Select mode). Heading, "Make stop at" / "Make stop here", the moved warning, Name,
+// Sites served, Make anchorage / Make site, Remove stop and Delete. Created once per bind() by routes.js; route state
+// stays in routes.js.
 (function () {
   "use strict";
 
@@ -7,7 +8,7 @@
   const MAX_NEARBY_BUTTONS = 3;
   const SITES_NEAR_NM = 5;       // sites within this distance of a stop are grouped first in "Sites served"
 
-  // ctx: { core, places, getWork, getMap, editPoints(fn, opts), editPointsQuiet(fn), makeStopAtAnchorage(i, anchorage) }
+  // ctx: { core, places, getWork, getMap, editPoints(fn, opts), editPointsQuiet(fn), makeStopAtAnchorage(i, anchorage), status(message, tone) }
   function create(ctx) {
     const { core: c, places } = ctx;
     const { el, fmtPos } = window.IolantheRoutesUi;
@@ -32,25 +33,42 @@
       nameInput.addEventListener("change", commitName);
       nameInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); commitName(); nameInput.blur(); } });
       const stop = c.isStop(p);
-      const anchorage = stop && places ? places.findAnchorage(p.anchorage_id) : null;
+      const atAnchorage = Boolean(p.anchorage_id); // a plain stop (stop: true) has no anchorage
+      const anchorage = atAnchorage && places ? places.findAnchorage(p.anchorage_id) : null;
       const moved = places ? c.anchorageMovedM(p, anchorage) : 0;
-      const nearby = !stop && places ? c.nearbyAnchorages(places.anchorages(), p, NEARBY_ANCHORAGE_NM).slice(0, MAX_NEARBY_BUTTONS) : [];
+      // Waypoints and plain stops are offered nearby anchorages; only waypoints get "Make stop here".
+      const nearby = !atAnchorage && places ? c.nearbyAnchorages(places.anchorages(), p, NEARBY_ANCHORAGE_NM).slice(0, MAX_NEARBY_BUTTONS) : [];
       const sub = `${fmtPos(p)}${anchorage && anchorage.depth_m ? ` · ${anchorage.depth_m} m` : ""}`;
       const box = el("div", { class: "pop" },
         heading,
         el("div", { class: "sub" }, sub),
-        nearby.length ? el("div", { class: "nearby" },
+        nearby.length || !stop ? el("div", { class: "nearby" },
           nearby.map((n) => el("button", { type: "button", class: "text-btn", onclick: () => ctx.makeStopAtAnchorage(i, n.anchorage) },
-            `Make stop at ${n.anchorage.name}`, el("span", { class: "d" }, `${n.nm.toFixed(1)} nm`)))) : null,
+            `Make stop at ${n.anchorage.name}`, el("span", { class: "d" }, `${n.nm.toFixed(1)} nm`))),
+          !stop ? el("button", { type: "button", class: "text-btn", title: "Hold position or drift here, with no anchorage", onclick: () => makeStopHere(i) },
+            "Make stop here", el("span", { class: "d" }, "no anchorage")) : null) : null,
         moved ? el("div", { class: "banner warn", style: "margin-bottom:8px" }, `The anchorage has moved ${Math.round(moved)} m since this stop was placed. `,
           el("button", { type: "button", class: "link-btn", onclick: () => ctx.editPoints((pts) => c.replaceAt(pts, i, { ...pts[i], latitude: anchorage.latitude, longitude: anchorage.longitude }), { popup: i }) }, "Move stop to anchorage")) : null,
         el("div", { class: "field" }, el("label", {}, "Name"), nameInput));
       if (stop && places) box.append(sitesServedPicker(i));
       box.append(el("div", { class: "actions" },
-        !stop && places ? el("button", { type: "button", class: "text-btn secondary", onclick: () => makeAnchorageFromPoint(i) }, "Make anchorage") : null,
+        !atAnchorage && places ? el("button", { type: "button", class: "text-btn secondary", onclick: () => makeAnchorageFromPoint(i) }, "Make anchorage") : null,
         places ? el("button", { type: "button", class: "text-btn secondary", onclick: () => makeSiteFromPoint(i) }, "Make site") : null,
+        stop ? el("button", { type: "button", class: "text-btn secondary", title: "Turn this stop back into a waypoint", onclick: () => removeStopAt(i) }, "Remove stop") : null,
         el("button", { type: "button", class: "text-btn danger-text", onclick: () => { closePopup(); ctx.editPoints((pts) => c.removeAt(pts, i)); } }, "Delete")));
       return box;
+    }
+
+    function makeStopHere(i) {
+      closePopup();
+      ctx.editPoints((pts) => c.makePlainStop(pts, i), { popup: i });
+      ctx.status(`Stop added here: ${points()[i].name}`, "");
+    }
+
+    function removeStopAt(i) {
+      closePopup();
+      ctx.editPoints((pts) => c.removeStop(pts, i), { popup: i });
+      ctx.status("Stop removed. The point is a waypoint again.", "");
     }
 
     async function makeAnchorageFromPoint(i) {

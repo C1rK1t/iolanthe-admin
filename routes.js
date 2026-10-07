@@ -329,7 +329,7 @@
       places.draw(L, groups, {
         mode: ui.mode,
         layers: ui.layers,
-        usedAnchorageIds: new Set(pts.filter(c.isStop).map((p) => p.anchorage_id)),
+        usedAnchorageIds: new Set(pts.filter((p) => p.anchorage_id).map((p) => p.anchorage_id)),
         divIcon,
         onAnchorageClick,
         onSiteClick,
@@ -365,7 +365,7 @@
         stopNo += 1;
         const a = places && p.anchorage_id ? places.findAnchorage(p.anchorage_id) : null;
         const flagged = places && p.anchorage_id && ((!a && places.isLoaded()) || c.anchorageMovedM(p, a) > 0);
-        html = `<div class="mk-stop">${stopNo}</div>${flagged ? '<div class="mk-badge">!</div>' : ""}`;
+        html = `<div class="mk-stop${p.anchorage_id ? "" : " plain"}">${stopNo}</div>${flagged ? '<div class="mk-badge">!</div>' : ""}`;
       }
       else html = `<div class="mk-wp ${p.name ? "named" : ""}"></div>`;
       const m = L.marker(ll(p), { icon: divIcon(html), draggable: ui.mode !== "delete", title: p.name || "Waypoint", zIndexOffset: c.isStop(p) ? 1100 : 1000 });
@@ -729,7 +729,8 @@
       getMap: () => map,
       editPoints,
       editPointsQuiet,
-      makeStopAtAnchorage
+      makeStopAtAnchorage,
+      status
     });
     lists = window.IolantheRoutesLists.create({
       A: A(),

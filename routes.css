@@ -114,6 +114,7 @@
 .routes-panel .mk-wp { width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 2px solid #1d3540; box-shadow: 0 1px 4px rgba(0,0,0,.5); }
 .routes-panel .mk-wp.named { border-color: var(--site); }
 .routes-panel .mk-stop { width: 28px; height: 28px; border-radius: 50%; background: var(--stop); color: #fff; border: 2px solid #fff; display: grid; place-items: center; font-size: 13px; font-weight: 700; box-shadow: 0 1px 5px rgba(0,0,0,.5); }
+.routes-panel .mk-stop.plain { background: #fff; color: var(--stop); border: 3px dashed var(--stop); }
 .routes-panel .mk-badge { position: absolute; top: -2px; right: -2px; width: 15px; height: 15px; border-radius: 50%; background: #f0b429; color: #3d2800; font-size: 11px; font-weight: 700; display: grid; place-items: center; border: 1px solid #fff; }
 .routes-panel .mk-anch { width: 26px; height: 26px; border-radius: 50%; background: #fff; color: var(--stop); display: grid; place-items: center; box-shadow: 0 1px 5px rgba(0,0,0,.5); }
 .routes-panel .mk-anch svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }

@@ -19,6 +19,7 @@
     }
 
     // A stop row with anchorage depth, moved/deleted warnings and site chips (ids that no longer exist are dropped quietly).
+    // A plain stop (no anchorage) shows "Holding / drifting" where the depth would be.
     function stopItem(p, i, n) {
       const a = places ? places.findAnchorage(p.anchorage_id) : null;
       const moved = places ? c.anchorageMovedM(p, a) : 0;
@@ -26,7 +27,8 @@
       const deleted = places && places.isLoaded() && p.anchorage_id && !a;
       return el("div", { class: "stop-item", onclick: () => ctx.focusPoint(i) },
         el("div", { class: "title" }, el("span", { class: "stop-num" }, n), p.name || "Stop",
-          a && a.depth_m ? el("span", { class: "meta", style: "font-weight:400" }, `${a.depth_m} m`) : null),
+          a && a.depth_m ? el("span", { class: "meta", style: "font-weight:400" }, `${a.depth_m} m`) : null,
+          p.anchorage_id ? null : el("span", { class: "meta", style: "font-weight:400" }, "Holding / drifting")),
         moved ? el("div", { class: "warn-text" }, `⚠ Anchorage moved ${Math.round(moved)} m since placed`) : null,
         deleted ? el("div", { class: "warn-text" }, "⚠ Anchorage deleted. The stop keeps its position.") : null,
         siteChips.length ? el("div", { class: "chips" }, siteChips) : el("div", { class: "empty", style: "margin-top:4px" }, "No sites linked"));
@@ -39,7 +41,7 @@
         return stopItem(p, i, n);
       });
       countEl.textContent = stops.length || "";
-      box.replaceChildren(...(stops.length ? stops : [el("div", { class: "empty" }, "No stops yet. In Add mode, tap an anchorage to add one.")]));
+      box.replaceChildren(...(stops.length ? stops : [el("div", { class: "empty" }, "No stops yet. In Add mode, tap an anchorage to add one, or use Make stop here on a waypoint.")]));
     }
 
     function setLegSpeed(leg, value) {

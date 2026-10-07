@@ -37,7 +37,8 @@
     return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}`;
   }
 
-  const isStop = (point) => Boolean(point && point.anchorage_id);
+  // A stop is at an anchorage (anchorage_id) or a plain stop (stop: true: hold position or drift, no anchorage).
+  const isStop = (point) => Boolean(point && (point.anchorage_id || point.stop === true));
   const replaceAt = (arr, index, value) => arr.map((item, j) => (j === index ? value : item));
   const insertAt = (arr, index, value) => [...arr.slice(0, index), value, ...arr.slice(index)];
   const removeAt = (arr, index) => arr.filter((_, j) => j !== index);
@@ -102,7 +103,7 @@
 
   // What counts as "unsaved changes": the editable fields only.
   function routeSnapshot(route) {
-    const keys = ["latitude", "longitude", "name", "anchorage_id", "site_id", "site_ids", "leg_speed_kn"];
+    const keys = ["latitude", "longitude", "name", "anchorage_id", "site_id", "site_ids", "leg_speed_kn", "stop"];
     const points = (route.points || []).map((p) => {
       const out = {};
       keys.forEach((k) => { if (p[k] !== undefined) out[k] = p[k]; });
@@ -163,6 +164,32 @@
     }
     const metres = distM(point, anchorage);
     return metres > MOVED_WARN_M ? metres : 0;
+  }
+
+  const DEFAULT_STOP_NAME = "Stop";
+
+  // "Make stop here": point index becomes a plain stop where it is. An unnamed point is named "Stop", numbered
+  // against the route's other stop names (uniqueName). A point that is already a stop is returned unchanged.
+  function makePlainStop(points, index) {
+    const point = points[index];
+    if (!point || isStop(point)) {
+      return points;
+    }
+    const otherStopNames = points.filter((p, j) => j !== index && isStop(p)).map((p) => p.name);
+    const name = point.name || uniqueName(DEFAULT_STOP_NAME, otherStopNames);
+    return replaceAt(points, index, { ...point, name, stop: true });
+  }
+
+  // "Remove stop": an anchorage or plain stop goes back to a waypoint at the same position, keeping its name.
+  // Its sites served go, and so does its leg speed (its leg merges into the previous one, spec §2.1), except on the
+  // first point, which still starts the first leg.
+  function removeStop(points, index) {
+    const point = points[index];
+    if (!point) {
+      return points;
+    }
+    const { anchorage_id: _a, stop: _s, site_ids: _ids, leg_speed_kn: speed, ...rest } = point;
+    return replaceAt(points, index, index === 0 && speed ? { ...rest, leg_speed_kn: speed } : rest);
   }
 
   function routesUsingAnchorage(routes, anchorageId) {
@@ -385,6 +412,7 @@
     METRES_PER_NM, distM, distNm, routeNm, fmtHm, isStop, replaceAt, insertAt, removeAt,
     stopLegs, totalHours, setLegSpeed, joinPoints, joinGapNm, routeSnapshot,
     sitesWithin, nearbyAnchorages, stopAt, makeStopAt, appendStop, anchorageMovedM, routesUsingAnchorage, uniqueName,
+    makePlainStop, removeStop,
     IMPORT_TARGET_POINTS, MAX_TOLERANCE_M, TOLERANCE_STEP_M, PIN_MATCH_NM, validPos, parseKmlCoordinates, htmlToText,
     extractGeo, simplify, defaultTolerance, joinLines, chosenLinePoints, importPoints, pinMatch, xmlEscape, slugify,
     exportBaseName, toGpx, toKml

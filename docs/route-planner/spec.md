@@ -58,6 +58,9 @@ Repos: `iolanthe-admin` (UI), `iolanthe-server` (storage and APIs). **No guest o
 - A point holds its **own copy of the position**. `anchorage_id` / `site_id` / `name` are labels taken when the point
   was placed. Moving an anchorage or site later doesn't move the point. The planner shows a small warning badge when
   they no longer match (decision: stay put plus a warning).
+- `stop: true` marks a **plain stop**: hold position or drift, with no anchorage. A point is a stop if it has
+  `anchorage_id` or `stop: true`. The server keeps `stop` only on points without `anchorage_id`. Plain stops have
+  names, `site_ids` and leg speeds like anchorage stops, but no depth or anchorage warnings.
 - `site_ids` (stops only): the sites this stop serves, in display order. It's set in the stop popup by ticking from
   a list of sites, sorted by distance, with those within 5 nm shown first. Sites that are deleted later are dropped
   quietly when the route loads. The planner draws a faint dashed "tender" line from the stop to each associated site.
@@ -195,11 +198,14 @@ This replaces draft 1's "side panel above the map" (decided 2026-10-07, §7 Q1).
 - Point popup: the heading is "Stop *n* · *name*", or "Waypoint" (with its name if it has one). Below it are the
   position and the anchorage depth. Point numbers are not shown (D9). Actions:
   - **Make stop at *anchorage*** (waypoints only): one button per anchorage within 2 nm, nearest first, with its
-    distance. It does the same as snapping.
+    distance. It does the same as snapping. Plain stops get these offers too.
+  - **Make stop here** (waypoints only): makes a plain stop at the point's position. An unnamed point is named
+    "Stop", or "Stop #02", "Stop #03" when the route already has a stop with that name.
   - **Name** (optional label)
   - **Sites served** (stops only): tick sites from a distance-sorted list (D8)
   - **Make anchorage**: opens the anchorage modal with lat/lon filled in. On save the point becomes a stop.
   - **Make site**: opens the existing Add Site modal with lat/lon filled in.
+  - **Remove stop** (stops only): turns the stop back into a waypoint at the same position, keeping its name.
   - **Delete**
 - Styling:
   - Waypoints are small white dots. Stops are larger blue markers, numbered in route order, with a small "!"
