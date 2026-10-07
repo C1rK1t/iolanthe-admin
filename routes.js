@@ -449,7 +449,9 @@
       m.on("dragend", (e) => {
         const q = e.target.getLatLng();
         const anchorage = places ? places.anchorageUnder(map, q) : null;
-        if (anchorage) { makeStopAtAnchorage(i, anchorage, { snapped: true }); return; }
+        const cur = work.route.points[i];
+        // A stop nudged near its OWN anchorage is just moved, so its name and ticked sites are kept.
+        if (anchorage && !(c.isStop(cur) && cur.anchorage_id === anchorage.id)) { makeStopAtAnchorage(i, anchorage, { snapped: true }); return; }
         editPoints((arr) => c.replaceAt(arr, i, { ...arr[i], latitude: q.lat, longitude: q.lng }));
       });
       m.addTo(groups.points);
