@@ -537,13 +537,15 @@
   const withSpeed = (route) => ({ ...route, speed_kn: route.speed_kn == null ? null : route.speed_kn });
 
   // Applies a server-saved route. If the user kept editing while the request was in flight, keep those edits as unsaved.
-  function applySaved(saved, sent, isNewRoute) {
+  // For Save As and first saves, oldName is the working name when the request started; if it is unchanged, the new name applies.
+  function applySaved(saved, sent, isNewRoute, oldName) {
     replaceInLibrary(saved);
     if (!isNewRoute && work.route.id !== saved.id) { renderPicker(); return; }
-    const current = { ...work.route, name: (work.route.name || "").trim() };
+    const nameNow = isNewRoute && work.route.name === oldName ? saved.name : work.route.name;
+    const current = { ...work.route, name: (nameNow || "").trim() };
     if (core().routeSnapshot(current) === sent) { setWork(saved, { fit: false }); afterPersist(); return; }
     work.baseRevision = saved.revision;
-    work.route = { ...work.route, id: saved.id, revision: saved.revision, updated_at: saved.updated_at, created_at: saved.created_at, source: saved.source };
+    work.route = { ...work.route, name: nameNow, id: saved.id, revision: saved.revision, updated_at: saved.updated_at, created_at: saved.created_at, source: saved.source };
     work.savedJson = core().routeSnapshot(saved);
     renderPicker();
     renderActions();
@@ -610,9 +612,10 @@
         try {
           const route = withSpeed({ ...work.route, id: "", name, source: work.route.source });
           const sent = core().routeSnapshot(route);
+          const oldName = work.route.name;
           const { route: saved } = await post("/api/admin/routes/save", { route, base_revision: 0 });
           if (panel !== mine || !mine.isConnected) return true;
-          applySaved(saved, sent, true);
+          applySaved(saved, sent, true, oldName);
           status(`Saved "${saved.name}" to the library`, "ok");
           return true;
         } catch (error) {
