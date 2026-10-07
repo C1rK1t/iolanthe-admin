@@ -192,8 +192,13 @@ From spec §5:
   - `update.sh` used to fail at SignalK with a container-name conflict. **That was fixed on 2026-10-07.** SignalK now
     runs from the vessel compose file, with `cap_add: NET_ADMIN, NET_RAW` for the CAN feed. The repo
     (`iolanthe-signalk` `8ee2da0`) retired its standalone compose file and keeps a reference copy in
-    `vessel-compose-service.yml`, because `/opt/projects/vessel/docker-compose.yml` isn't in git. The VM picks that
-    commit up on the next `update.sh`.
+    `vessel-compose-service.yml`, because `/opt/projects/vessel/docker-compose.yml` isn't in git. `update.sh` was
+    then run successfully on 2026-10-07, and all five repos are current on the VM.
+  - The SignalK block also has `ulimits: core: 0` now (`47c4002`). SignalK had written three ~2.8 GB core dumps,
+    probably from heap exhaustion. The leak itself is not yet investigated.
+  - Not Route Planner work, and handled in a separate session: SignalK's cat-engine plugin has never loaded (no
+    engine data in SignalK). The plan is `iolanthe-signalk/docs/plans/2026-10-07-cat-engine-plugin-fix.md`
+    (`7a15438`). The cat-genset-analysis crash-loop was fixed and deployed (`f374845`).
   - Server-only alternative:
     `cd /opt/projects/vessel && git -C iolanthe-server pull --ff-only && docker compose up -d --build iolanthe-server`
 - **Claude has direct SSH to the VM:** `ssh docker-vm` (an alias in `~/.ssh/config`, root, key
