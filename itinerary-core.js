@@ -380,6 +380,85 @@
   // Replaced in Task 3 with the real renumbering.
   function renumberActivities(activities) { return activities; }
 
+  // Spec §4.3. Returns { itinerary } or { error }. A departure change cascades to every later stop; an arrival change
+  // moves only that stop.
+  function setStopDays(itinerary, stopId, change, dayCount) {
+    const stops = stopEntries(itinerary.route.points);
+    const k = stops.findIndex((e) => e.point.id === stopId);
+    if (k < 0) return { error: "Unknown stop." };
+    const stop = stops[k].point;
+    const name = stop.name || `stop ${k + 1}`;
+    let next = itinerary;
+
+    if (Number.isInteger(change.arriveDay)) {
+      if (!stop.arrive) return { error: `${name} is the origin and has no arrival.` };
+      const prev = stops[k - 1];
+      if (prev && prev.point.depart && change.arriveDay < prev.point.depart.day) return { error: `${prev.point.name || "The previous stop"} leaves on day ${prev.point.depart.day}; ${name} cannot arrive before that.` };
+      if (stop.depart && change.arriveDay > stop.depart.day) return { error: `${name} departs on day ${stop.depart.day}; it cannot arrive after that.` };
+      if (change.arriveDay < 1 || change.arriveDay > dayCount) return { error: `Day ${dayCount} is the last day.` };
+      next = replacePoint(next, stops[k].index, { ...stop, arrive: { ...stop.arrive, day: change.arriveDay } });
+      next = clampActivities(next, stopId, dayCount);
+    }
+
+    if (Number.isInteger(change.departDay)) {
+      const current = stopEntries(next.route.points)[k].point;
+      if (!current.depart) return { error: `${name} is the terminus and has no departure.` };
+      const arriveDay = current.arrive ? current.arrive.day : 1;
+      if (change.departDay < arriveDay) return { error: `${name} arrives on day ${arriveDay}; it cannot depart before it arrives.` };
+      const delta = change.departDay - current.depart.day;
+      const shifted = stopEntries(next.route.points).map((e, i) => {
+        if (i < k) return e.point;
+        if (i === k) return { ...e.point, depart: { ...e.point.depart, day: change.departDay } };
+        const p = { ...e.point };
+        if (p.arrive) p.arrive = { ...p.arrive, day: p.arrive.day + delta };
+        if (p.depart) p.depart = { ...p.depart, day: p.depart.day + delta };
+        return p;
+      });
+      const last = shifted[shifted.length - 1];
+      const lastDay = last.arrive ? last.arrive.day : (last.depart ? last.depart.day : 1);
+      if (lastDay > dayCount) return { error: `Day ${dayCount} is the last day; this would put ${last.name || "the terminus"} on day ${lastDay}.` };
+      if (shifted.some((p) => (p.arrive && p.arrive.day < 1) || (p.depart && p.depart.day < 1))) return { error: "Day 1 is the first day." };
+      let points = next.route.points;
+      stopEntries(points).forEach((e, i) => { points = points.map((p, idx) => (idx === e.index ? shifted[i] : p)); });
+      next = { ...next, route: { ...next.route, points } };
+      shifted.slice(k).forEach((p) => { next = clampActivities(next, p.id, dayCount); });
+    }
+    return { itinerary: next };
+  }
+
+  // field: "arrive" | "depart"; time "HH:MM" sets, "" clears. Invalid input returns the same itinerary.
+  function setStopTime(itinerary, stopId, field, time) {
+    const entry = stopEntries(itinerary.route.points).find((e) => e.point.id === stopId);
+    if (!entry || !entry.point[field]) return itinerary;
+    const value = toStr(time);
+    if (value && !TIME_RE.test(value)) return itinerary;
+    const dayTime = value ? { day: entry.point[field].day, time: value } : { day: entry.point[field].day };
+    return replacePoint(itinerary, entry.index, { ...entry.point, [field]: dayTime });
+  }
+
+  // Replaces the served sites. Site activities whose site is no longer served are removed.
+  function setStopSites(itinerary, stopId, siteIds) {
+    const entry = stopEntries(itinerary.route.points).find((e) => e.point.id === stopId);
+    if (!entry) return itinerary;
+    const ids = cleanIdList(siteIds);
+    const next = replacePoint(itinerary, entry.index, { ...entry.point, site_ids: ids });
+    const activities = next.activities.filter((a) => !(a.stop_id === stopId && a.site_id && !ids.includes(a.site_id)));
+    return { ...next, activities: renumberActivities(activities) };
+  }
+
+  const NEAR_NM = 5;   // route-planner Q4: sites within 5 nm are shown first in the picker
+
+  // [{ id, title, nm, near }] sorted by distance; sites without a position are left out.
+  function sitesByDistance(siteLibrary, position) {
+    return ((toObj(siteLibrary).sites) || [])
+      .filter((s) => s && typeof s.id === "string" && Number.isFinite(Number(s.latitude)) && Number.isFinite(Number(s.longitude)))
+      .map((s) => {
+        const nm = distNm(position, { latitude: Number(s.latitude), longitude: Number(s.longitude) });
+        return { id: s.id, title: s.title || s.id, nm, near: nm <= NEAR_NM };
+      })
+      .sort((a, b) => a.nm - b.nm);
+  }
+
   return {
     ITINERARY_VERSION, DEFAULT_SPEED_KN, MAX_TITLE_LENGTH, MAX_NOTES_LENGTH, TIME_RE,
     distM, distNm, newId, isStop, parseDateOnly, charterDayCount, dayDateLabel,
@@ -387,6 +466,7 @@
     stopEntries, positionOf, stopSpan, deriveDays, validateItinerary,
     legHours, timeToMinutes, minutesToTime, estimateTimes, stopTimesLabel,
     lineGeometry,
-    clampActivities, edgeStates, moveEdge
+    clampActivities, edgeStates, moveEdge,
+    setStopDays, setStopTime, setStopSites, sitesByDistance
   };
 });

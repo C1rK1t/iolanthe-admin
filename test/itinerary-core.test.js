@@ -205,3 +205,59 @@ test("moveEdge: an activity pushed outside its stop's span is clamped to the nea
   assert.equal(again.activities.find((a) => a.id === "act_3").day, 3);
   assert.deepEqual(core.validateItinerary(again, 7), []);
 });
+
+test("setStopDays: a later departure shifts every later stop; the last day is a hard limit", () => {
+  const it = sevenDays();
+  const p = (x, id) => core.stopEntries(x.route.points).map((e) => e.point).find((s) => s.id === id);
+  const refused = core.setStopDays(it, "stp_herm", { departDay: 4 }, 7);  // would push Subic's arrival to day 8
+  assert.match(refused.error, /Day 7 is the last day/);
+  const shorter = core.setStopDays(it, "stp_poti", { departDay: 4 }, 7);  // one night fewer at Potipot: later stops move a day earlier
+  assert.equal(shorter.error, undefined);
+  assert.deepEqual([p(shorter.itinerary, "stp_hund").arrive.day, p(shorter.itinerary, "stp_hund").depart.day], [5, 6]);
+  assert.equal(p(shorter.itinerary, "stp_subic2").arrive.day, 6);
+  assert.equal(p(shorter.itinerary, "stp_poti").depart.time, "18:00");  // times kept
+  assert.deepEqual(core.validateItinerary(shorter.itinerary, 7), []);
+  const tooEarly = core.setStopDays(it, "stp_poti", { departDay: 2 }, 7); // before its own arrival (day 3)
+  assert.match(tooEarly.error, /before it arrives/);
+});
+
+test("setStopDays: an arrival change moves only that stop and is clamped between its neighbours", () => {
+  const it = sevenDays();
+  const p = (x, id) => core.stopEntries(x.route.points).map((e) => e.point).find((s) => s.id === id);
+  const later = core.setStopDays(it, "stp_poti", { arriveDay: 4 }, 7);   // arrive day 4 instead of 3
+  assert.equal(later.error, undefined);
+  assert.equal(p(later.itinerary, "stp_poti").arrive.day, 4);
+  assert.equal(p(later.itinerary, "stp_hund").arrive.day, 6);           // untouched
+  assert.equal(later.itinerary.activities.find((a) => a.id === "act_4").day, 4);   // Beach (day 3) clamped into the span
+  const tooEarly = core.setStopDays(it, "stp_poti", { arriveDay: 2 }, 7); // Hermana leaves day 3
+  assert.match(tooEarly.error, /Hermana Mayor leaves/);
+  const origin = core.setStopDays(it, "stp_subic1", { arriveDay: 1 }, 7);
+  assert.match(origin.error, /origin/);
+});
+
+test("setStopTime and setStopSites", () => {
+  const it = sevenDays();
+  const p = (x, id) => core.stopEntries(x.route.points).map((e) => e.point).find((s) => s.id === id);
+  const timed = core.setStopTime(it, "stp_herm", "arrive", "12:40");
+  assert.deepEqual(p(timed, "stp_herm").arrive, { day: 2, time: "12:40" });
+  const cleared = core.setStopTime(timed, "stp_herm", "arrive", "");
+  assert.deepEqual(p(cleared, "stp_herm").arrive, { day: 2 });
+  assert.equal(core.setStopTime(it, "stp_herm", "arrive", "25:00"), it);          // invalid → unchanged
+  const sited = core.setStopSites(it, "stp_herm", ["reef-east", "reef-west"]);
+  assert.deepEqual(p(sited, "stp_herm").site_ids, ["reef-east", "reef-west"]);
+  // removing a served site drops the site activities that pointed at it
+  const unsited = core.setStopSites(it, "stp_capo", []);
+  assert.equal(unsited.activities.some((a) => a.id === "act_2"), false);
+  assert.equal(unsited.activities.some((a) => a.id === "act_1"), true);
+});
+
+test("sitesByDistance: nearest first, with the within-5nm flag", () => {
+  const sitesLib = { sites: [
+    { id: "far", title: "Far", latitude: 16.0, longitude: 121.0 },
+    { id: "near", title: "Near", latitude: 15.31, longitude: 119.81 },
+    { id: "bad", title: "No position" }
+  ] };
+  const list = core.sitesByDistance(sitesLib, { latitude: 15.30, longitude: 119.80 });
+  assert.deepEqual(list.map((s) => [s.id, s.near]), [["near", true], ["far", false]]);
+  assert.ok(list[0].nm < 1 && list[1].nm > 50);
+});
