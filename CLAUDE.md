@@ -32,6 +32,8 @@ URL access also requires `?key=<settings.admin.urlKey>`.
 - `routes-core.js` — Route Planner pure logic (also a Node module; tests in `test/`, run `node --test`)
 - `routes.js` / `routes.css` — Charter → Routes panel. It uses the `window.IolantheAdmin` helpers exposed at the end
   of `admin.js`, and its styles are scoped under `.routes-panel` / `.routes-modal`
+- `routes-places.js` — Routes panel places: anchorages and sites on the map, the anchorage modal, and the bridge to
+  the admin's Site Editor modal (`IolantheAdmin.openSiteEditorModal`)
 
 ## Path conventions
 
