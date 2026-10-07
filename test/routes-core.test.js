@@ -178,3 +178,51 @@ test("routesUsingAnchorage lists the routes with a stop there", () => {
   ];
   assert.deepEqual(core.routesUsingAnchorage(routes, "a").map((r) => r.id), ["r1"]);
 });
+
+const deepFreeze = (o) => { Object.values(o).forEach((v) => { if (v && typeof v === "object") deepFreeze(v); }); return Object.freeze(o); };
+
+test("makeStopAt keeps the replaced point's leg speed and drops its other fields", () => {
+  const pts = [P(11.9, 120), P(12.001, 120.001, { leg_speed_kn: 6, site_id: "x", name: "Old", site_ids: ["z"] }), P(12.1, 120)];
+  const { points, merged } = core.makeStopAt(pts, 1, ANCH, SITES);
+  assert.equal(merged, false);
+  assert.equal(points[1].leg_speed_kn, 6);
+  assert.equal(points[1].name, "Alpha");
+  assert.deepEqual(points[1].site_ids, ["near"]);
+  assert.equal(points[1].site_id, undefined);
+});
+
+test("makeStopAt works at the first and last index", () => {
+  const pts = [P(12.001, 120), P(12.1, 120), P(12.001, 120.001)];
+  const first = core.makeStopAt(pts, 0, ANCH, SITES);
+  assert.equal(first.merged, false);
+  assert.equal(first.points[0].anchorage_id, "a");
+  assert.equal(first.points.length, 3);
+  const last = core.makeStopAt(pts, 2, ANCH, SITES);
+  assert.equal(last.merged, false);
+  assert.equal(last.points[2].anchorage_id, "a");
+  assert.equal(last.points.length, 3);
+});
+
+test("makeStopAt does not merge when only the next neighbour is a stop at a different anchorage", () => {
+  const next = { ...P(12.02, 120), anchorage_id: "b", name: "Bravo" };
+  const { merged, points } = core.makeStopAt([P(11.9, 120), P(12.001, 120), next], 1, ANCH, SITES);
+  assert.equal(merged, false);
+  assert.equal(points.length, 3);
+  assert.equal(points[1].anchorage_id, "a");
+});
+
+test("makeStopAt removes the point once when both neighbours are stops at the same anchorage", () => {
+  const stop = { ...P(12, 120), anchorage_id: "a", name: "Alpha" };
+  const { merged, points } = core.makeStopAt([stop, P(12.001, 120), stop], 1, ANCH, SITES);
+  assert.equal(merged, true);
+  assert.deepEqual(points, [stop, stop]);
+});
+
+test("makeStopAt and appendStop do not mutate their inputs", () => {
+  const stop = { ...P(12, 120), anchorage_id: "a", name: "Alpha" };
+  const pts = deepFreeze([P(11.9, 120), P(12.001, 120, { leg_speed_kn: 5 }), P(12.1, 120)]);
+  assert.doesNotThrow(() => core.makeStopAt(pts, 1, ANCH, SITES));
+  const merging = deepFreeze([stop, P(12.001, 120)]);
+  assert.doesNotThrow(() => core.makeStopAt(merging, 1, ANCH, SITES));
+  assert.doesNotThrow(() => core.appendStop(pts, ANCH, SITES));
+});

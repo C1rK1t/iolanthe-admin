@@ -144,7 +144,10 @@
     if (sameStop(points[index - 1], anchorage) || sameStop(points[index + 1], anchorage)) {
       return { points: removeAt(points, index), merged: true };
     }
-    return { points: replaceAt(points, index, stopAt(anchorage, sites)), merged: false };
+    const old = points[index];
+    const stop = stopAt(anchorage, sites);
+    const next = old && old.leg_speed_kn ? { ...stop, leg_speed_kn: old.leg_speed_kn } : stop;
+    return { points: replaceAt(points, index, next), merged: false };
   }
 
   function appendStop(points, anchorage, sites) {
