@@ -34,13 +34,12 @@
         siteChips.length ? el("div", { class: "chips" }, siteChips) : el("div", { class: "empty", style: "margin-top:4px" }, "No sites linked"));
     }
 
-    function renderStops(box, countEl) {
+    function renderStops(box) {
       let n = 0;
       const stops = points().map((p, i) => ({ p, i })).filter(({ p }) => c.isStop(p)).map(({ p, i }) => {
         n += 1;
         return stopItem(p, i, n);
       });
-      countEl.textContent = stops.length || "";
       box.replaceChildren(...(stops.length ? stops : [el("div", { class: "empty" }, "No stops yet. In Add mode, tap an anchorage to add one, or use Make stop here on a waypoint.")]));
     }
 
@@ -67,9 +66,8 @@
       return row;
     }
 
-    function renderLegs(box, countEl) {
+    function renderLegs(box) {
       const legs = legsFor(points());
-      countEl.textContent = legs.length || "";
       if (!legs.length) { box.replaceChildren(el("div", { class: "empty" }, "Add at least two points to see legs.")); return; }
       const total = legs.reduce((sum, l) => sum + l.nm, 0);
       const hours = c.totalHours(legs);
@@ -83,7 +81,7 @@
         el("div", { class: "leg-total" }, el("span", {}, "Total"), el("span", {}, `${total.toFixed(1)} nm${hours !== null ? ` · ${c.fmtHm(hours)}` : ""}`)));
     }
 
-    return { timeStat, renderStops, renderLegs };
+    return { timeStat, renderStops, renderLegs, legCount: () => legsFor(points()).length };
   }
 
   window.IolantheRoutesLists = Object.freeze({ create });
