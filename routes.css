@@ -1,7 +1,8 @@
 /* Routes panel styles, ported from docs/route-planner/planner-mockup.html and scoped so nothing leaks into the rest of the admin. */
 
 .routes-panel {
-  --panel: #ffffff;
+  --panel: #f4f6f7; /* muted off-white for inputs and cards (captain, 2026-10-07) */
+  --card-bg: #dfe6e9; /* the panel itself, a shade darker than the admin's white cards */
   --ink: #172026;
   --muted: #5f6b73;
   --line: #d7dde1;
@@ -21,6 +22,7 @@
   color: var(--ink);
 }
 
+.routes-panel.card { background: var(--card-bg); }
 .routes-panel .card-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
 .routes-panel .card-header h2 { margin: 0; font-size: 20px; flex: 1; min-width: 120px; }
 
@@ -50,11 +52,11 @@
 .routes-panel .tabbox { flex: 1; min-height: 160px; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .routes-panel .tabs { display: flex; background: var(--soft); border-bottom: 1px solid var(--line); }
 .routes-panel .tabs button { flex: 1; border: 0; background: none; color: var(--muted); font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; padding: 10px 8px; cursor: pointer; border-bottom: 3px solid transparent; }
-.routes-panel .tabs button[aria-selected="true"] { color: var(--accent-dark); background: #fff; border-bottom-color: var(--accent); }
+.routes-panel .tabs button[aria-selected="true"] { color: var(--accent-dark); background: var(--panel); border-bottom-color: var(--accent); }
 .routes-panel .tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .routes-panel .tabs .count { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px; background: #dfe7ea; color: var(--ink); font-size: 11px; margin-left: 4px; letter-spacing: 0; }
 .routes-panel .tabs .count:empty { display: none; }
-.routes-panel .tab-panel { flex: 1; min-height: 0; overflow-y: auto; padding: 10px; }
+.routes-panel .tab-panel { flex: 1; min-height: 0; overflow-y: auto; padding: 10px; background: #e9eef0; }
 .routes-panel .leg-item .title { font-weight: 700; }
 .routes-panel .leg-item .leg-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 12px; margin: 4px 0 0 30px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .routes-panel .leg-speed { display: inline-flex; align-items: center; gap: 8px; color: var(--ink); cursor: default; }
@@ -65,7 +67,7 @@
 .routes-panel .leg-item.custom .leg-meta b { color: var(--accent-dark); }
 .routes-panel .leg-total { display: flex; justify-content: space-between; gap: 8px; padding: 8px 10px; border-radius: 8px; background: var(--soft); font-weight: 700; font-variant-numeric: tabular-nums; }
 .routes-panel .field label, .routes-panel .side-label { display: block; font-size: 12px; font-weight: 700; color: var(--muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
-.routes-panel .field input, .routes-panel .field select, .routes-panel .field textarea { width: 100%; border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; background: #fff; color: var(--ink); }
+.routes-panel .field input, .routes-panel .field select, .routes-panel .field textarea { width: 100%; border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; background: var(--panel); color: var(--ink); }
 .routes-panel .field textarea { min-height: 64px; resize: vertical; }
 .routes-panel .field input[type=checkbox], .routes-panel .field input[type=radio] { width: auto; padding: 0; margin: 0; flex: none; }
 .routes-panel .field input[type=range] { width: auto; padding: 0; border: 0; }
@@ -79,7 +81,7 @@
 .routes-panel .banner.info { background: #e4f1f3; color: #0e4f58; }
 .routes-panel .banner.warn { background: var(--warn-bg); color: #5c3c00; }
 .routes-panel .stops { display: flex; flex-direction: column; gap: 6px; }
-.routes-panel .stop-item { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; cursor: pointer; }
+.routes-panel .stop-item { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; cursor: pointer; background: var(--panel); }
 .routes-panel .stop-item:hover { border-color: var(--accent); }
 .routes-panel .stop-item .title { display: flex; gap: 8px; align-items: center; font-weight: 700; }
 .routes-panel .stop-num { width: 22px; height: 22px; border-radius: 50%; background: var(--stop); color: #fff; display: inline-grid; place-items: center; font-size: 12px; flex: none; }
