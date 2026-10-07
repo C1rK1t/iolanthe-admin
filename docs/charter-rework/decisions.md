@@ -106,3 +106,15 @@ Started 2026-10-07. Each line is a decision David made during the brainstorm. Th
 - **S5 Testing and rollout (approved):** server pure-module + endpoint tests, migration rehearsal on a copy of live
   data; admin `itinerary-core.js` tests + manual drag checklist; guest pure day derivation; rollout server → admin →
   guest, no feature flag.
+
+## Execution notes
+
+- **2026-10-07 plan 1 (server) done** on `iolanthe-server` branch `feat/itinerary-v2`, 16 commits, 52 tests. The
+  checklist found and fixed one bug: `itinerary/save` must check the payload's own `version` before normalising.
+  Template charters now ship as v2. Docker-VM migration rehearsal deferred to deploy time.
+- **2026-10-07 plan 2 (admin core + read-only panel) done** on admin branch `feat/itinerary-v2`, verified in the
+  browser against migrated dev data. Fix found in the browser: origin/terminus marks must span a multi-day dwell
+  (open-ended loop), not sit on the first day only.
+- **Polish for the tweak round (not blocking):** the route thumbnail wraps under the header at 1024 px instead of
+  sitting top right; `renderGalley` still runs the v1 itinerary normaliser (plan 4 must give the Galley panel a v2
+  day count before deleting it).
