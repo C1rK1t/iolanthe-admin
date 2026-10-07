@@ -118,3 +118,9 @@ Started 2026-10-07. Each line is a decision David made during the brainstorm. Th
 - **Polish for the tweak round (not blocking):** the route thumbnail wraps under the header at 1024 px instead of
   sitting top right; `renderGalley` still runs the v1 itinerary normaliser (plan 4 must give the Galley panel a v2
   day count before deleting it).
+- **2026-10-07 plan 3 (admin editing) done** on admin `feat/itinerary-v2`, verified in the browser: keyboard and
+  pointer edge steps, popover, add menu, inline edit, real pointer drag of an activity to another stop, Save
+  (revision 2 on the dev server), Cancel with the discard dialog, Apply and Promote modals. Fixes found in the
+  browser: admin global `button` styles swelled the edge handles (hardened), oversized popover checkboxes, thumbnail
+  wrapping (header is now a two-row grid). Implementer's sound deviations: edges overlay not confined to grid column
+  3; `.itinerary-panel` positioned for the popover; handles re-positioned on resize.
