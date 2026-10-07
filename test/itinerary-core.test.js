@@ -261,3 +261,67 @@ test("sitesByDistance: nearest first, with the within-5nm flag", () => {
   assert.deepEqual(list.map((s) => [s.id, s.near]), [["near", true], ["far", false]]);
   assert.ok(list[0].nm < 1 && list[1].nm > 50);
 });
+
+test("renumberActivities: 0..n within each (stop, day) group by relative order; array order is kept", () => {
+  const out = core.renumberActivities([
+    { id: "a", stop_id: "s", day: 1, order: 5 }, { id: "b", stop_id: "s", day: 1, order: 2 }, { id: "c", stop_id: "s", day: 2, order: 9 }
+  ]);
+  assert.deepEqual(out.map((a) => [a.id, a.order]), [["a", 1], ["b", 0], ["c", 0]]);
+});
+
+test("canDropActivity: site activities only onto a stop that serves the site; free text anywhere in span", () => {
+  const it = sevenDays();
+  assert.equal(core.canDropActivity(it, "act_2", "stp_capo", 2, 7), true);     // same stop, other day in span
+  assert.equal(core.canDropActivity(it, "act_2", "stp_capo", 3, 7), false);    // day 3 outside Capones (1–2)
+  assert.equal(core.canDropActivity(it, "act_2", "stp_poti", 3, 7), false);    // Potipot does not serve capones-lh
+  assert.equal(core.canDropActivity(it, "act_1", "stp_poti", 4, 7), true);     // free text
+  assert.equal(core.canDropActivity(it, "act_1", "stp_nope", 4, 7), false);
+});
+
+test("moveActivity: re-homes and renumbers both groups; insertion index respected", () => {
+  const it = sevenDays();
+  const out = core.moveActivity(it, "act_1", "stp_poti", 4, 0);               // Sundowners → Potipot day 4, first
+  const poti4 = out.activities.filter((a) => a.stop_id === "stp_poti" && a.day === 4).sort((a, b) => a.order - b.order);
+  assert.deepEqual(poti4.map((a) => a.id), ["act_1", "act_3"]);
+  const capo1 = out.activities.filter((a) => a.stop_id === "stp_capo" && a.day === 1);
+  assert.deepEqual(capo1.map((a) => [a.id, a.order]), [["act_2", 0]]);
+  assert.equal(core.moveActivity(it, "act_2", "stp_poti", 3, 0), it);         // refused: not served → unchanged
+  const reorder = core.moveActivity(it, "act_1", "stp_capo", 1, 0);           // within the group, to the top
+  assert.deepEqual(reorder.activities.filter((a) => a.stop_id === "stp_capo").sort((a, b) => a.order - b.order).map((a) => a.id), ["act_1", "act_2"]);
+});
+
+test("addActivity, updateActivity, removeActivity", () => {
+  const it = sevenDays();
+  const seqRandom = (() => { let i = 0; return () => (i = (i + 7) % 36) / 36; })();
+  const added = core.addActivity(it, "stp_herm", 2, { title: "Snorkel", site_id: "reef-east" }, seqRandom);
+  const act = added.activities.find((a) => a.title === "Snorkel");
+  assert.match(act.id, /^act_/);
+  assert.deepEqual([act.stop_id, act.day, act.order, act.site_id], ["stp_herm", 2, 0, "reef-east"]);
+  const herm = core.stopEntries(added.route.points).map((e) => e.point).find((p) => p.id === "stp_herm");
+  assert.deepEqual(herm.site_ids, ["reef-east"]);                             // served site added
+  assert.deepEqual(core.validateItinerary(added, 7), []);
+  const updated = core.updateActivity(added, act.id, { title: "Snorkel the reef", notes: "East side", time: "10:00" });
+  const u = updated.activities.find((a) => a.id === act.id);
+  assert.deepEqual([u.title, u.notes, u.time], ["Snorkel the reef", "East side", "10:00"]);
+  assert.equal(core.updateActivity(added, act.id, { time: "bad" }).activities.find((a) => a.id === act.id).time, undefined);
+  const removed = core.removeActivity(updated, act.id);
+  assert.equal(removed.activities.some((a) => a.id === act.id), false);
+  assert.equal(core.addActivity(it, "stp_herm", 5, { title: "x" }, seqRandom), it);   // day outside span → unchanged
+});
+
+test("promoteRoute: strips charter fields, writes nights and depart_time, sets the library id or a new name", () => {
+  const it = sevenDays();
+  const overwrite = core.promoteRoute(it, { id: "north-loop", revision: 4 });
+  assert.equal(overwrite.id, "north-loop");
+  assert.equal(overwrite.revision, 4);
+  const stops = overwrite.points.filter(core.isStop);
+  stops.forEach((p) => { assert.equal(p.id, undefined); assert.equal(p.arrive, undefined); assert.equal(p.depart, undefined); });
+  assert.deepEqual([stops[0].nights, stops[0].depart_time], [0, "09:00"]);        // origin: depart day 1 → 0 nights
+  assert.deepEqual([stops[2].nights, stops[2].depart_time], [1, "08:30"]);        // Capones
+  assert.deepEqual([stops[4].nights, stops[4].depart_time], [2, "18:00"]);        // Potipot
+  assert.deepEqual([stops[6].nights, stops[6].depart_time], [undefined, undefined]);   // terminus
+  assert.deepEqual(overwrite.source, { type: "planner" });
+  assert.equal(overwrite.speed_kn, 8);
+  const fresh = core.promoteRoute(it, { name: "Reyes family 2026" });
+  assert.deepEqual([fresh.id, fresh.name, fresh.revision], ["", "Reyes family 2026", 0]);
+});

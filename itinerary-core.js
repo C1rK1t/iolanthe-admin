@@ -377,9 +377,6 @@
     return direction === "down" ? change(state.fromIndex + 1, "arrive", edgeDay) : change(state.fromIndex, "depart", edgeDay + 1);
   }
 
-  // Replaced in Task 3 with the real renumbering.
-  function renumberActivities(activities) { return activities; }
-
   // Spec §4.3. Returns { itinerary } or { error }. A departure change cascades to every later stop; an arrival change
   // moves only that stop.
   function setStopDays(itinerary, stopId, change, dayCount) {
@@ -459,6 +456,111 @@
       .sort((a, b) => a.nm - b.nm);
   }
 
+  // 0..n within each (stop_id, day) group, keeping the current relative order.
+  function renumberActivities(activities) {
+    const groups = new Map();
+    activities.forEach((a) => {
+      const key = `${a.stop_id}:${a.day}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(a);
+    });
+    const orderOf = new Map();
+    groups.forEach((list) => list.sort((a, b) => a.order - b.order).forEach((a, i) => orderOf.set(a.id, i)));
+    return activities.map((a) => ({ ...a, order: orderOf.get(a.id) }));
+  }
+
+  function stopById(itinerary, stopId) {
+    const stops = stopEntries(itinerary.route.points);
+    const i = stops.findIndex((e) => e.point.id === stopId);
+    return i < 0 ? null : { point: stops[i].point, index: stops[i].index, position: positionOf(i, stops.length) };
+  }
+
+  // Spec §4.4 drop rule.
+  function canDropActivity(itinerary, activityId, targetStopId, targetDay, dayCount) {
+    const activity = itinerary.activities.find((a) => a.id === activityId);
+    const target = stopById(itinerary, targetStopId);
+    if (!activity || !target) return false;
+    const span = stopSpan(target.point, target.position, dayCount);
+    if (targetDay < span.from || targetDay > span.to) return false;
+    if (activity.site_id && activity.stop_id !== targetStopId && !(target.point.site_ids || []).includes(activity.site_id)) return false;
+    return true;
+  }
+
+  // Moves an activity to (stop, day) at `index` within that group. Refused moves return the same itinerary.
+  function moveActivity(itinerary, activityId, targetStopId, targetDay, index) {
+    const dayCountGuess = Math.max(...itinerary.activities.map((a) => a.day), targetDay, ...stopEntries(itinerary.route.points).flatMap((e) => [e.point.arrive ? e.point.arrive.day : 0, e.point.depart ? e.point.depart.day : 0]));
+    if (!canDropActivity(itinerary, activityId, targetStopId, targetDay, dayCountGuess)) return itinerary;
+    const moving = itinerary.activities.find((a) => a.id === activityId);
+    const others = itinerary.activities.filter((a) => a.id !== activityId);
+    const group = others.filter((a) => a.stop_id === targetStopId && a.day === targetDay).sort((a, b) => a.order - b.order);
+    const at = Math.min(Math.max(Number.isInteger(index) ? index : group.length, 0), group.length);
+    const placed = { ...moving, stop_id: targetStopId, day: targetDay, order: at - 0.5 };   // sits between neighbours; renumber fixes it
+    return { ...itinerary, activities: renumberActivities([...others, placed]) };
+  }
+
+  // Appends an activity to the (stop, day) group. A site not yet served by the stop is added to its site_ids.
+  function addActivity(itinerary, stopId, day, fields, random = Math.random) {
+    const target = stopById(itinerary, stopId);
+    if (!target) return itinerary;
+    const dayCountGuess = Math.max(day, ...stopEntries(itinerary.route.points).flatMap((e) => [e.point.arrive ? e.point.arrive.day : 0, e.point.depart ? e.point.depart.day : 0]));
+    const span = stopSpan(target.point, target.position, dayCountGuess);
+    if (day < span.from || day > span.to) return itinerary;
+    const f = toObj(fields);
+    const siteId = toStr(f.site_id);
+    let next = itinerary;
+    if (siteId && !(target.point.site_ids || []).includes(siteId)) {
+      next = replacePoint(next, target.index, { ...target.point, site_ids: [...(target.point.site_ids || []), siteId] });
+    }
+    const groupSize = next.activities.filter((a) => a.stop_id === stopId && a.day === day).length;
+    const activity = normalizeActivity({ id: newId("act", random), stop_id: stopId, day, order: groupSize, title: f.title, notes: f.notes, time: f.time, site_id: siteId }, random);
+    return { ...next, activities: [...next.activities, activity] };
+  }
+
+  // patch: { title?, notes?, time? }. An invalid time clears the time.
+  function updateActivity(itinerary, activityId, patch) {
+    const p = toObj(patch);
+    const activities = itinerary.activities.map((a) => {
+      if (a.id !== activityId) return a;
+      const out = { ...a };
+      if ("title" in p) out.title = toStr(p.title, MAX_TITLE_LENGTH);
+      if ("notes" in p) out.notes = toStr(p.notes, MAX_NOTES_LENGTH);
+      if ("time" in p) {
+        const time = toStr(p.time);
+        if (time && TIME_RE.test(time)) out.time = time; else delete out.time;
+      }
+      return out;
+    });
+    return { ...itinerary, activities };
+  }
+
+  function removeActivity(itinerary, activityId) {
+    return { ...itinerary, activities: renumberActivities(itinerary.activities.filter((a) => a.id !== activityId)) };
+  }
+
+  // Spec §3.3 / §4.6: the charter route as a library route. target: { id, revision } to overwrite, or { name } for new.
+  function promoteRoute(itinerary, target) {
+    const t = toObj(target);
+    const points = itinerary.route.points.map((p) => {
+      if (!isStop(p)) return { ...p };
+      const { id, arrive, depart, ...rest } = p;
+      const out = { ...rest };
+      if (depart) {
+        out.nights = depart.day - (arrive ? arrive.day : 1);
+        if (depart.time) out.depart_time = depart.time;
+      }
+      return out;
+    });
+    return {
+      id: toStr(t.id),
+      name: toStr(t.name, MAX_TITLE_LENGTH) || "",
+      description: "",
+      revision: Number.isInteger(Number(t.revision)) ? Number(t.revision) : 0,
+      speed_kn: itinerary.route.speed_kn,
+      source: { type: "planner" },
+      points
+    };
+  }
+
   return {
     ITINERARY_VERSION, DEFAULT_SPEED_KN, MAX_TITLE_LENGTH, MAX_NOTES_LENGTH, TIME_RE,
     distM, distNm, newId, isStop, parseDateOnly, charterDayCount, dayDateLabel,
@@ -467,6 +569,7 @@
     legHours, timeToMinutes, minutesToTime, estimateTimes, stopTimesLabel,
     lineGeometry,
     clampActivities, edgeStates, moveEdge,
-    setStopDays, setStopTime, setStopSites, sitesByDistance
+    setStopDays, setStopTime, setStopSites, sitesByDistance,
+    renumberActivities, canDropActivity, moveActivity, addActivity, updateActivity, removeActivity, promoteRoute
   };
 });
