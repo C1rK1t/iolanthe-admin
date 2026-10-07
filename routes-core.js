@@ -312,7 +312,7 @@
   const fix6 = (n) => Number(n).toFixed(6);
 
   function slugify(name) {
-    return String(name || "").toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    return String(name || "").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   }
   const exportBaseName = (route) => route.id || slugify(route.name) || "route";
 

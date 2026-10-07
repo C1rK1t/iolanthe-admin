@@ -419,6 +419,10 @@ test("exportBaseName uses the route id, else a slug of the name, else 'route'", 
   assert.equal(core.exportBaseName({ id: "", name: "" }), "route");
 });
 
+test("slugify strips combining accents", () => {
+  assert.equal(core.slugify("Cr\u00e8me Br\u00fbl\u00e9e to Hydra"), "creme-brulee-to-hydra");
+});
+
 test("parseKmlCoordinates tolerates spaces after the commas", () => {
   assert.deepEqual(core.parseKmlCoordinates("120.1, 12.1, 0 120.2, 12.2, 0"), [P(12.1, 120.1), P(12.2, 120.2)]);
 });
