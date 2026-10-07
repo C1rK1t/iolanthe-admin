@@ -1,8 +1,7 @@
 # Route Planner — handoff
 
-Last updated 2026-10-07. **Phases 1 and 2 are complete** (phase 2 at `24d6568`). **Phase 1 is complete and live.** The server route library is in `iolanthe-server`
-`2ac4b8d`, and the admin Routes panel is in `iolanthe-admin` `91d679a`. Next: **phase 2** (site and anchorage
-overlays). Q3 is decided (merge), so nothing blocks it.
+Last updated 2026-10-07. **Phases 1, 2 and 3 are complete and live** (phase 3 merged at `9828511`, with the
+server at `0e68d98`). Next: **phase 4** (assign routes to charters). Spec Q2 is still open and is needed first.
 
 | File | What it is |
 |---|---|
@@ -190,40 +189,71 @@ by turning the mockup's CSS (`:root` tokens, `.icon-btn`, `.stat`, `.banner`, `.
   - overlapping saves losing an update
   - re-snapping a nudged stop
 - **Follow-ups:**
-  - `routes.js` is 974 lines (over the 800 guideline). Split the point popup into its own file.
   - Local dev data has leftover test anchorages and routes.
   - Browser checks need the local test login; David allowed agents to read the dev password, but the auto-mode
     classifier still blocks subagents. The workaround is for the main session to log in to the browser pane and
     hand over the session.
 
-## Next: phase 3
+## Phase 3 (done, 2026-10-07)
 
-**The plan is ready:** `docs/superpowers/plans/2026-10-07-routes-phase3-import-export.md`. It was prototyped by the
-planning agent: 43 tests pass with the plan's code, and the edit scripts reproduce the prototype. It's run in a NEW
-session (David's choice).
+- **Merged** to `iolanthe-admin` `main` at `9828511` (plan: `docs/superpowers/plans/2026-10-07-routes-phase3-import-export.md`).
+  It went live via the cron. **Server** `iolanthe-server` `main` at `0e68d98`, deployed with `./update.sh` on
+  2026-10-07 (the server went first, because the admin's plain stops and anchorage ids need it).
+- **Files:** `routes.js` was split into `routes-ui.js`, `routes-popup.js`, `routes-lists.js` and `routes-join.js`, plus the
+  new `routes-io.js` (import, pins, export). `routes.js` is now 775 lines. Tests: 63 (`node --test`); server 24
+  (`npm test`). The version string is `admin-routes-v3`.
+- **Features:**
+  - **Import** KML/GPX: pick one line or join them all, Simplify (the default aims for 60 points or fewer, found by binary
+    search and cached per line), and Replace / Append. Importing into a new route fills its name and source.
+  - **Pins:** temporary orange markers with Add to route, Make anchorage (creates the anchorage only), Make site (with
+    the description), Delete and "near X". They're never saved, survive route switches and New, and leaving the panel
+    warns. Re-importing skips duplicate pins.
+  - **Export:** GPX 1.1 and KML of the working copy, including unsaved edits.
+- **Captain's feedback, added to phase 3:**
+  - Leg cards are compact: a small black-and-white tickbox, with distance, time and leg speed on one line.
+  - New anchorages default to "Anchorage". A duplicate name (ignoring case) is saved as "<name> #02", "#03", …
+    The server gives a new anchorage a free id, because a renamed anchorage keeps its old slug. It also rejects
+    duplicate names, ignoring case.
+  - **Plain stops** (hold position / drift): `stop: true` on a point with no anchorage. Waypoints get "Make stop here";
+    every stop gets "Remove stop". Plain stops have a dashed-ring marker and show "Holding / drifting" in the Stops tab.
+- **Reviews caught and fixed:**
+  - **Security:** every admin `<textarea>` and three `<option>`s filled HTML through `escapeText`, which escapes nothing.
+    An imported pin description could inject script via Make site. They now use `escapeHtml`. `htmlToText` also
+    strips tags again after decoding entities.
+  - a stale-bind guard (`isCurrent`) after every await in the import
+  - stale file loads
+  - KML coordinates with spaces after the commas
+  - control characters in exported names
+  - accents in export file names
+  - long pin names exceeding the server's 120-character limit
+  - the slow default tolerance on huge tracks
+  - a default-named anchorage clashing on its id
+- **Task 5 is HELD:** retiring Route Upload is on branch `feat/routes-retire-upload` (`6aff979`, pushed and reviewed).
+  It removes the Route Upload panel and the old KML pin import modal from admin.js/admin.css. Merge it **only with
+  phase 4**. Until then Route Upload stays, so charters can still get routes.
+- **Local dev:** the worktree session used its own `.claude/launch.json` (excluded via `.git/info/exclude`), so the
+  dev server served the worktree. Restarting the dev server logs the browser tab out.
 
-How to run it:
-- **Process:** use superpowers:subagent-driven-development on branch `feat/routes-phase3`, with a spec and quality
-  review after each task.
-- **Order:** run Tasks 1, 3 and 4 strictly in that order (they share files). Task 2 (core plus tests) and Task 5
-  (admin.js/admin.css) touch separate files and may run alongside. David is fine with 2–3 agents at a time when
-  usage allows; check `get_usage` first.
-- **Task 1** splits `routes.js` (976 to 744 lines, into `routes-ui.js`, `routes-popup.js`, `routes-lists.js` and
-  `routes-join.js`) and bumps to `admin-routes-v3`.
-- **Browser checks:** start `routes-admin-dev` with `preview_start` (never Bash). **The controller session logs in to
-  the browser pane itself** (David allows reading the LOCAL dev `admin.passwords.charter`) and hands the logged-in
-  tab to implementers. Subagents are blocked by the classifier from reading it.
-- **Decisions are in the plan:** Task 5 (retire Route Upload) is **held until phase 4** (its own branch, not merged
-  with phase 3); pins survive route switches; Make anchorage from a pin creates the anchorage only.
-- **Merge** phase 3 (Tasks 1–4 and 6) to `main` only with David's approval. Admin goes live within 5 minutes via the
-  cron.
+## Next: phase 4
 
+From spec §5: assign / unassign routes to charters from the Itinerary route rows, "edited since assigned", read-only
+after the charter's end date, charter copies in the route picker and in Add another route, and removing the server's
+`upload-route`.
+- **Spec Q2 is still open** (should charter copies keep their stops?). Decide before planning. Plain stops (`stop: true`)
+  are now part of that question too.
+- Merge the held `feat/routes-retire-upload` with phase 4. The Alternative-route fallback notice must be rebuilt on the
+  Itinerary rows. The old `routeUploadFallbackNoticeHtml` and `routePlanData` are in admin.js at the Task 5 parent
+  commit `9247000`.
+- Charter copies in "Add another route" go into `routes-join.js`.
 
-From spec §5:
-- KML/GPX import in the browser: Simplify, temporary pins (Add to route / Make anchorage / Make site, "near X" flags)
-- GPX/KML export
-- retire the old Route Upload panel and the KML pin import modal
-- the mockup's JS is the reference: `parseGeoFile`, `simplify`, `openImport`, `exportGpx`/`exportKml`
+**Follow-ups (not blocking):**
+- `iolanthe-guest` puts site titles/descriptions into Leaflet tooltips and popups as raw HTML (guest.js ~3165,
+  3294–3305, 6548). Imported pins can now become sites, so escape them there (a separate task was suggested).
+- Import decodes files as UTF-8 only (Latin-1 / UTF-16 GPX files would garble or fail).
+- The server sends no `Cache-Control` for static files; consider `no-cache` for `admin/index.html`.
+- Undo after importing into a new route restores the points but keeps the imported name and source.
+- `admin.js` `<option value="${id}">` attributes for charter and site ids are unescaped (ids are slugs, so low risk).
+- "Add mode" stays on after New (existing behaviour).
 
 ## Release process and conventions
 
