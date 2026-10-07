@@ -120,3 +120,16 @@
 .itinerary-activity--source { opacity: 0.35; }
 .itinerary-sub--over { outline: 2px solid var(--accent); outline-offset: -1px; }
 .itinerary-sub--refused { outline: 2px dashed var(--danger, #a93d35); outline-offset: -1px; }
+
+.itinerary-action--small { padding: 3px 8px; font-size: 12px; }
+.itinerary-welcome__head { display: flex; justify-content: space-between; align-items: center; }
+.itinerary-welcome__edit { width: 100%; font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px; margin: 6px 0; }
+.itinerary-modal { position: fixed; inset: 0; z-index: 40; background: rgba(16, 32, 40, 0.45); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.itinerary-modal__card { background: var(--panel, #fff); color: var(--ink, #172026); border-radius: 10px; box-shadow: 0 12px 30px rgba(16, 32, 40, 0.3); width: min(480px, 100%); padding: 14px 16px; }
+.itinerary-modal__head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.itinerary-modal__head h3 { margin: 0; font-size: 16px; }
+.itinerary-modal__field { display: grid; gap: 4px; margin: 8px 0; font-size: 12.5px; color: var(--muted); }
+.itinerary-modal__select, .itinerary-modal__text { font: inherit; padding: 6px 8px; border: 1px solid var(--line, #d7dde1); border-radius: 4px; color: var(--ink, #172026); }
+.itinerary-modal__radio { display: block; margin: 6px 0; }
+.itinerary-modal__preview { margin: 8px 0; }
+.itinerary-modal__actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }

@@ -80,9 +80,99 @@
     if (ok) await reloadFromServer();
   }
 
-  // Replaced by the Apply / Promote modals (plan 3 task 9).
-  function openApplyModal() {}
-  function openPromoteModal() {}
+  // Minimal modal: returns { root, body, close }. Buttons are built by the caller.
+  function openModal(title) {
+    const body = el("div", { class: "itinerary-modal__body" });
+    const close = () => root.remove();
+    const root = el("div", { class: "itinerary-modal", role: "dialog", "aria-modal": "true", "aria-label": title },
+      el("div", { class: "itinerary-modal__card" },
+        el("div", { class: "itinerary-modal__head" }, el("h3", {}, title), el("button", { type: "button", class: "itinerary-pop__close", "aria-label": "Close" }, "×")),
+        body));
+    root.querySelector(".itinerary-pop__close").addEventListener("click", close);
+    root.addEventListener("click", (e) => { if (e.target === root) close(); });
+    document.body.append(root);
+    return { root, body, close };
+  }
+
+  async function openApplyModal() {
+    if (isDirty()) { status("Save or cancel your changes first.", "error"); return; }
+    const n = dayCount();
+    if (!n) { status("Set the charter's start and end dates first.", "error"); return; }
+    let routes = [];
+    try { routes = (await A().api("/api/admin/routes")).routes || []; } catch (error) { status(error.message, "error"); return; }
+    const modal = openModal("Apply a library route");
+    const picker = el("select", { class: "itinerary-modal__select" }, ...routes.map((r) => el("option", { value: r.id }, `${r.name} · ${r.points.filter(core().isStop).length} stops`)));
+    const today = (() => { const start = core().parseDateOnly(ctx.charter.start_date); if (start === null) return 1; const d = Math.floor((Date.now() - start) / 86400000) + 1; return Math.min(Math.max(d, 1), n); })();
+    const fromDay = el("select", { class: "itinerary-modal__select" }, ...dayOptions(core().stopEntries(work.itinerary.route.points).length ? today : 1, n));
+    const preview = el("div", { class: "muted itinerary-modal__preview" });
+    const updatePreview = () => {
+      const route = routes.find((r) => r.id === picker.value);
+      const from = Number(fromDay.value);
+      const nights = route ? route.points.filter(core().isStop).reduce((sum, p) => sum + (Number.isInteger(p.nights) ? p.nights : (p.anchorage_id ? 1 : 0)), 0) : 0;
+      const kept = core().stopEntries(work.itinerary.route.points).filter((e, i, all) => core().stopSpan(e.point, core().positionOf(i, all.length), n).from < from).length;
+      preview.textContent = route ? `Keeps ${kept} stop${kept === 1 ? "" : "s"}, replaces from Day ${from}. The route plans about ${nights} night${nights === 1 ? "" : "s"}; ${n - from + 1} day${n - from + 1 === 1 ? "" : "s"} remain.` : "";
+    };
+    picker.addEventListener("change", updatePreview);
+    fromDay.addEventListener("change", updatePreview);
+    updatePreview();
+    const apply = el("button", { type: "button", class: "itinerary-action itinerary-action--primary" }, "Apply");
+    apply.addEventListener("click", async () => {
+      apply.disabled = true;
+      try {
+        const { itinerary } = await post(`/api/admin/charter/${encodeURIComponent(ctx.charterId)}/itinerary/apply-route`, { route_id: picker.value, from_day: Number(fromDay.value), base_revision: work.baseRevision });
+        const saved = core().normalizeItinerary(itinerary);
+        work = { itinerary: saved, savedJson: core().itinerarySnapshot(saved), baseRevision: saved.revision };
+        modal.close();
+        status(`Applied "${picker.selectedOptions[0].textContent}" from Day ${fromDay.value}.`, "ok");
+        renderAll();
+      } catch (error) {
+        apply.disabled = false;
+        if (error.status === 409 && error.payload && error.payload.code === "too-long") status(error.message, "error");
+        else if (error.status === 409) { modal.close(); await handleClash(error); }
+        else status(error.message, "error");
+      }
+    });
+    modal.body.append(
+      el("label", { class: "itinerary-modal__field" }, "Route", picker),
+      el("label", { class: "itinerary-modal__field" }, "From day", fromDay),
+      preview,
+      el("div", { class: "itinerary-modal__actions" }, apply)
+    );
+  }
+
+  async function openPromoteModal() {
+    if (isDirty()) { status("Save your changes first.", "error"); return; }
+    let routes = [];
+    try { routes = (await A().api("/api/admin/routes")).routes || []; } catch (error) { status(error.message, "error"); return; }
+    const source = work.itinerary.route.source || {};
+    const parent = source.type === "library" ? routes.find((r) => r.id === source.route_id) : null;
+    const modal = openModal("Promote this route to the library");
+    const overwrite = el("input", { type: "radio", name: "promote", value: "overwrite", ...(parent ? { checked: "" } : { disabled: "" }) });
+    const asNew = el("input", { type: "radio", name: "promote", value: "new", ...(parent ? {} : { checked: "" }) });
+    const name = el("input", { type: "text", class: "itinerary-modal__text", placeholder: "New route name", value: `${ctx.charter.name || ctx.charterId} route` });
+    const go = el("button", { type: "button", class: "itinerary-action itinerary-action--primary" }, "Promote");
+    go.addEventListener("click", async () => {
+      go.disabled = true;
+      const target = overwrite.checked && parent ? { id: parent.id, revision: parent.revision, name: parent.name } : { name: name.value.trim() };
+      if (!target.id && !target.name) { status("Give the new route a name.", "error"); go.disabled = false; return; }
+      const route = core().promoteRoute(work.itinerary, target);
+      if (target.id) route.name = parent.name;
+      try {
+        const { route: saved } = await post("/api/admin/routes/save", { route, base_revision: target.id ? parent.revision : 0 });
+        modal.close();
+        status(`Library route "${saved.name}" saved · revision ${saved.revision}`, "ok");
+      } catch (error) {
+        go.disabled = false;
+        status(error.message, "error");
+      }
+    });
+    modal.body.append(
+      el("label", { class: "itinerary-modal__radio" }, overwrite, ` Overwrite "${parent ? parent.name : "(no parent library route)"}"`),
+      el("label", { class: "itinerary-modal__radio" }, asNew, " Save as a new library route"),
+      el("label", { class: "itinerary-modal__field" }, "Name", name),
+      el("div", { class: "itinerary-modal__actions" }, go)
+    );
+  }
 
   const dayCount = () => core().charterDayCount(ctx.charter);
   const siteTitle = (id) => {
@@ -136,8 +226,16 @@
   function renderWelcome() {
     const box = panel.querySelector("#itinerary-welcome");
     const text = work.itinerary.welcome_message;
+    const edit = el("button", { type: "button", class: "itinerary-action itinerary-action--small" }, "Edit");
+    edit.addEventListener("click", () => {
+      const ta = el("textarea", { class: "itinerary-welcome__edit", rows: "4", maxlength: String(core().MAX_NOTES_LENGTH) }, text);
+      const done = el("button", { type: "button", class: "itinerary-action itinerary-action--small" }, "Done");
+      done.addEventListener("click", () => commit({ ...work.itinerary, welcome_message: ta.value.trim() }) || renderWelcome());
+      box.replaceChildren(el("div", { class: "itinerary-welcome__label label" }, "Welcome message"), ta, done);
+      ta.focus();
+    });
     box.replaceChildren(
-      el("div", { class: "itinerary-welcome__label label" }, "Welcome message"),
+      el("div", { class: "itinerary-welcome__head" }, el("div", { class: "itinerary-welcome__label label" }, "Welcome message"), edit),
       el("div", { class: `itinerary-welcome__text${text ? "" : " muted"}` }, text || "No welcome message yet.")
     );
   }
