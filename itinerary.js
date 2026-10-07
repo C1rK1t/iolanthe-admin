@@ -143,7 +143,6 @@
     requestAnimationFrame(() => drawLine(days));
   }
 
-  // Filled in by Task 5.
   const SVG_NS = "http://www.w3.org/2000/svg";
   const svgEl = (tag, attrs) => {
     const node = document.createElementNS(SVG_NS, tag);
@@ -185,10 +184,11 @@
 
     geo.shapes.forEach((shape) => {
       if (shape.terminal === "origin") {
-        // Underground-style open loop: a U open at the top with the stem continuing down.
-        svg.append(svgEl("path", { class: "itinerary-line__terminal", d: `M ${LINE_X - 9} ${shape.y1 - 14} V ${shape.y1} A 9 9 0 0 0 ${LINE_X + 9} ${shape.y1} V ${shape.y1 - 14}` }));
+        // Open at the top, rounded at the bottom; spans the dwell when the origin stop is slept at.
+        svg.append(svgEl("path", { class: "itinerary-line__terminal", d: `M ${LINE_X - 9} ${shape.y1 - 14} V ${shape.y2} A 9 9 0 0 0 ${LINE_X + 9} ${shape.y2} V ${shape.y1 - 14}` }));
       } else if (shape.terminal === "terminus") {
-        svg.append(svgEl("path", { class: "itinerary-line__terminal", d: `M ${LINE_X - 9} ${shape.y2 + 14} V ${shape.y2} A 9 9 0 0 1 ${LINE_X + 9} ${shape.y2} V ${shape.y2 + 14}` }));
+        // Open at the bottom, rounded at the top.
+        svg.append(svgEl("path", { class: "itinerary-line__terminal", d: `M ${LINE_X - 9} ${shape.y2 + 14} V ${shape.y1} A 9 9 0 0 1 ${LINE_X + 9} ${shape.y1} V ${shape.y2 + 14}` }));
       } else if (shape.kind === "loop") {
         svg.append(svgEl("rect", { class: "itinerary-line__loop", x: LINE_X - LOOP_W / 2, y: shape.y1 - 9, width: LOOP_W, height: shape.y2 - shape.y1 + 18, rx: 9 }));
       } else {

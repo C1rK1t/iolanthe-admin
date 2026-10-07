@@ -41,7 +41,7 @@
 .itinerary-stop-title__times--est { font-style: italic; }
 
 .itinerary-line__trunk { stroke: var(--route); stroke-width: 6; stroke-linecap: round; }
-.itinerary-line__terminal { stroke: var(--route); stroke-width: 5; fill: none; stroke-linecap: round; }
+.itinerary-line__terminal { stroke: var(--route); stroke-width: 5; fill: #fff; stroke-linecap: round; }
 .itinerary-line__loop { fill: #fff; stroke: var(--route); stroke-width: 4; }
 .itinerary-line__dot { fill: var(--route); stroke: #fff; stroke-width: 2; }
 
