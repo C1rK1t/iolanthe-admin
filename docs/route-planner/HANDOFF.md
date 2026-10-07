@@ -198,8 +198,25 @@ by turning the mockup's CSS (`:root` tokens, `.icon-btn`, `.stat`, `.banner`, `.
 
 ## Next: phase 3
 
-An agent is writing the plan to `docs/superpowers/plans/2026-10-07-routes-phase3-import-export.md`. It's not
-committed yet. Task 1 splits `routes.js` (the point popup moves to its own file) before import/export is added.
+**The plan is ready:** `docs/superpowers/plans/2026-10-07-routes-phase3-import-export.md`. It was prototyped by the
+planning agent: 43 tests pass with the plan's code, and the edit scripts reproduce the prototype. It's run in a NEW
+session (David's choice).
+
+How to run it:
+- **Process:** use superpowers:subagent-driven-development on branch `feat/routes-phase3`, with a spec and quality
+  review after each task.
+- **Order:** run Tasks 1, 3 and 4 strictly in that order (they share files). Task 2 (core plus tests) and Task 5
+  (admin.js/admin.css) touch separate files and may run alongside. David is fine with 2–3 agents at a time when
+  usage allows; check `get_usage` first.
+- **Task 1** splits `routes.js` (976 to 744 lines, into `routes-ui.js`, `routes-popup.js`, `routes-lists.js` and
+  `routes-join.js`) and bumps to `admin-routes-v3`.
+- **Browser checks:** start `routes-admin-dev` with `preview_start` (never Bash). **The controller session logs in to
+  the browser pane itself** (David allows reading the LOCAL dev `admin.passwords.charter`) and hands the logged-in
+  tab to implementers. Subagents are blocked by the classifier from reading it.
+- **Decisions are in the plan:** Task 5 (retire Route Upload) is **held until phase 4** (its own branch, not merged
+  with phase 3); pins survive route switches; Make anchorage from a pin creates the anchorage only.
+- **Merge** phase 3 (Tasks 1–4 and 6) to `main` only with David's approval. Admin goes live within 5 minutes via the
+  cron.
 
 
 From spec §5:
