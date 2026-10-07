@@ -360,12 +360,87 @@
       );
       title.style.top = `${(shape.y1 + shape.y2) / 2}px`;
       titles.append(title);
+      title.addEventListener("click", () => openStopPopover(shape.stopId, title));
+      svg.lastElementChild.addEventListener("click", () => openStopPopover(shape.stopId, title));
+      svg.lastElementChild.classList.add("itinerary-line__clickable");
     });
+  }
+
+  let popover = null;
+
+  function closePopover() {
+    if (popover) { popover.remove(); popover = null; }
+    document.removeEventListener("pointerdown", onDocPointerDown, true);
+  }
+  function onDocPointerDown(event) {
+    if (popover && !popover.contains(event.target)) closePopover();
+  }
+
+  function dayOptions(selected, n) {
+    return Array.from({ length: n }, (_, i) => el("option", { value: String(i + 1), ...(i + 1 === selected ? { selected: "" } : {}) }, `Day ${i + 1} · ${core().dayDateLabel(ctx.charter, i + 1)}`));
+  }
+
+  function openStopPopover(stopId, anchor) {
+    closePopover();
+    const stop = core().stopEntries(work.itinerary.route.points).map((e) => e.point).find((p) => p.id === stopId);
+    if (!stop) return;
+    const n = dayCount();
+    const times = core().estimateTimes(work.itinerary).get(stopId) || { arrive: null, depart: null };
+    const nights = stop.arrive && stop.depart ? stop.depart.day - stop.arrive.day : 0;
+
+    const dayTimeRow = (label, field) => {
+      const value = stop[field];
+      if (!value) return el("div", { class: "itinerary-pop__row muted" }, `${label}: ${field === "arrive" ? "origin" : "terminus"}`);
+      const daySel = el("select", { class: "itinerary-pop__day" }, ...dayOptions(value.day, n));
+      const timeIn = el("input", { type: "time", class: "itinerary-pop__time", value: value.time || "", placeholder: times[field] && times[field].estimated ? `~${times[field].time}` : "" });
+      daySel.addEventListener("change", () => {
+        const result = core().setStopDays(work.itinerary, stopId, field === "arrive" ? { arriveDay: Number(daySel.value) } : { departDay: Number(daySel.value) }, n);
+        if (result.error) { status(result.error, "error"); daySel.value = String(value.day); return; }
+        commit(result.itinerary);
+        openStopPopover(stopId, panel.querySelector(`.itinerary-stop-title[data-stop-id="${stopId}"]`) || anchor);
+      });
+      timeIn.addEventListener("change", () => { commit(core().setStopTime(work.itinerary, stopId, field, timeIn.value)); });
+      const est = times[field] && times[field].estimated ? el("span", { class: "muted itinerary-pop__est" }, `est. ${times[field].time}`) : null;
+      return el("div", { class: "itinerary-pop__row" }, el("label", {}, label), daySel, timeIn, est);
+    };
+
+    const sitesList = core().sitesByDistance(ctx.siteLibrary, stop);
+    const served = new Set(stop.site_ids || []);
+    const siteRows = sitesList.filter((s) => s.near || served.has(s.id)).map((s) => {
+      const cb = el("input", { type: "checkbox", ...(served.has(s.id) ? { checked: "" } : {}) });
+      cb.addEventListener("change", () => {
+        const ids = cb.checked ? [...(stop.site_ids || []), s.id] : (stop.site_ids || []).filter((x) => x !== s.id);
+        if (!cb.checked && work.itinerary.activities.some((a) => a.stop_id === stopId && a.site_id === s.id)) {
+          A().showAdminConfirm({ title: "Remove site", message: `Activities at ${s.title} on this stop will be removed too.`, confirmLabel: "Remove", cancelLabel: "Keep", tone: "warning" })
+            .then((ok) => { if (ok) { commit(core().setStopSites(work.itinerary, stopId, ids)); openStopPopover(stopId, anchor); } else { cb.checked = true; } });
+          return;
+        }
+        commit(core().setStopSites(work.itinerary, stopId, ids));
+      });
+      return el("label", { class: "itinerary-pop__site" }, cb, ` ${s.title} `, el("span", { class: "muted" }, `${s.nm.toFixed(1)} nm`));
+    });
+
+    popover = el("div", { class: "itinerary-pop", role: "dialog", "aria-label": `${stop.name || "Stop"} details` },
+      el("div", { class: "itinerary-pop__head" }, el("strong", {}, stop.name || "Stop"), el("button", { type: "button", class: "itinerary-pop__close", "aria-label": "Close" }, "×")),
+      dayTimeRow("Arrival", "arrive"),
+      dayTimeRow("Departure", "depart"),
+      el("div", { class: "itinerary-pop__row muted" }, `Nights: ${nights}`),
+      el("div", { class: "itinerary-pop__sites" }, el("div", { class: "label" }, "Sites served"), ...(siteRows.length ? siteRows : [el("div", { class: "muted" }, "No sites within 5 nm")])),
+      el("div", { class: "itinerary-pop__foot muted" }, "Open on map arrives with the Route panel (plan 4).")
+    );
+    popover.querySelector(".itinerary-pop__close").addEventListener("click", closePopover);
+    panel.append(popover);
+    const a = anchor.getBoundingClientRect();
+    const p = panel.getBoundingClientRect();
+    popover.style.top = `${a.top - p.top}px`;
+    popover.style.left = `${Math.max(8, a.right - p.left + 48)}px`;
+    setTimeout(() => document.addEventListener("pointerdown", onDocPointerDown, true), 0);
   }
 
   function bind(opts) {
     panel = document.getElementById("itinerary-panel");
     if (!panel) return;
+    closePopover();
     ctx = { charterId: opts.charterId, charter: opts.charter || {}, siteLibrary: opts.siteLibrary || { sites: [] } };
     const itinerary = core().normalizeItinerary(opts.itinerary);
     work = { itinerary, savedJson: core().itinerarySnapshot(itinerary), baseRevision: itinerary.revision };

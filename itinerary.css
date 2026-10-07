@@ -14,6 +14,7 @@
   --sub-border: rgba(120, 160, 255, 0.45);
   --act-border: rgba(70, 170, 200, 0.8);
   color: var(--ink);
+  position: relative;   /* anchors the stop popover */
 }
 .itinerary-panel.card { background: var(--card-bg); }
 
@@ -83,3 +84,16 @@
 .itinerary-edge--dragging { transform: scaleX(1.15); }
 .itinerary-edge--refused { animation: itinerary-shake 0.35s; background: var(--danger, #a93d35); }
 @keyframes itinerary-shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+
+.itinerary-line__clickable { cursor: pointer; }
+.itinerary-stop-title { cursor: pointer; }
+.itinerary-pop { position: absolute; z-index: 5; width: 300px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); padding: 10px 12px; font-size: 12.5px; }
+.itinerary-pop__head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.itinerary-pop__close { border: none; background: transparent; font-size: 18px; cursor: pointer; line-height: 1; }
+.itinerary-pop__row { display: grid; grid-template-columns: 70px minmax(0, 1fr) 84px; gap: 6px; align-items: center; margin: 4px 0; }
+.itinerary-pop__row label { color: var(--muted); }
+.itinerary-pop__day, .itinerary-pop__time { font: inherit; padding: 3px 4px; border: 1px solid var(--line); border-radius: 4px; background: #fff; min-width: 0; }
+.itinerary-pop__est { grid-column: 2 / span 2; font-size: 11px; }
+.itinerary-pop__sites { margin-top: 8px; max-height: 180px; overflow: auto; }
+.itinerary-pop__site { display: block; padding: 2px 0; }
+.itinerary-pop__foot { margin-top: 8px; font-size: 11px; }
