@@ -29,6 +29,9 @@ URL access also requires `?key=<settings.admin.urlKey>`.
 - `admin.css` — all styles
 - `admin.js` — all client-side logic (~15k lines, IIFE)
 - `assets/icons/admin/` — favicons and department login icons
+- `routes-core.js` — Route Planner pure logic (also a Node module; tests in `test/`, run `node --test`)
+- `routes.js` / `routes.css` — Charter → Routes panel. It uses the `window.IolantheAdmin` helpers exposed at the end
+  of `admin.js`, and its styles are scoped under `.routes-panel` / `.routes-modal`
 
 ## Path conventions
 
@@ -72,9 +75,13 @@ set to in `data-local/settings.json`).
 ## Deployment (docker-vm)
 
 `iolanthe-server` bind-mounts `./iolanthe-admin:/static/admin:ro` in the
-vessel compose file. Updates:
+vessel compose file. **Merging to `main` releases it:** root's cron runs
+`/opt/projects/vessel/update-vessel.sh` every 5 minutes. That script pulls the static repos (admin, guest, crew), and
+the bind mount serves the new files with no restart. Bump the `?v=` strings in `index.html` so browsers fetch the
+new CSS/JS. To pull straight away:
 
 ```bash
 cd /opt/projects/vessel/iolanthe-admin && git pull
-# No container restart needed — bind-mount serves live files
 ```
+
+Server changes are different. `iolanthe-server` doesn't auto-update; run `./update.sh` there (see its CLAUDE.md).
