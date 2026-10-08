@@ -476,3 +476,9 @@ Brainstormed with the visual companion (`.superpowers/brainstorm/31923-*/content
   track cut and the existing active-charter day rule flip at 08:00 Philippine time (set `TZ=Asia/Manila` in compose?).
   Deferred: track read is synchronous per request (fine at 3-day retention sizes). Merge order: server #5 -> deploy ->
   guest #2 + admin #11 together; then remove the worktrees and the `iolanthe-server-specb` launch entry.
+- **2026-10-08 spec B LIVE.** Server #5 merged `fbafd0a`, pulled and rebuilt on docker-vm (`/api/charter`,
+  `/api/planned-route`, `/api/track` 200; `?charter=` without a session 401; `/api/version` main-fbafd0a). Guest #2
+  `d731236` and admin #11 `8f94ca4` merged and pulled onto the vessel straight away (guest `?v=guest-b-1`, SW v5; admin
+  `admin-preview-1`). Worktrees, the data copy, the test-server launch entry and the feature branches removed. Plan 5
+  Task 8 is done with it. Next: David / the captain try Charter -> Guest view on the boat; the vessel TZ question
+  (deferred by David); spec C (revisions for crew / guests / menus / drinks).
