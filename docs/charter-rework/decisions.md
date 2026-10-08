@@ -406,3 +406,10 @@ Brainstormed with the visual companion (`.superpowers/brainstorm/31923-*/content
   session's docs commits landed on this branch (docs only) and a Haiku implementer briefly switched the server checkout
   off the other session's branch (restored at once) — give implementers in a shared checkout an explicit "do not checkout".
 
+
+- **2026-10-08 server PR #3 OPEN and verified** (C1rK1t/iolanthe-server#3, `7a23db7`, 97 tests). Endpoint checks run from the
+  logged-in scratch admin: charters/bootstrap payload fields, reserved periods GET / 409 stale / 400 invalid / 400 overlap /
+  400 duplicate id, create overlap 400, make-active 200; and the day-before rule live (Larry moved to start tomorrow ->
+  forced active + guest payload flips, make-active Csaba -> 409 "Larry is in date…", restore -> Csaba). No conflict with
+  server PR #4 (itinerary.js only). Admin main is at 117 tests (round-2 work), so plan ch-02 totals read +6. ch-02 starts
+  with the new files; index.html / CLAUDE.md wiring waits for admin PR #8. NEXT: David merges #3 + `./update.sh`.
