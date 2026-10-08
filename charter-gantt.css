@@ -1,5 +1,7 @@
 /* The charter Gantt band (spec-charters §6). Scoped under .charter-gantt. */
 .charter-gantt {
+  min-width: 0;
+  max-width: 100%;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -29,7 +31,7 @@
 .charter-gantt .gantt-nodates select { min-height: 36px; font-size: 0.8rem; padding: 0 0.5rem; border: 1px solid var(--line); border-radius: 6px; background: #fff; color: var(--muted); }
 
 .charter-gantt .gantt-viewport {
-  position: relative; overflow-x: auto; overflow-y: hidden; border: 1px solid var(--line); border-radius: 8px;
+  position: relative; min-width: 0; max-width: 100%; overflow-x: auto; overflow-y: hidden; border: 1px solid var(--line); border-radius: 8px;
   background: #f8fafb; cursor: grab; user-select: none; -webkit-user-select: none; touch-action: pan-y;
   scrollbar-width: thin;
 }

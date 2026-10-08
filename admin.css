@@ -307,6 +307,11 @@ button.admin-icon-button--gold:focus {
   gap: 0.8rem;
 }
 
+.charter-gantt-host {
+  min-width: 0;
+  max-width: 100%;
+}
+
 .charter-gantt-host:empty {
   display: none;
 }
