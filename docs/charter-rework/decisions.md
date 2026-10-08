@@ -332,3 +332,26 @@ workplace per charter.
 - **A2-T13 (question) time picker usability:** the native `<input type="time">` is fiddly on the tablet; consider a
   pair of selects (hour, 5-minute steps) or ±15-min buttons beside it.
 
+
+## Charter setup spec: the Gantt band and the active rule (2026-10-08)
+
+Brainstormed with the visual companion (`.superpowers/brainstorm/31923-*/content/`). Written up as
+[spec-charters.md](spec-charters.md).
+
+- **C-D1. The Gantt is the charter selector** above every Charter panel; the Charter section's dropdown goes (Galley and
+  Hotel keep theirs). Collapsed by default to a strip on the Route page, remembered per browser.
+- **C-D2. Active = in date, else the crew's choice.** In date = the day before start to the end date; forced. Otherwise
+  the stored choice (any charter), else the most recently ended. No end-of-charter buffer; on a back-to-back turnaround
+  the next charter wins on the last day. Rule runs on the server; `DEFAULT_ACTIVE_CHARTER` goes.
+- **C-D3. No overlapping dates** between charters and reserved periods; refused on create / save, checked live in the
+  admin. The day-before window is not part of the check.
+- **C-D4. Make active is a button on the charter's Info header**, disabled while any charter is in date. Gold on the
+  Gantt. Past charters may be made active (old "completed" refusal removed).
+- **C-D5. The Gantt is read-only:** drag pans, wheel zooms, arrows and scrollbar pan; click a charter to select it, click a
+  reserved period to open its card. No drag-create, no date dragging, no context menu.
+- **C-D6. Reserved periods** (maintenance / unavailable / other) in `data/reserved-periods.json` with revision + 409;
+  created from a button beside New charter; edited / deleted in the same card. Never active, invisible to guests.
+- **C-D7. Info page layout B** (two columns on wide screens), Route-page style via new shared `admin.css` classes
+  (stat tiles, form sections, status pill, segmented control, gold icon tone). `routes.css` untouched.
+- **C-D8. New charter keeps Copy from**, drops Set active, lands on the new charter's Info.
+- Rollout: server `feat/charter-gantt` then admin `feat/charter-gantt` (`admin-charters-1`); no migration.
