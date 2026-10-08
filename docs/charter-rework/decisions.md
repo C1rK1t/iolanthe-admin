@@ -432,3 +432,24 @@ Brainstormed with the visual companion (`.superpowers/brainstorm/31923-*/content
   `feat/itinerary-a2-round2` deleted. Next: the captain's second look; plan 5 Task 8 shims; specs B and C; restore the
   ended-charter read-only guard when the reminder fires (2026-11-16).
 
+## Captain's second look at round 2 (2026-10-08)
+
+- Captain happy with progress. Fixes shipped in admin PR C1rK1t/iolanthe-admin#10 (merged `c825810`, assets
+  `admin-charters-2`): the departure time sits on the same line as the date / nights (Depart tile 1.35x wide); the fit
+  pill shows a red warning triangle instead of "+N d" with a wrapping tooltip "Route is N days longer/shorter than the
+  charter: ..."; Delete charter moved from the Gantt band toolbar to the Charter Info header.
+
+## Spec B brainstorm (2026-10-08): the guest preview
+
+- **B-D1 Home:** a "Guest view" tab in the Charter section; the live guest in a same-origin iframe, the slider in the
+  admin page; eye buttons on the Route and Charter Info headers (layout A of `preview-layout.html`).
+- **B-D2 Charter:** the selected charter (future, active or past).
+- **B-D3 Data:** the saved record only; a dirty Route page asks Save / Preview saved version.
+- **B-D4 Slider:** whole days, plus a day-before-boarding and a day-after step.
+- **B-D5 Live data:** position and weather stay live; the track is the previewed charter's own, cut at the end of the
+  slider date (tracks are kept only 3 days after a charter, so old ones show none).
+- **B-D6 Security:** `?charter=` on the guest endpoints only with a valid admin session; 401 otherwise, never a silent
+  fallback. The preview track read uses `loadTrack` (read-only), never `ensureTrackState`.
+- **B-D7 Plan 5 Task 8 bundled** into the spec B guest and server releases, plus guest `?v=` cache-busters.
+- **B-D8 Release order:** server, then guest + admin together.
+- Spec written: [spec-b.md](spec-b.md) (draft 1).
