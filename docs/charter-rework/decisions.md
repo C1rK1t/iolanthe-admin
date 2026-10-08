@@ -250,4 +250,11 @@ workplace per charter.
   assembled from the plan text passes 110 tests; the two new browser modules parse. Next: execute A2-01 (server, with
   the docker-vm migration rehearsal), deploy, then A2-02 on `feat/itinerary-a2` with Sonnet subagents and browser
   verification, then merge.
+- **2026-10-08 plan A2-01 (server) EXECUTED** on `iolanthe-server` branch `feat/itinerary-a2` (9 commits, 65 tests, was
+  52), Sonnet/Haiku implementers with this session reviewing each diff against the plan. One fix beyond the plan: a
+  `null` or empty `duration_min` means "no duration" (Number() made it 0 and the bounds check rejected it); mirrored in
+  plan a2-02. Checklist 10/10 on the scratch server; migration v5 rehearsed on docker-vm in a throwaway container on a
+  copy of the live volume (4 routes, 16 anchorages, 6 charters; live untouched, `live_version` 4). PR
+  C1rK1t/iolanthe-server#2 open. Next: David's go to merge + `./update.sh` on the vessel, then execute plan a2-02 on
+  admin `feat/itinerary-a2`.
 
