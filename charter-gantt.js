@@ -18,7 +18,8 @@
     add: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
     reserve: '<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 9h16M8 3v4M16 3v4M7 13l4 4 6-7"/></svg>',
     collapse: '<svg viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg>',
-    expand: '<svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>'
+    expand: '<svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>',
+    eye: '<svg viewBox="0 0 24 24"><path d="M2.8 12s3.4-6 9.2-6 9.2 6 9.2 6-3.4 6-9.2 6-9.2-6-9.2-6z"/><circle cx="12" cy="12" r="3"/></svg>'
   };
 
   function el(tag, attrs, children) {
@@ -199,14 +200,19 @@
         "aria-label": `${bar.name}, ${core.fmtRange(bar.start_date, bar.end_date)}`,
         onclick: () => {
           if (Date.now() < suppressClickUntil) return;
-          if (bar.kind === "charter") ctx.onSelectCharter(bar.id); else ctx.onOpenPeriod(bar.id);
+          if (bar.kind === "charter") {
+            if (ctx.overlay && !ctx.collapsed) setCollapsed(true);   // R3b-3: roll up smoothly, then the page re-renders
+            ctx.onSelectCharter(bar.id);
+          } else {
+            ctx.onOpenPeriod(bar.id);
+          }
         },
         onpointerenter: (e) => showTip(bar, e), onpointermove: (e) => moveTip(e), onpointerleave: hideTip,
         onfocus: (e) => showTip(bar, e), onblur: hideTip
       }, [
+        bar.kind === "charter" && bar.id === ctx.selectedId ? el("span", { class: "gantt-eye", html: ICONS.eye, title: "Viewing" }) : null,   // R3b-1
         el("span", { class: "gantt-bar-name", text: w > 40 ? bar.name : "" }),
-        meta ? el("small", { text: meta }) : null,
-        bar.kind === "charter" && bar.id === ctx.selectedId && w > 90 ? el("small", { class: "gantt-viewing", text: "viewing" }) : null   // R3-6
+        meta ? el("small", { text: meta }) : null
       ]);
       return node;
     }
@@ -302,7 +308,7 @@
       // R3-6: a two-swatch legend (gold = active, outlined = viewing). R3-5: no Collapse button while the band is locked open.
       const legend = el("span", { class: "gantt-legend", "aria-hidden": "true" }, [
         el("i", { class: "is-active" }), el("span", { text: "active" }),
-        el("i", { class: "is-selected" }), el("span", { text: "viewing" })
+        el("span", { class: "gantt-eye", html: ICONS.eye }), el("span", { text: "viewing" })
       ]);
       return el("div", { class: "gantt-toolbar" }, [
         el("div", { class: "gantt-title" }, [el("strong", { text: "Charters" }), el("span", { class: "gantt-span" })]),
@@ -318,7 +324,7 @@
         iconBtn("add", "New charter", { disabled: !ctx.canManage, onclick: () => ctx.onCreateCharter() }),
         iconBtn("reserve", "Reserved period", { disabled: !ctx.canManage, onclick: () => ctx.onOpenPeriod(null) }),
         ctx.locked ? null : el("span", { class: "gantt-sep" }),
-        ctx.locked ? null : iconBtn("collapse", "Collapse", { onclick: () => { ctx.collapsed = true; ctx.onToggleCollapsed(true); render(); } })
+        ctx.locked ? null : iconBtn("collapse", "Collapse", { onclick: () => setCollapsed(true) })
       ]);
     }
 
@@ -331,12 +337,17 @@
       const pill = sel ? core.pillFor(sel, { activeId: ctx.activeId, today: ctx.today }) : { tone: "none", text: "No charter" };
       const dates = sel ? core.fmtRange((sel.charter || {}).start_date, (sel.charter || {}).end_date) : "";
       const n = sel ? core.nights(sel) : null;
-      return el("div", { class: "gantt-strip" }, [
+      // R3b-4: the whole strip is the Expand control (click, Enter or Space), not just the button at its end.
+      return el("div", {
+        class: "gantt-strip", role: "button", tabindex: "0", "aria-label": "Expand the charter timeline",
+        onclick: (e) => { if (!e.target.closest("button, select, a")) setCollapsed(false); },
+        onkeydown: (e) => { if ((e.key === "Enter" || e.key === " ") && e.target === e.currentTarget) { e.preventDefault(); setCollapsed(false); } }
+      }, [
         el("strong", { text: sel ? (sel.name || sel.id) : "Charters" }),
         el("span", { class: "gantt-strip-dates", text: dates + (n !== null ? ` · ${n} nights` : "") }),
         el("span", { class: `status-pill status-pill--${pill.tone}`, text: pill.text }),
         el("span", { class: "gantt-strip-grow" }),
-        iconBtn("expand", "Expand", { onclick: () => { ctx.collapsed = false; ctx.onToggleCollapsed(false); render(); } })
+        iconBtn("expand", "Expand", { onclick: () => setCollapsed(false) })
       ]);
     }
 
@@ -345,30 +356,42 @@
       host.classList.toggle("is-overlay", Boolean(ctx.overlay && !ctx.collapsed));
     }
 
+    // R3b-3: the strip and the body are both in the DOM; collapsing toggles a class and CSS rolls the folds, so the
+    // change is a transition, not a re-render. The body is drawn even while folded (its width is known).
     function render(view) {
       hideTip();
       host.replaceChildren();
       root = el("section", { class: `charter-gantt${ctx.collapsed ? " is-collapsed" : ""}${ctx.overlay && !ctx.collapsed ? " is-overlay" : ""}`, tabindex: "0", "aria-label": "Charter timeline" });
       host.appendChild(root);
       syncOverlay();
-      if (ctx.collapsed) {
-        root.appendChild(strip());
-        return;
-      }
-      root.appendChild(toolbar());
+      root.appendChild(el("div", { class: "gantt-fold gantt-fold--strip" }, [el("div", {}, [strip()])]));
+      const body = el("div", {});
+      body.appendChild(toolbar());
       viewport = el("div", { class: "gantt-viewport" });
       track = el("div", { class: "gantt-track" });
       viewport.appendChild(track);
-      root.appendChild(viewport);
+      body.appendChild(viewport);
       if (!(ctx.charters || []).length) {
-        root.appendChild(el("p", { class: "gantt-empty", text: "Use + to create your first charter." }));
+        body.appendChild(el("p", { class: "gantt-empty", text: "Use + to create your first charter." }));
       }
+      root.appendChild(el("div", { class: "gantt-fold gantt-fold--body" }, [body]));
       bindPan();
       // Width is only known once laid out. A timeout, not requestAnimationFrame: rAF never fires in a hidden tab.
       afterLayout(() => {
         if (!viewport.isConnected) return;
         if (view) restoreView(view); else applyZoom(ctx.zoom);
       });
+    }
+
+    function setCollapsed(collapsed) {
+      if (ctx.locked && collapsed) return;
+      hideTip();
+      ctx.collapsed = collapsed;
+      ctx.onToggleCollapsed(collapsed);
+      root.classList.toggle("is-collapsed", collapsed);
+      root.classList.toggle("is-overlay", Boolean(ctx.overlay && !collapsed));
+      syncOverlay();
+      if (!collapsed) afterLayout(() => { if (viewport.isConnected) { if (pxPerDay) syncTitle(); else applyZoom(ctx.zoom); } });
     }
 
     // The scale and left edge to restore, or null when nothing has been drawn. Read from the last draw / scroll /
@@ -378,7 +401,7 @@
     }
 
     render();
-    const onResize = () => { if (!ctx.collapsed && pxPerDay && viewport && viewport.isConnected) { drawTrack(); syncTitle(); } };
+    const onResize = () => { if (pxPerDay && viewport && viewport.isConnected) { drawTrack(); syncTitle(); } };
     window.addEventListener("resize", onResize);
 
     return {
