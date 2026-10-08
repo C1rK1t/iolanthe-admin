@@ -366,3 +366,11 @@ Brainstormed with the visual companion (`.superpowers/brainstorm/31923-*/content
   option. T12 confirmed: 07:00 with nights, arrival + 2 h for a day stop, clamp 23:59; seeds move to 07:00 both sides.
 - **Round 2 design approved (David, 2026-10-08)** section by section; spec `spec-a2-round2.md` (T8–T15 + housekeeping);
   read-only guard stays off with a reminder for mid-November 2026. Next: plan `plans/a2-04-round2.md`.
+- **2026-10-08 plan A2-04 (round 2) WRITTEN and dry-run:** `plans/a2-04-round2.md`, 9 tasks. Core code and tests assembled
+  from the plan text pass 117/117 (111 + 6 new; 5 expectations moved with the 07:00 seed and the defaulted cleared time);
+  the four browser modules parse after the plan's replacements. Decisions taken while planning: the card's own ← / →
+  handler is deleted (the page-wide handler covers a focused card too, no double step); a charter source's record is
+  fetched lazily from `GET /api/admin/charter/<id>` for the item count and the result line; a stop with no stored time
+  shows the default in the selects with "· assumed" in the hint; the server's `extraDaysForLeg` default test moves to an
+  18-hour leg. Next: David's go → execute with Sonnet implementers on `feat/itinerary-a2-round2`.
+
