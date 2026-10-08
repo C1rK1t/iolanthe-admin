@@ -46,7 +46,7 @@
 .routes-panel .link-btn { border: 0; background: none; color: var(--accent); padding: 0; cursor: pointer; font-size: 13px; text-decoration: underline; }
 
 /* Planner layout: side panel left (~30%), map right (~70%) */
-.routes-panel .planner { display: grid; grid-template-columns: minmax(300px, var(--side-w, 30%)) 10px minmax(0, 1fr); gap: 16px; }
+.routes-panel .planner { display: grid; grid-template-columns: minmax(300px, var(--side-w, 30%)) 10px minmax(0, 1fr); gap: 4px; }   /* the splitter tracks carry the spacing */
 .routes-panel .side { display: flex; flex-direction: column; gap: 14px; min-width: 0; height: var(--map-h); }
 /* Stops / Legs share one box that fills the side panel down to the map's bottom edge and scrolls inside */
 .routes-panel .tabbox { flex: 1; min-height: 160px; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }

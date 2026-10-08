@@ -400,7 +400,7 @@
       const strip = $("strip");
       const stripH = strip && strip.offsetHeight ? strip.offsetHeight : 260;
       const top = panel.querySelector(".planner").getBoundingClientRect().top + window.scrollY;
-      const headerH = Math.max(0, Math.min(top, 240));   // the admin header and the Route page header above the map
+      const headerH = Math.max(0, top);   // everything above the planner (admin header, department bar, Route page header)
       h = window.innerHeight - headerH - stripH - MAP_GAP_PX;
     }
     panel.style.setProperty("--map-h", `${Math.max(MAP_MIN_PX, Math.round(h))}px`);
