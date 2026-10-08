@@ -237,10 +237,10 @@ function rangesOverlap(a, b) {
 }
 
 // Spec §4. candidate: {id?, start_date, end_date}; others: [{kind: "charter"|"period", id, name, start_date, end_date}].
-// An entry with the candidate's own id (same kind) is skipped so a charter never clashes with itself.
+// An entry with the candidate's own (non-empty) id and kind is skipped so a charter never clashes with itself.
 function findOverlaps(candidate, others, selfKind = "charter") {
   return (Array.isArray(others) ? others : [])
-    .filter((entry) => entry && !(entry.kind === selfKind && candidate && entry.id === candidate.id))
+    .filter((entry) => entry && !(candidate && candidate.id && entry.kind === selfKind && entry.id === candidate.id))
     .filter((entry) => rangesOverlap(candidate, entry))
     .map((entry) => ({ kind: entry.kind, id: entry.id, name: entry.name, start_date: entry.start_date, end_date: entry.end_date }));
 }
@@ -344,7 +344,7 @@ test("validatePeriods catches periods that overlap each other", () => {
   ]);
   assert.equal(errors.length, 1);
   assert.equal(errors[0].field, "periods[1].start_date");
-  assert.match(errors[0].message, /Overlaps A/);
+  assert.match(errors[0].message, /Overlaps Maintenance · A/);
 });
 
 test("savePeriods writes, generates ids, bumps the revision and refuses stale saves", () => {
@@ -454,10 +454,10 @@ function periodEntries(periods) {
   return (Array.isArray(periods) ? periods : []).map((p) => ({ kind: "period", id: p.id, name: periodName(p), start_date: p.start_date, end_date: p.end_date }));
 }
 
-// Returns [{field, message}]; empty when valid. Periods are already normalised.
+// Returns [{field, message}]; empty when valid. Accepts raw or normalised periods.
 function validatePeriods(periods) {
   const errors = [];
-  const list = Array.isArray(periods) ? periods : [];
+  const list = (Array.isArray(periods) ? periods : []).map(normalizePeriod);
   list.forEach((p, i) => {
     const at = `periods[${i}]`;
     if (p.id && !ID_RE.test(p.id)) errors.push({ field: `${at}.id`, message: "Invalid id." });

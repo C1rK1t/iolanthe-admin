@@ -250,7 +250,7 @@ Expected: FAIL with `Cannot find module '../charters-core.js'`.
 
   function findOverlaps(candidate, others, selfKind = "charter") {
     return (Array.isArray(others) ? others : [])
-      .filter((e) => e && !(e.kind === selfKind && candidate && e.id === candidate.id))
+      .filter((e) => e && !(candidate && candidate.id && e.kind === selfKind && e.id === candidate.id))
       .filter((e) => rangesOverlap(candidate, e))
       .map((e) => ({ kind: e.kind, id: e.id, name: e.name, start_date: e.start_date, end_date: e.end_date }));
   }
