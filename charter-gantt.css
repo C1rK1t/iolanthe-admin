@@ -87,7 +87,7 @@
 .charter-gantt.is-collapsed { padding: 0.45rem 0.8rem; }
 /* R3-5: on every page but Charter Admin an expanded band floats over the page; the host holds the strip's height */
 .charter-gantt-host { position: relative; z-index: 20; }
-.charter-gantt-host.is-overlay { min-height: 54px; }
+.charter-gantt-host.is-overlay { min-height: 52px; }
 .charter-gantt.is-overlay { position: absolute; top: 0; left: 0; right: 0; box-shadow: 0 18px 40px rgba(16, 32, 40, 0.38); }
 .charter-gantt .gantt-strip { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; }
 .charter-gantt .gantt-strip strong { font-size: 1rem; }
