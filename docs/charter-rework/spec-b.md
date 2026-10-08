@@ -1,6 +1,6 @@
-# Charter itinerary rework — spec B: the guest preview with a date slider (draft 1)
+# Charter itinerary rework — spec B: the guest preview with a date slider (draft 2)
 
-Written 2026-10-08 from the brainstorm recorded in [decisions.md](decisions.md) (entries B-D1 … B-D8). Sub-project 3 of
+Written 2026-10-08 from the brainstorm (draft 2: three small amendments while planning, marked "amended") recorded in [decisions.md](decisions.md) (entries B-D1 … B-D8). Sub-project 3 of
 the rework: "Guest preview with a date slider, wrapping the live guest site." It builds on spec A (guest days derived
 from the route-based itinerary) and spec A2 (the Route page as the itinerary editor), both live.
 
@@ -40,9 +40,9 @@ wait for it, or to change the device clock.
 - **Eye buttons:** an icon button (eye icon, secondary tone, title "Guest view") in the Charter Info header (next to
   ★ Make active) and in the Route page header (next to the pills). Both switch to the Guest view panel. The Route
   page's button opens it on the day of the selected stop card when the card has a date, else on the default date
-  (§3.3). If the Route page is dirty, it shows the admin confirm: "Save your changes before previewing?" with
-  **Save** (save, then open), **Preview saved version** (open without saving; the working copy stays) and
-  **Cancel**.
+  (§3.3). If the Route page is dirty, the admin's usual unsaved-changes prompt runs first (`showCharterPanel` →
+  `confirmDiscardPageChanges`): save first, or discard and preview the saved version (amended while planning: one
+  prompt for every panel switch, no new dialog).
 - The Route page's button is shown only while the subject is "This charter's route" (an unassigned route has no
   guest view).
 
@@ -63,8 +63,8 @@ One card, `.guest-preview` (own stylesheet `guest-preview.css`, scoped under `.g
    (`tabindex="0"`, `role="slider"` with `aria-valuemin/max/now` and `aria-valuetext` = the readout). A tick's title:
    "Tue 3 Nov · Day 3 · Apo Island".
 3. **Stage:** the iframe, centred, in a device frame (dark border, rounded). Its CSS size is the device's: phone
-   390 × 844, tablet 820 × 1180. It is scaled with `transform: scale(k)` (origin top centre) so it fits the stage's
-   width and a height of `100vh − stage top − 16 px`, never above 1. The stage reserves the scaled height.
+   390 × 844, tablet 820 × 1180. It is scaled with `transform: scale(k)` (origin top left, inside a box of the scaled
+   size) so it fits the stage's width and the window height less 32 px, never above 1; the page scrolls to it.
 
 The stop name in the readout and tick titles is the stop where the boat is at the end of that day (the last stop
 whose arrival day ≤ the day; on a passage day, "passage to <next stop>"), from `itinerary-core`'s `deriveDays`.
@@ -137,10 +137,10 @@ whose arrival day ≤ the day; on a passage day, "passage to <next stop>"), from
 
 ### 4.4 Errors in the frame
 
-- `/api/charter` 401 (session expired) → the banner reads "PREVIEW · ADMIN LOGIN NEEDED" and the itinerary panel
-  shows "Log in to the admin again to preview this charter." The guest does not fall back to the active charter's
-  data.
-- 404 (charter deleted) → banner "PREVIEW · CHARTER NOT FOUND", same panel message style.
+- `/api/charter` 401 (session expired) → the banner turns dark red and reads "PREVIEW · LOG IN TO THE ADMIN AGAIN";
+  the guest shows its empty states and never falls back to the active charter's data (amended while planning: the
+  banner carries the message, the guest's panels stay untouched).
+- 404 (charter deleted) → "PREVIEW · CHARTER NOT FOUND" the same way.
 - Other failures keep the guest's existing fallbacks.
 
 ## 5. Server (S)

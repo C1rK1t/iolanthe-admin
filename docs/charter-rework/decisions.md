@@ -453,3 +453,12 @@ Brainstormed with the visual companion (`.superpowers/brainstorm/31923-*/content
 - **B-D7 Plan 5 Task 8 bundled** into the spec B guest and server releases, plus guest `?v=` cache-busters.
 - **B-D8 Release order:** server, then guest + admin together.
 - Spec written: [spec-b.md](spec-b.md) (draft 1).
+- **Plans written (2026-10-08):** [b-01-server](plans/b-01-server.md) (lib/preview.js + server.js wiring + Task 8 wrapper,
+  97 -> 102 tests), [b-02-guest](plans/b-02-guest.md) (preview-mode.js + guest.js hooks + Task 8 converter + ?v=guest-b-1
+  + SW v5, 7 -> 11), [b-03-admin](plans/b-03-admin.md) (guest-preview-core.js + guest-preview.js/.css + admin.js / Route
+  wiring + ?v=admin-preview-1, 140 -> 146). Each dry-run from the plan text (`apply_plan.py`). The three assembled copies
+  were also run together on a throwaway server (port 8011): the tab renders 11 ticks, stepping keeps the guest's tab,
+  the banner follows the date, before/after work, logged out gives 401 and the "LOG IN TO THE ADMIN AGAIN" banner. Work
+  happens in git worktrees under `GitHub/worktrees/spec-b/` (no branch switching in the shared checkouts) with its own
+  test server config `iolanthe-server-specb` on port 8010. Spec amended to draft 2 (dirty Route uses the usual
+  unsaved prompt; stage height = window - 32 px; refusal messages in the banner only).
