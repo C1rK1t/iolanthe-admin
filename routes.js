@@ -325,7 +325,7 @@
         b("undo", "Undo (Ctrl+Z)", undo, "", ro || !history.undo.length),
         b("redo", "Redo (Ctrl+Y)", redo, "", ro || !history.redo.length),
         el("span", { class: "icon-sep" }),
-        b("start", "Start from an unassigned route or another charter…", openStartFrom, "", ro || saving),
+        b("start", "Start from an unassigned route or another charter…", () => openStartFrom(), "", ro || saving),
         b("saveAs", "Save as an unassigned route (items kept)", () => saveAs(false), "", work.route.points.length < 2),
         b("import", "Import KML / GPX", () => io.openImport(), "", ro),
         b("export", "Export GPX / KML", () => io.openExport(), "", work.route.points.length < 2));
@@ -340,6 +340,7 @@
       el("span", { class: "icon-sep" }),
       b("plus", "New route", newRoute),
       b("saveAs", "Save As", () => saveAs(false), "", work.route.points.length < 2),
+      b("start", "Assign this route to the charter (Start from…)", () => assignToCharter(), "", !work.route.id || work.route.points.length < 2),
       b("join", "Add another route to this one", () => join.openJoin()),
       b("import", "Import KML / GPX", () => io.openImport()),
       b("export", "Export GPX / KML", () => io.openExport(), "", work.route.points.length < 2),
@@ -848,7 +849,14 @@
 
   // Spec A2 §5.8: import an unassigned route or another charter's record from a day. The server re-bases its days
   // onto the from-day and brings its items unless stripped; nothing is refused for length (the fit pill reports).
-  async function openStartFrom() {
+  // Spec A2 T7: open this charter's route with the Start from… dialog preselecting the route being edited.
+  async function assignToCharter() {
+    if (!work || !work.route.id) return;
+    if (!(await guardDiscard())) return;
+    await A().showCharterPanel("routes", { subject: "charter", startFrom: work.route.id });
+  }
+
+  async function openStartFrom(preselectId) {
     if (!work || saving || !isCharter()) return;
     if (readOnly()) { status("This charter has ended; the route is read-only.", "error"); return; }
     if (!(await guardDiscard())) return;
@@ -899,6 +907,8 @@
     fromDay.addEventListener("change", refreshFit);
     refreshFit();
     if (sourceRows.length) { sourceRows[0].input.checked = true; strip.checked = sourceRows[0].kind === "charter"; }
+    const pre = sourceRows.find((s) => s.value === `library:${preselectId}`);
+    if (pre) { pre.input.checked = true; strip.checked = false; }
     openModal({
       title: "Start from…", saveTitle: "Import", wide: true,
       body: el("div", {},
@@ -1171,6 +1181,7 @@
         const idx = work.route.points.findIndex((p) => p.id === subject.focusStopId);
         if (idx >= 0) setTimeout(() => focusPoint(idx), 300);
       }
+      if (subject.startFrom) setTimeout(() => openStartFrom(subject.startFrom), 400);
     } else {
       $("name-field").hidden = false;
       $("desc-label").textContent = "Description";
