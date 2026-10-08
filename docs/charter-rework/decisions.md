@@ -486,3 +486,10 @@ Brainstormed with the visual companion (`.superpowers/brainstorm/31923-*/content
   monitor bezel, beside phone / tablet) and a **steady slider**: the title is one line above, the row below is only
   ‹ track › ◎, so the track never moves (verified identical position and width on all 11 steps). Also fixed: a frame wider
   than the panel used to widen the card instead of scaling.
+- **2026-10-08 Guest view round 2 LIVE** (guest #3 `d515f4f`, `guest-b-2`, SW v6; admin #13 `ee593b9`, `admin-preview-4`):
+  in a preview the guest has no live NMEA, so it shows a stand-in position (where the boat spends that night; halfway
+  along the route on a night at sea; first / last stop outside the charter) in the header, and Navigation, Weather,
+  Vessel Info and Safety are greyed out. The captain wants the preview for Hotel and Galley too: **Guest view** is now
+  a tab in the Charter, Galley and Hotel sections, opening the guest on Itinerary / Today's Menu / Wine & Drinks.
+  Verified with real Galley and Hotel logins on a local server. Seen once, not reproduced: a stale Charter Info unsaved
+  guard threw on the first section click after a login in a tab that had held a Charter Admin page.
