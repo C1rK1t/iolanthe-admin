@@ -599,3 +599,11 @@ test("routeSnapshot changes when id, arrive, depart, an item or the dirty list c
   assert.equal(a, core.routeSnapshot({ ...base, points: [P(1, 1, { stop: true, id: "stp_a", depart: { day: 1 }, nights: 2, depart_time: "08:00" }), P(2, 2)] }));
   assert.equal(a, core.routeSnapshot({ name: "r", description: "", speed_kn: 8, points: base.points }));   // missing lists count as empty
 });
+
+test("unlinkStop: an anchorage stop dropped elsewhere becomes a plain stop at the new position, keeping its identity", () => {
+  const pts = [P(1, 1, { stop: true, id: "stp_a", name: "A", depart: { day: 1 } }), P(2, 2, { anchorage_id: "capones", id: "stp_b", name: "Capones Is.", site_ids: ["lh"], arrive: { day: 1 }, leg_speed_kn: 6 })];
+  const out = core.unlinkStop(pts, 1, { lat: 2.5, lng: 2.5 });
+  assert.deepEqual(out[1], { latitude: 2.5, longitude: 2.5, stop: true, id: "stp_b", name: "Capones Is.", site_ids: ["lh"], arrive: { day: 1 }, leg_speed_kn: 6 });
+  assert.deepEqual(pts[1].anchorage_id, "capones");   // input untouched
+  assert.equal(core.unlinkStop(pts, 0, { lat: 0, lng: 0 })[0].stop, true);   // a plain stop just moves
+});

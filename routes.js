@@ -28,6 +28,7 @@
   let guard = null;      // page unsaved-changes guard
 
   const MAP_CENTER = [12.1, 120.0];
+  const STICKY_PX = 40;   // an anchorage stop dropped this close to its anchorage snaps back (spec A2 T5)
   let map = null;        // Leaflet map for the current panel
   const groups = {};     // Leaflet layer groups
   let routeLines = [];
@@ -525,7 +526,7 @@
         const a = places && p.anchorage_id ? places.findAnchorage(p.anchorage_id) : null;
         const flagged = places && p.anchorage_id && ((!a && places.isLoaded()) || c.anchorageMovedM(p, a) > 0);
         const selected = cards && cards.selectedId() === p.id;
-        html = `<div class="mk-stop${p.anchorage_id ? "" : " plain"}${selected ? " selected" : ""}">${stopNo}</div>${flagged ? '<div class="mk-badge">!</div>' : ""}`;
+        html = `<div class="mk-stop${p.anchorage_id ? "" : " plain"}${selected ? " selected" : ""}">${stopNo}</div>${p.anchorage_id ? '<div class="mk-anchor-badge"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2"/><path d="M12 7v14M5 13a7 7 0 0 0 14 0M8 10h8"/></svg></div>' : ""}${flagged ? '<div class="mk-badge">!</div>' : ""}`;
       }
       else html = `<div class="mk-wp ${p.name ? "named" : ""}"></div>`;
       const m = L.marker(ll(p), { icon: divIcon(html), draggable: ui.mode !== "delete" && !readOnly(), title: p.name || "Waypoint", zIndexOffset: c.isStop(p) ? 1100 : 1000 });
@@ -537,10 +538,19 @@
       });
       m.on("dragend", (e) => {
         const q = e.target.getLatLng();
-        const anchorage = places ? places.anchorageUnder(map, q) : null;
         const cur = work.route.points[i];
-        // A stop nudged near its OWN anchorage is just moved, so its name and ticked sites are kept.
-        if (anchorage && !(c.isStop(cur) && cur.anchorage_id === anchorage.id)) { makeStopAtAnchorage(i, anchorage, { snapped: true }); return; }
+        const own = c.isStop(cur) && cur.anchorage_id && places ? places.findAnchorage(cur.anchorage_id) : null;
+        if (own && map.latLngToContainerPoint(q).distanceTo(map.latLngToContainerPoint([own.latitude, own.longitude])) <= STICKY_PX) {
+          renderMap();   // sticky: it stays on its anchorage
+          return;
+        }
+        const anchorage = places ? places.anchorageUnder(map, q) : null;
+        if (anchorage && !(own && anchorage.id === own.id)) { makeStopAtAnchorage(i, anchorage, { snapped: true }); return; }
+        if (own) {
+          editPoints((arr) => c.unlinkStop(arr, i, q));
+          status(`${cur.name || "Stop"} moved off ${own.name}; it is a plain stop now (make it an anchorage from its popup if you like).`, "");
+          return;
+        }
         editPoints((arr) => c.replaceAt(arr, i, { ...arr[i], latitude: q.lat, longitude: q.lng }));
       });
       m.addTo(groups.points);

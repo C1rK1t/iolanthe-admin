@@ -217,6 +217,17 @@
     return replaceAt(points, index, index === 0 && speed ? { ...rest, leg_speed_kn: speed } : rest);
   }
 
+  // Spec A2 T5: an anchorage stop dragged off its anchorage becomes a plain stop at the new position; everything else
+  // about the stop (id, name, days, sites, leg speed) is kept. A plain stop just moves.
+  function unlinkStop(points, index, latlng) {
+    const point = points[index];
+    if (!point) {
+      return points;
+    }
+    const { anchorage_id: _a, ...rest } = point;
+    return replaceAt(points, index, { ...rest, latitude: latlng.lat, longitude: latlng.lng, stop: true });
+  }
+
   function routesUsingAnchorage(routes, anchorageId) {
     return (routes || []).filter((route) => (route.points || []).some((p) => p.anchorage_id === anchorageId));
   }
@@ -437,7 +448,7 @@
     METRES_PER_NM, distM, distNm, routeNm, fmtHm, isStop, replaceAt, insertAt, removeAt,
     stopLegs, totalHours, legsTsv, setLegSpeed, joinPoints, joinGapNm, routeSnapshot,
     sitesWithin, nearbyAnchorages, stopAt, makeStopAt, appendStop, anchorageMovedM, routesUsingAnchorage, uniqueName,
-    makePlainStop, removeStop,
+    makePlainStop, removeStop, unlinkStop,
     IMPORT_TARGET_POINTS, MAX_TOLERANCE_M, TOLERANCE_STEP_M, PIN_MATCH_NM, validPos, parseKmlCoordinates, htmlToText,
     extractGeo, simplify, defaultTolerance, joinLines, chosenLinePoints, importPoints, pinMatch, xmlEscape, slugify,
     exportBaseName, toGpx, toKml
