@@ -273,4 +273,11 @@ workplace per charter.
   disagree with the computed ones, so the first geometry edit re-dates most stops and marks them to check (by design;
   the captain will see it on first contact). Not exercised (code paths unchanged): KML/GPX import/export, Add another
   route. PR C1rK1t/iolanthe-admin#6 open; merging releases it to the vessel within 5 minutes (server A2 is live).
+- **2026-10-08 admin DEPLOYED (spec A2 complete on the vessel).** PR iolanthe-admin#6 merged as `0aa5f0a`, pulled
+  onto the vessel straight away; the live admin serves the 15 `admin-itin-a2` assets, `itinerary.js` is gone (404),
+  guest and `/api/charter` unaffected. **Decision (David): the read-only guard for ended charters is switched off for
+  now** (`readOnly = () => false` in routes.js, one line to restore) so the migrated historical itineraries can be
+  repaired by hand; the old data is not precious. Next: the captain's first contact on the bridge tablet; then specs
+  B (guest preview with a date slider) and C (revisions for the other charter files); restore the read-only guard once
+  the historical records are tidy.
 
