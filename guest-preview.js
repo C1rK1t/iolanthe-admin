@@ -15,7 +15,8 @@
     reload: '<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>',
     open: '<path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
     phone: '<rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/>',
-    tablet: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M11 18h2"/>'
+    tablet: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M11 18h2"/>',
+    pc: '<rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4"/>'
   };
   const chosenDate = new Map();   // charterId → the date last shown, for this admin session only
   let teardown = null;            // removes the previous bind's window listeners and observer
@@ -39,7 +40,10 @@
   }
 
   function loadDevice() {
-    try { return localStorage.getItem(DEVICE_KEY) === "tablet" ? "tablet" : "phone"; } catch (e) { return "phone"; }
+    try {
+      const stored = localStorage.getItem(DEVICE_KEY);
+      return core().DEVICES[stored] ? stored : "phone";
+    } catch (e) { return "phone"; }
   }
   function storeDevice(device) {
     try { localStorage.setItem(DEVICE_KEY, device); } catch (e) { /* per-browser convenience only */ }
@@ -90,7 +94,8 @@
     const prevBtn = iconBtn("prev", "Previous day", () => go(index - 1, true));
     const nextBtn = iconBtn("next", "Next day", () => go(index + 1, true));
     const todayBtn = iconBtn("today", todayIndex >= 0 ? "Jump to today" : "Today is outside this charter", () => go(todayIndex, true), { disabled: todayIndex < 0 });
-    const deviceBtns = ["phone", "tablet"].map((d) => iconBtn(d, d === "phone" ? "Phone" : "Tablet", () => setDevice(d), { "data-device": d }));
+    const DEVICE_TITLES = { phone: "Phone", tablet: "Tablet", pc: "PC" };
+    const deviceBtns = Object.keys(DEVICE_TITLES).map((d) => iconBtn(d, DEVICE_TITLES[d], () => setDevice(d), { "data-device": d }));
 
     host.replaceChildren(
       el("div", { class: "card-header" }, title, pill,
@@ -99,7 +104,8 @@
           el("span", { class: "gp-sep" }),
           iconBtn("reload", "Reload", reload),
           iconBtn("open", "Open full screen in a new tab", () => window.open(currentUrl(), "_blank", "noopener")))),
-      el("div", { class: "gp-strip" }, prevBtn, el("div", { class: "gp-readout" }, readDate, readSub), track, nextBtn, todayBtn),
+      // The title sits on its own line above the slider, so its changing length never moves the track (David, 2026-10-08).
+      el("div", { class: "gp-strip" }, el("div", { class: "gp-readout" }, readDate, readSub), el("div", { class: "gp-slide" }, prevBtn, track, nextBtn, todayBtn)),
       stage);
 
     function currentHash() {
@@ -149,6 +155,7 @@
       device = d;
       storeDevice(d);
       deviceBtns.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.device === d)));
+      deviceBox.classList.toggle("gp-device--pc", d === "pc");
       fit();
     }
     function fit() {

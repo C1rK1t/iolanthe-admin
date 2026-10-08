@@ -11,7 +11,11 @@
   "use strict";
 
   const DAY_MS = 86400000;
-  const DEVICES = Object.freeze({ phone: Object.freeze({ w: 390, h: 844 }), tablet: Object.freeze({ w: 820, h: 1180 }) });
+  const DEVICES = Object.freeze({
+    phone: Object.freeze({ w: 390, h: 844 }),
+    tablet: Object.freeze({ w: 820, h: 1180 }),
+    pc: Object.freeze({ w: 1280, h: 800 })   // a laptop browser window
+  });
   const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
