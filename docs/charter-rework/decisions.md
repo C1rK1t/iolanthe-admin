@@ -296,4 +296,14 @@ workplace per charter.
   and the Days tab shows "Underway".
 - **A2-T4 Size sliders.** A vertical splitter between the side column and the map and a horizontal one between the
   map and the strip, remembered per browser (localStorage); the map redraws on resize already.
+- **A2-T5 Anchorage stops on the map** (David's second note): the marker must show it is an anchorage; dragged off the
+  anchorage it reverts to a plain stop (definable as a new anchorage in the normal way); snapping to a nearby
+  anchorage or pre-defined stop, and sticky when dragged a little way off its own anchorage.
+- **A2-T6 Wider edges on big screens**, keep the vertical names and make them clearer.
+- **A2-T7 Assign the current route to the selected charter** from the unassigned route's page (David looked for it
+  there; today it is only reachable from the charter side via Start from…).
+- **A2-T0 FIXED and live (`7e8b410`, assets `admin-itin-a2b`):** switching "Working on" with unsaved changes greyed the
+  page except the map and needed a refresh: the "Unsaved route" dialog (backdrop z-index 140) was drawn behind the
+  Leaflet panes (z-index 400). The map container now has its own stacking context.
+- Plan for T1–T7: `plans/a2-03-tweaks.md` (written 2026-10-08, not yet executed).
 
