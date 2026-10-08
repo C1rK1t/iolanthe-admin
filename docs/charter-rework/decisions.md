@@ -462,3 +462,17 @@ Brainstormed with the visual companion (`.superpowers/brainstorm/31923-*/content
   happens in git worktrees under `GitHub/worktrees/spec-b/` (no branch switching in the shared checkouts) with its own
   test server config `iolanthe-server-specb` on port 8010. Spec amended to draft 2 (dirty Route uses the usual
   unsaved prompt; stage height = window - 32 px; refusal messages in the banner only).
+- **2026-10-08 spec B EXECUTED; three PRs open:** C1rK1t/iolanthe-server#5 (`feat/spec-b-server`, 102 tests),
+  C1rK1t/iolanthe-guest#2 (`feat/spec-b-guest`, 11), C1rK1t/iolanthe-admin#11 (`feat/spec-b-admin`, 146). Built in git
+  worktrees under `GitHub/worktrees/spec-b/` (no branch switching in the shared checkouts) by Sonnet implementers (Haiku
+  for docs), every file compared byte-for-byte with the dry-run copies (two implementer slips fixed: a literal BOM for
+  `﻿`, stray `\·` escapes). Browser pass on `iolanthe-server-specb` (port 8010, data copy `data-scratch-b`): endpoint
+  table incl. 401/400/404 and the read-only track (no file created, mtime unchanged), slider by keyboard / real click /
+  real drag, tab kept, tablet/phone, both eye buttons, dirty-route prompt, larry/hoffmann, no-dates empty state, phone
+  width, logged-out banner, plain guest unchanged (SW v5, no preview entries cached). Final Sonnet review: nothing
+  Critical; minors fixed (banner clears after re-login, left-button drags + lostpointercapture, tab ids with digits).
+  Lesson: a guest.js change under an already-cached `?v=` is invisible to a device whose SW cached it; bump the tag
+  whenever a cached file changes. Open question for David: the vessel server container has `TZ` unset (UTC), so the
+  track cut and the existing active-charter day rule flip at 08:00 Philippine time (set `TZ=Asia/Manila` in compose?).
+  Deferred: track read is synchronous per request (fine at 3-day retention sizes). Merge order: server #5 -> deploy ->
+  guest #2 + admin #11 together; then remove the worktrees and the `iolanthe-server-specb` launch entry.
