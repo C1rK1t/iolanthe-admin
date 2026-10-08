@@ -8,9 +8,9 @@
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
 
-  // Pure logic for the Itinerary panel. Mirrors iolanthe-server/lib/itinerary.js for the shared rules
-  // (normalise, spans, deriveDays, validate) and adds the admin-only pieces (time estimates, line geometry).
-  // Spec: docs/charter-rework/spec.md.
+  // Pure logic for the Route page (spec A2: the Route page is the itinerary). Mirrors iolanthe-server/lib/itinerary.js
+  // for the shared rules (normalise, spans, deriveDays, validate) and adds the admin-only pieces (time estimates, the
+  // departure cascade, clashes, fit, line geometry). Specs: docs/charter-rework/spec-a2.md, spec-a2-round2.md.
 
   const ITINERARY_VERSION = 2;
   const DEFAULT_SPEED_KN = 8;
@@ -21,7 +21,10 @@
   const MIN_DURATION_MIN = 5;
   const MAX_DURATION_MIN = 1440;
   const DEFAULT_DURATION_MIN = 60;     // an item with no duration occupies an hour (spec A2 D12)
-  const SEED_DEPART_TIME = "09:00";    // a stop with no departure time is assumed to leave at 09:00 (spec A2 D4)
+  const SEED_DEPART_TIME = "07:00";    // an overnight stop with no departure time leaves at 07:00 (spec A2 round 2, T12)
+  const DAY_STOP_DWELL_MIN = 120;      // a day stop with no departure time leaves 2 h after its estimated arrival (T12)
+  const LAST_MINUTE = 23 * 60 + 59;    // a default never rolls into the next day
+  const MINUTE_STEP = 15;              // the time control's minute grid (T13)
   const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
   const METRES_PER_NM = 1852;
   const EARTH_RADIUS_M = 6371000;
@@ -270,6 +273,8 @@
     const m = ((Math.round(minutes) % 1440) + 1440) % 1440;
     return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
   }
+  // A day stop's assumed departure: 2 h after the arrival, never past 23:59 (spec A2 round 2, T12).
+  const dwellAfter = (arriveTime) => minutesToTime(Math.min(timeToMinutes(arriveTime) + DAY_STOP_DWELL_MIN, LAST_MINUTE));
 
   // Map stop id → { arrive: {time, estimated} | null, depart: {time, estimated} | null }.
   function estimateTimes(itinerary) {
@@ -291,9 +296,9 @@
       if (p.depart && p.depart.time) {
         depart = { time: p.depart.time, estimated: false };
       } else if (p.depart && nights === 0 && arrive) {
-        depart = { time: arrive.time, estimated: true };
+        depart = { time: dwellAfter(arrive.time), estimated: true };   // day stop with no departure time: arrival + 2 h
       } else if (p.depart) {
-        depart = { time: SEED_DEPART_TIME, estimated: true };   // overnight stop with no departure time: assume 09:00
+        depart = { time: SEED_DEPART_TIME, estimated: true };   // overnight stop with no departure time: assume 07:00
       }
       out.set(p.id, { arrive, depart });
       prevDepart = depart ? { minutes: timeToMinutes(depart.time), index: entry.index } : null;
@@ -560,12 +565,24 @@
     return Math.max(1, last.arrive ? last.arrive.day : (last.depart ? last.depart.day : 1));
   }
 
-  // The time a stop leaves, for the next leg: its departure time, else (day stop) its arrival time, else 09:00.
+  // The time a stop leaves, for the next leg: its departure time, else (day stop) 2 h after its arrival, else 07:00.
   function effectiveDepartMinutes(point, arriveTime) {
     if (point.depart && point.depart.time) return timeToMinutes(point.depart.time);
     const dayStop = !point.arrive || !point.depart || point.arrive.day === point.depart.day;
-    if (dayStop && arriveTime) return timeToMinutes(arriveTime);
+    if (dayStop && arriveTime) return timeToMinutes(dwellAfter(arriveTime));
     return timeToMinutes(SEED_DEPART_TIME);
+  }
+
+  // Spec A2 round 2 T12: the departure time stored when the captain sets a stay without picking a time.
+  // 07:00 for an overnight stop; the estimated arrival + 2 h for a day stop; 07:00 when nothing can be estimated.
+  function defaultDepartTime(record, stopId) {
+    const entry = stopEntries(record.route.points).find((e) => e.point.id === stopId);
+    if (!entry || !entry.point.depart) return SEED_DEPART_TIME;
+    const p = entry.point;
+    const nights = p.arrive ? p.depart.day - p.arrive.day : p.depart.day - 1;
+    if (nights > 0) return SEED_DEPART_TIME;
+    const t = estimateTimes(record).get(stopId);
+    return t && t.arrive ? dwellAfter(t.arrive.time) : SEED_DEPART_TIME;
   }
 
   // Spec A2 §3 / §5.6: every arrival day is the previous departure plus the leg at its speed, rolling past midnight.
@@ -617,8 +634,9 @@
     return addDirty({ ...withPoints(record, points), activities }, [...later]);
   }
 
-  // The card's Depart tile. change: { day?, time? } (time "" clears). The day is clamped to the arrival day; the stop's
-  // own items beyond the new departure day are removed (the caller has shown the popup); arrivals are recomputed.
+  // The card's Depart tile. change: { day?, time? }. The day is clamped to the arrival day; the stop's own items beyond
+  // the new departure day are removed (the caller has shown the popup); a departure left without a valid time gets the
+  // T12 default; arrivals are recomputed.
   function setDeparture(record, stopId, change) {
     const entry = stopEntries(record.route.points).find((e) => e.point.id === stopId);
     if (!entry || !entry.point.depart) return record;
@@ -626,11 +644,13 @@
     const c = toObj(change);
     const arriveDay = p.arrive ? p.arrive.day : 1;
     const day = Number.isInteger(c.day) ? Math.max(c.day, arriveDay) : p.depart.day;
-    const time = "time" in c ? (TIME_RE.test(toStr(c.time)) ? toStr(c.time) : undefined) : p.depart.time;
+    const picked = "time" in c ? (TIME_RE.test(toStr(c.time)) ? toStr(c.time) : undefined) : p.depart.time;
     let next = shiftFromStop(record, stopId, day - p.depart.day);
     next = { ...next, activities: renumberActivities(next.activities.filter((a) => !(a.stop_id === stopId && a.day > day))) };
-    next = withPoints(next, next.route.points.map((q) => (isStop(q) && q.id === stopId ? { ...q, depart: time ? { day, time } : { day } } : q)));
-    return recomputeArrivals(next);
+    const setDepart = (r, depart) => withPoints(r, r.route.points.map((q) => (isStop(q) && q.id === stopId ? { ...q, depart } : q)));
+    next = setDepart(next, { day });
+    const time = picked || defaultDepartTime(next, stopId);
+    return recomputeArrivals(setDepart(next, { day, time }));
   }
 
   // What the popup names before a departure moves earlier (newDepartDay) or a stop goes (newDepartDay null):
@@ -747,6 +767,64 @@
     return { state: delta > 0 ? "over" : "short", delta, endsDay, label: `${delta > 0 ? "+" : "−"}${Math.abs(delta)} d`, title };
   }
 
+  // Stops of the current record that an import from `fromDay` keeps: those reached before it (spec A2 §4 step 1).
+  function keptStopsBefore(record, fromDay, dayCount) {
+    const stops = stopEntries(toObj(toObj(record).route).points || []);
+    return stops.filter((e, i) => stopSpan(e.point, positionOf(i, stops.length), dayCount).from < fromDay).length;
+  }
+
+  // Spec A2 round 2 T14: the Start from… result line. f = fit(rebased record, charter); info = { stops, fromDay, kept }.
+  // { tone: "ok" | "warn" | "none", line1, line2 }.
+  function fitSentence(f, charter, info) {
+    const o = toObj(info);
+    const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+    if (!f || f.state === "none") return { tone: "none", line1: f && f.title ? f.title : "No stops to place.", line2: "" };
+    const dayCount = charterDayCount(charter);
+    const ends = dayDateLabel(charter, f.endsDay);
+    const fromDay = Number.isInteger(o.fromDay) && o.fromDay > 0 ? o.fromDay : 1;
+    const stops = Number.isInteger(o.stops) ? o.stops : 0;
+    const kept = Number.isInteger(o.kept) ? o.kept : 0;
+    const verdict = f.state === "match" ? "fits the charter"
+      : `${plural(Math.abs(f.delta), "day")} ${f.state === "short" ? "before" : "after"} the charter ends`;
+    const charterEnd = f.state === "match" ? "" : ` · the charter ends ${dayDateLabel(charter, dayCount)}`;
+    const line2 = kept > 0
+      ? `Keeps the ${plural(kept, "stop")} reached before ${dayDateLabel(charter, fromDay)}, then ${plural(stops, "stop")} to ${ends}${charterEnd}`
+      : `${plural(stops, "stop")} · ${dayDateLabel(charter, fromDay)} to ${ends}${charterEnd}`;
+    return { tone: f.state === "match" ? "ok" : "warn", line1: `Ends ${ends} · ${verdict}`, line2 };
+  }
+
+  // Spec A2 round 2 T8: the times line in a Days-tab sub-box for one day of a stop's stay. The arrival day shows the
+  // arrival (and the departure when it leaves the same day); a middle day shows the nights; the departure day shows the
+  // departure. "" when nothing applies.
+  function subBoxTimesLabel(stop, times, day) {
+    const t = times || { arrive: null, depart: null };
+    const s = toObj(stop);
+    const parts = [];
+    const arriveDay = s.arrive ? s.arrive.day : null;
+    const departDay = s.depart ? s.depart.day : null;
+    if (arriveDay === day && t.arrive) parts.push(`Arr. ${t.arrive.estimated ? "~" : ""}${t.arrive.time}`);
+    if (departDay === day && t.depart) parts.push(`Dep. ${t.depart.estimated ? "~" : ""}${t.depart.time}`);
+    if (!parts.length && arriveDay !== null && departDay !== null && day > arriveDay && day < departDay) {
+      const nights = departDay - arriveDay;
+      parts.push(`${nights} night${nights === 1 ? "" : "s"}`);
+    }
+    return parts.join(" · ");
+  }
+
+  // Spec A2 round 2 T13: the hour and minute option lists for the time control. value "HH:MM" or "". A minute off the
+  // 15-minute grid is kept as one extra option so a stored time is never rounded silently. allowBlank adds "" first.
+  // { hours: [string], minutes: [string], hour: string, minute: string }.
+  function timeOptions(value, opts) {
+    const o = toObj(opts);
+    const v = TIME_RE.test(toStr(value)) ? toStr(value) : "";
+    const [hour, minute] = v ? v.split(":") : ["", ""];
+    const hours = Array.from({ length: 24 }, (_, h) => String(h).padStart(2, "0"));
+    const minutes = Array.from({ length: 60 / MINUTE_STEP }, (_, i) => String(i * MINUTE_STEP).padStart(2, "0"));
+    if (minute && !minutes.includes(minute)) { minutes.push(minute); minutes.sort(); }
+    if (o.allowBlank) { hours.unshift(""); minutes.unshift(""); }
+    return { hours, minutes, hour, minute };
+  }
+
   // A record's days are relative to its day 1; lay it onto `fromDay` (same rule as the server's import, spec A2-D20).
   function rebaseRecord(record, fromDay) {
     const delta = (Number.isInteger(fromDay) ? fromDay : 1) - 1;
@@ -772,7 +850,7 @@
 
   return {
     ITINERARY_VERSION, DEFAULT_SPEED_KN, MAX_TITLE_LENGTH, MAX_NOTES_LENGTH, TIME_RE,
-    MIN_DURATION_MIN, MAX_DURATION_MIN, DEFAULT_DURATION_MIN, SEED_DEPART_TIME,
+    MIN_DURATION_MIN, MAX_DURATION_MIN, DEFAULT_DURATION_MIN, SEED_DEPART_TIME, DAY_STOP_DWELL_MIN, MINUTE_STEP,
     distM, distNm, newId, isStop, parseDateOnly, charterDayCount, dayDateLabel,
     normalizePoint, normalizeItinerary, itinerarySnapshot,
     stopEntries, positionOf, stopSpan, deriveDays, validateItinerary,
@@ -782,7 +860,7 @@
     setStopTime, setStopSites, sitesByDistance,
     renumberActivities, canDropActivity, moveActivity, addActivity, updateActivity, removeActivity,
     reconcileRoutePoints,
-    recordDayCount, recomputeArrivals, shiftFromStop, setDeparture, droppedDays, itemsDroppedByImport, dayOrdinal,
-    removeStop, clashes, legSummaries, fit, rebaseRecord, toUnassignedRoute
+    recordDayCount, recomputeArrivals, shiftFromStop, setDeparture, defaultDepartTime, droppedDays, itemsDroppedByImport, dayOrdinal,
+    removeStop, clashes, legSummaries, fit, fitSentence, keptStopsBefore, subBoxTimesLabel, timeOptions, rebaseRecord, toUnassignedRoute
   };
 });

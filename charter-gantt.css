@@ -1,0 +1,89 @@
+/* The charter Gantt band (spec-charters §6). Scoped under .charter-gantt. */
+.charter-gantt {
+  min-width: 0;
+  max-width: 100%;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.6rem 0.8rem;
+  box-shadow: var(--shadow);
+  outline: none;
+}
+
+.charter-gantt:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.charter-gantt .gantt-toolbar { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+.charter-gantt .gantt-title { flex: 1 1 120px; min-width: 0; display: flex; align-items: baseline; gap: 0.6rem; white-space: nowrap; overflow: hidden; }
+.charter-gantt .gantt-title strong { font-size: 1rem; }
+.charter-gantt .gantt-span { font-size: 0.8rem; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.charter-gantt .gantt-sep { width: 1px; height: 26px; background: var(--line); margin: 0 0.15rem; }
+
+.charter-gantt .gantt-ib {
+  width: 36px; height: 36px; min-height: 0; padding: 0; border: 0; border-radius: 6px;
+  display: inline-grid; place-items: center; background: #e8eef0; color: var(--ink); cursor: pointer;
+}
+.charter-gantt .gantt-ib:hover, .charter-gantt .gantt-ib:focus { background: #d8e2e5; }
+.charter-gantt .gantt-ib.danger { background: var(--danger); color: #fff; }
+.charter-gantt .gantt-ib.danger:hover, .charter-gantt .gantt-ib.danger:focus { background: #8a312b; }
+.charter-gantt .gantt-ib:disabled { opacity: 0.35; cursor: not-allowed; }
+.charter-gantt .gantt-ib svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+.charter-gantt .gantt-nodates select { min-height: 36px; font-size: 0.8rem; padding: 0 0.5rem; border: 1px solid var(--line); border-radius: 6px; background: #fff; color: var(--muted); }
+
+.charter-gantt .gantt-viewport {
+  position: relative; min-width: 0; max-width: 100%; overflow-x: auto; overflow-y: hidden; border: 1px solid var(--line); border-radius: 8px;
+  background: #f8fafb; cursor: grab; user-select: none; -webkit-user-select: none; touch-action: pan-y;
+  scrollbar-width: thin;
+}
+.charter-gantt .gantt-viewport.is-dragging { cursor: grabbing; }
+.charter-gantt .gantt-track { position: relative; height: 128px; min-width: 100%; }
+
+.charter-gantt .gantt-months { position: absolute; top: 0; left: 0; right: 0; height: 22px; background: #e9eef0; border-bottom: 1px solid var(--line); }
+.charter-gantt .gantt-months span {
+  position: absolute; top: 0; height: 22px; line-height: 22px; padding: 0 6px; box-sizing: border-box; overflow: hidden; white-space: nowrap;
+  border-right: 1px solid var(--line); font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted);
+}
+.charter-gantt .gantt-weeks { position: absolute; top: 22px; left: 0; right: 0; height: 16px; border-bottom: 1px solid #e3e8eb; }
+.charter-gantt .gantt-weeks span { position: absolute; top: 0; height: 16px; line-height: 16px; padding-left: 3px; font-size: 0.62rem; color: #8a959b; border-left: 1px dashed #dde3e6; }
+
+.charter-gantt .gantt-lanes { position: absolute; top: 44px; left: 0; right: 0; bottom: 0; padding-top: 6px; }
+.charter-gantt .gantt-row { position: relative; height: 26px; margin-bottom: 6px; }
+.charter-gantt .gantt-row--periods { height: 22px; }
+
+.charter-gantt .gantt-bar {
+  position: absolute; top: 0; height: 26px; min-height: 0; margin: 0 1px; padding: 0 8px; border: 0; border-radius: 6px;
+  background: var(--accent); color: #fff; font-size: 0.74rem; font-weight: 700; line-height: 26px; text-align: left;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+.charter-gantt .gantt-bar small { font-weight: 400; opacity: 0.85; margin-left: 6px; }
+.charter-gantt .gantt-bar:hover, .charter-gantt .gantt-bar:focus { filter: brightness(1.08); }
+.charter-gantt .gantt-bar:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+.charter-gantt .gantt-bar.is-ended { background: #9aa7ad; }
+.charter-gantt .gantt-bar.is-active { background: var(--gold); color: var(--ink); }
+.charter-gantt .gantt-bar.is-selected { box-shadow: 0 0 0 3px var(--ink); }
+.charter-gantt .gantt-bar--period { height: 22px; line-height: 22px; color: var(--ink); box-shadow: none; }
+.charter-gantt .gantt-bar--maintenance { background: repeating-linear-gradient(45deg, #b9c2c7, #b9c2c7 5px, #dfe5e8 5px, #dfe5e8 10px); }
+.charter-gantt .gantt-bar--unavailable { background: repeating-linear-gradient(45deg, #d9b7b4, #d9b7b4 5px, #f0dcda 5px, #f0dcda 10px); }
+.charter-gantt .gantt-bar--other { background: repeating-linear-gradient(45deg, #c8c4d6, #c8c4d6 5px, #e6e3ee 5px, #e6e3ee 10px); }
+
+.charter-gantt .gantt-today { position: absolute; top: 22px; bottom: 0; width: 2px; background: var(--danger); pointer-events: none; }
+.charter-gantt .gantt-today span { position: absolute; top: 0; left: 4px; font-size: 0.62rem; font-weight: 700; color: var(--danger); }
+
+.charter-gantt .gantt-empty { margin: 0.5rem 0 0; color: var(--muted); font-size: 0.9rem; }
+
+.charter-gantt.is-collapsed { padding: 0.45rem 0.8rem; }
+.charter-gantt .gantt-strip { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; }
+.charter-gantt .gantt-strip strong { font-size: 1rem; }
+.charter-gantt .gantt-strip-dates { font-size: 0.85rem; color: var(--muted); }
+.charter-gantt .gantt-strip-grow { flex: 1; }
+
+.gantt-tip {
+  position: fixed; z-index: 500; max-width: 320px; padding: 0.45rem 0.6rem; border-radius: 6px; background: var(--ink); color: #fff;
+  font-size: 0.78rem; line-height: 1.4; pointer-events: none; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+}
+.gantt-tip-title { font-weight: 700; }
+
+@media (max-width: 700px) {
+  .charter-gantt .gantt-title { flex-basis: 100%; }
+  .charter-gantt .gantt-span { display: none; }
+}

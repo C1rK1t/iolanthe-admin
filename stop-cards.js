@@ -1,7 +1,7 @@
-// Routes panel: the stop strip and the stop card (spec A2 §5.4–5.7). Every stop is a stacked edge either side of the
-// open card; the card edits the stay (Depart), pins the arrival time, holds the day tabs with the itinerary items and
-// the ⚙ settings tab. Created once per bind() by routes.js; the record itself stays in routes.js and is edited only
-// through ctx.editRecord.
+// Routes panel: the stop strip and the stop card (spec A2 §5.4–5.7, round 2 T11–T13). Every stop is a stacked edge
+// either side of the open card; the card edits the stay and the departure time (Depart), shows the derived arrival,
+// holds the day tabs with the itinerary items and the ⚙ settings tab. Created once per bind() by routes.js; the record
+// itself stays in routes.js and is edited only through ctx.editRecord.
 (function () {
   "use strict";
 
@@ -11,7 +11,7 @@
   const SITES_NEAR_NM = 5;
   const KIND_LABEL = { anchorage: "anchorage", stop: "stop", plain: "plain stop" };
 
-  // ctx: { A, core (IolantheItineraryCore), rcore (IolantheRoutesCore), el, svg, openModal, places,
+  // ctx: { A, core (IolantheItineraryCore), rcore (IolantheRoutesCore), el, svg, openModal, timeSelects, places,
   //        getWork(), getCharter() (null for an unassigned route), getDayCount(), getSiteLibrary(), readOnly(),
   //        editRecord(fn, opts), askDrop(dropped, verb), removeStop(stopId), panToStop(stopId), highlightStop(stopId),
   //        openStartFrom() (charter mode) , status(message, tone) }
@@ -51,10 +51,11 @@
     }
 
     // Opens a card. Spinning to a dirty card clears it (spec A2 D11, no confirm) and the map pans to the stop.
+    // opts: { pan: true } pans the map; { reveal: true } also scrolls the strip into view (the Days tab, round 2 T10).
     function select(stopId, opts) {
       const rec = record();
       if (!rec || !stops(rec).some((s) => s.point.id === stopId)) return;
-      const o = { pan: true, ...(opts || {}) };
+      const o = { pan: true, reveal: false, ...(opts || {}) };
       selectedId = stopId;
       tab = "day";
       closeMenu();
@@ -64,6 +65,7 @@
         render();
       }
       if (o.pan) ctx.panToStop(stopId); else ctx.highlightStop(stopId);
+      if (o.reveal && host && host.isConnected) host.scrollIntoView({ block: "nearest", behavior: "smooth" });
     }
     function step(delta) {
       const rec = record();
@@ -134,11 +136,7 @@
             iconBtn("gear", "Stop settings", () => { tab = tab === "settings" ? "day" : "settings"; render(); }, tab === "settings" ? "on" : ""))),
         el("div", { class: "tiles" }, arriveTile(stop, rec), departTile(stop, rec), nextLegTile(stop, rec)),
         tab === "settings" ? settingsTab(stop, rec, kind) : dayTabs(stop, rec));
-      art.addEventListener("keydown", (e) => {
-        if (e.target !== art) return;
-        if (e.key === "ArrowLeft") { e.preventDefault(); step(-1); }
-        if (e.key === "ArrowRight") { e.preventDefault(); step(1); }
-      });
+      // ← / → are handled page-wide by routes.js (spec A2 round 2 T15), so they work after a click on the map too.
       // A horizontal swipe on the header scrolls the strip (touch and mouse alike).
       const head = art.querySelector(".stop-card-head");
       head.addEventListener("pointerdown", (e) => {
@@ -169,22 +167,23 @@
       return tile("Arrive", value, sub, "estimated");
     }
 
-    // Depart: a date (or day number without a charter) no earlier than the arrival day, and a time. Spec A2 D1, §5.6, §5.7.
+    // Depart (charter mode: a date no earlier than the arrival day) or Stop duration (unassigned route: a nights count),
+    // then a "Departure time" label over the hour/minute selects. A stop with no stored time shows the T12 default with
+    // "assumed" in the hint; the first stay change stores it. Spec A2 D1, §5.6, §5.7; round 2 T11, T12, T13.
     function departTile(stop, rec) {
       const p = stop.point;
-      if (!p.depart) {
-        const ch = ctx.getCharter();
-        return tile("Depart", "—", ch && ch.end_date ? `charter ends ${c.dayDateLabel(ch, c.charterDayCount(ch))}` : "end of route");
-      }
       const ch = ctx.getCharter();
       const start = ch ? c.parseDateOnly(ch.start_date) : null;
+      const title = start !== null ? "Depart" : "Stop duration";
+      if (!p.depart) {
+        return tile(title, "—", ch && ch.end_date ? `charter ends ${c.dayDateLabel(ch, c.charterDayCount(ch))}` : "end of route");
+      }
       const arriveDay = p.arrive ? p.arrive.day : 1;
       const toIso = (day) => new Date(start + (day - 1) * 86400000).toISOString().slice(0, 10);
-      const nightsBefore = p.depart.day - arriveDay;
+      const nights = p.depart.day - arriveDay;
       const dayInput = start !== null
         ? el("input", { type: "date", class: "tile-date edit-only", value: toIso(p.depart.day), min: toIso(arriveDay) })
-        : el("input", { type: "number", class: "tile-nights edit-only", value: String(nightsBefore), min: "0", step: "1", "aria-label": "Nights at this stop" });
-      const timeInput = el("input", { type: "time", class: "tile-time edit-only", value: p.depart.time || "", title: "Departure time (blank: 09:00 is assumed)" });
+        : el("input", { type: "number", class: "tile-nights edit-only", value: String(nights), min: "0", step: "1", "aria-label": "Nights at this stop" });
       const dayOf = () => {
         if (start === null) { const n = parseInt(dayInput.value, 10); return Number.isInteger(n) && n >= 0 ? arriveDay + n : NaN; }
         const t = c.parseDateOnly(dayInput.value);
@@ -199,9 +198,18 @@
         }
         ctx.editRecord((r) => c.setDeparture(r, p.id, { day }));
       });
-      timeInput.addEventListener("change", () => ctx.editRecord((r) => c.setDeparture(r, p.id, { time: timeInput.value })));
-      const nights = p.depart.day - arriveDay;
-      return tile("Depart", el("div", { class: "tile-row" }, dayInput, start === null ? el("span", { class: "muted" }, "nights") : null, timeInput), stop.position === "origin" ? (nights ? `${nights} night${nights === 1 ? "" : "s"} aboard before sailing` : "sails on day 1") : (nights ? `${nights} night${nights === 1 ? "" : "s"}` : "day stop"));
+      const assumed = !p.depart.time;
+      const time = ctx.timeSelects({
+        value: p.depart.time || c.defaultDepartTime(rec, p.id), cls: "edit-only",
+        title: assumed ? "Assumed until you pick a time" : "Departure time",
+        onChange: (v) => ctx.editRecord((r) => c.setDeparture(r, p.id, { time: v }))
+      });
+      const stay = stop.position === "origin" ? (nights ? `${nights} night${nights === 1 ? "" : "s"} aboard before sailing` : "sails on day 1") : (nights ? `${nights} night${nights === 1 ? "" : "s"}` : "day stop");
+      const value = el("div", { class: "depart-stack" },
+        el("div", { class: "tile-row" }, dayInput, start === null ? el("span", { class: "muted" }, "nights") : null),
+        el("div", { class: "tile-k tile-k2" }, "Departure time"),
+        el("div", { class: "tile-row" }, time.root));
+      return tile(title, value, assumed ? el("span", {}, stay, el("em", { class: "muted" }, " · assumed")) : stay);
     }
 
     function nextLegTile(stop, rec) {
@@ -261,16 +269,16 @@
     function editItem(row, a) {
       closeMenu();
       const title = el("input", { type: "text", class: "edit-title", value: a.title, maxlength: String(c.MAX_TITLE_LENGTH), placeholder: "Title" });
-      const time = el("input", { type: "time", class: "edit-time", value: a.time || "" });
+      const time = ctx.timeSelects({ value: a.time || "", allowBlank: true, cls: "edit-time", title: "Time (blank: none)" });
       const duration = el("input", { type: "number", class: "edit-duration", value: a.duration_min === undefined ? "" : String(a.duration_min), min: String(c.MIN_DURATION_MIN), max: String(c.MAX_DURATION_MIN), step: "5", placeholder: "60", title: "Duration in minutes (1 h when blank)" });
       const notes = el("textarea", { class: "edit-notes", rows: "2", placeholder: "Notes for guests", maxlength: String(c.MAX_NOTES_LENGTH) }, a.notes || "");
-      const done = () => ctx.editRecord((r) => c.updateActivity(r, a.id, { title: title.value, time: time.value, duration_min: duration.value === "" ? "" : Number(duration.value), notes: notes.value }));
+      const done = () => ctx.editRecord((r) => c.updateActivity(r, a.id, { title: title.value, time: time.get(), duration_min: duration.value === "" ? "" : Number(duration.value), notes: notes.value }));
       const cancel = () => render();
       const form = el("div", { class: "item-edit" },
-        el("div", { class: "item-edit-row" }, title, time, duration, el("span", { class: "muted" }, "min")),
+        el("div", { class: "item-edit-row" }, title, time.root, duration, el("span", { class: "muted" }, "min")),
         notes,
         el("div", { class: "icon-row" }, iconBtn("check", "Done (Enter)", done, "success"), iconBtn("cancel", "Cancel (Esc)", cancel, "danger")));
-      [title, time, duration, notes].forEach((input) => input.addEventListener("keydown", (e) => {
+      [title, time.hour, time.minute, duration, notes].forEach((input) => input.addEventListener("keydown", (e) => {
         if (e.key === "Escape") { e.preventDefault(); cancel(); }
         if (e.key === "Enter" && input !== notes) { e.preventDefault(); done(); }
       }));

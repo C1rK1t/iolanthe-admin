@@ -254,11 +254,10 @@
 }
 /* Days tab: the read-only tube line (spec A2 §5.2), ported from itinerary.css */
 .routes-panel .days { --tube: #8b0000; --day: rgba(120, 160, 255, 0.07); --day-border: rgba(120, 160, 255, 0.55); --sub-border: rgba(120, 160, 255, 0.45); --act-border: rgba(70, 170, 200, 0.8); }
-.routes-panel .days-board { display: grid; grid-template-columns: minmax(70px, 110px) 32px minmax(0, 1fr); gap: 0 6px; position: relative; align-items: start; }
-.routes-panel .days-titles { position: relative; }
+.routes-panel .days-board { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 0 6px; position: relative; align-items: start; }   /* T8: no titles column */
 .routes-panel .days-line { display: block; overflow: visible; }
-.routes-panel .days-list { display: flex; flex-direction: column; }
-.routes-panel .days-stop-title { position: absolute; right: 0; transform: translateY(-50%); text-align: right; max-width: 100%; cursor: pointer; }
+.routes-panel .days-list { display: flex; flex-direction: column; gap: 8px; }   /* T9: a gap between day boxes */
+.routes-panel .days-sub-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; cursor: pointer; }
 .routes-panel .days-stop-name { font-weight: 700; font-size: 12px; line-height: 1.2; }
 .routes-panel .days-stop-times { font-size: 10.5px; line-height: 1.3; white-space: normal; }
 .routes-panel .days-stop-times.est { font-style: italic; }
@@ -268,9 +267,6 @@
 .routes-panel .days-dot { fill: var(--tube); stroke: #fff; stroke-width: 2; }
 .routes-panel .days-clickable { cursor: pointer; }
 .routes-panel .days-day { background: var(--day); border: 1.4px solid var(--day-border); border-radius: 6px; padding: 6px 8px 8px; }
-.routes-panel .days-day + .days-day { border-top-left-radius: 0; border-top-right-radius: 0; border-top: none; }
-.routes-panel .days-day:first-child:not(:last-child) { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
-.routes-panel .days-day:not(:first-child):not(:last-child) { border-radius: 0; }
 .routes-panel .days-day-title { font-size: 11.5px; font-weight: 600; margin-bottom: 4px; }
 .routes-panel .days-passage { font-size: 11.5px; padding: 4px 0 2px; }
 .routes-panel .days-sub { background: rgba(255, 255, 255, 0.5); border: 1px solid var(--sub-border); border-radius: 4px; padding: 4px 6px; min-height: 26px; display: flex; flex-direction: column; gap: 3px; }
@@ -283,5 +279,14 @@
 .routes-modal .radio-list label > span { flex: 1; }
 .routes-modal .switch-row { display: flex; gap: 8px; align-items: center; font-size: 13px; text-transform: none; letter-spacing: 0; color: var(--ink); font-weight: 400; cursor: pointer; }
 .routes-modal .switch-row input[type=checkbox] { width: 16px; height: 16px; min-height: 0; padding: 0; margin: 0; flex: none; }
+/* Round 2 T14: the Start from… result line */
+.routes-modal .result { display: flex; align-items: center; gap: 10px; background: var(--soft); border-radius: 8px; padding: 10px 12px; }
+.routes-modal .result-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--line); flex: none; }
+.routes-modal .result-dot.ok { background: var(--ok); }
+.routes-modal .result-dot.warn { background: #d9a400; }
+.routes-modal .result-text { min-width: 0; }
+.routes-modal .result-l1 { font-weight: 600; font-size: 14px; line-height: 1.35; }
+.routes-modal .result-l2 { font-size: 12px; line-height: 1.35; }
+.routes-modal .field .switch-row { padding-top: 8px; }
 .routes-panel .mk-anchor-badge { position: absolute; bottom: -3px; right: -3px; width: 15px; height: 15px; border-radius: 50%; background: #fff; color: var(--stop); border: 1px solid var(--stop); display: grid; place-items: center; }
 .routes-panel .mk-anchor-badge svg { width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }

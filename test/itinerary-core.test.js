@@ -81,7 +81,7 @@ test("legHours: distance at the leg's own speed, else the route speed", () => {
   assert.ok(Math.abs(core.legHours(pts, 0, 2, 8) - 0.5) < 0.01);
 });
 
-test("estimateTimes: set times upright, arrivals estimated from the previous departure, an overnight stop without a departure time leaves at 09:00", () => {
+test("estimateTimes: set times upright, arrivals estimated from the previous departure, an overnight stop without a departure time leaves at 07:00", () => {
   const times = core.estimateTimes(sevenDays());
   assert.deepEqual(times.get("stp_subic1"), { arrive: null, depart: { time: "09:00", estimated: false } });
   const anaw = times.get("stp_anaw");                      // ~5 nm at 8 kn from 09:00
@@ -94,22 +94,26 @@ test("estimateTimes: set times upright, arrivals estimated from the previous dep
   assert.deepEqual(capo.depart, { time: "08:30", estimated: false });
   const herm = times.get("stp_herm");
   assert.equal(herm.arrive.estimated, true);
-  assert.deepEqual(herm.depart, { time: "09:00", estimated: true });   // 1 night, no departure time set → 09:00 (spec A2 D4)
+  assert.deepEqual(herm.depart, { time: "07:00", estimated: true });   // 1 night, no departure time set → 07:00 (spec A2 round 2 T12)
   const poti = times.get("stp_poti");
-  assert.equal(poti.arrive.estimated, true);               // ~19 nm at 8 kn from 09:00 → about 11:22
-  assert.match(poti.arrive.time, /^11:[1-3]\d$/);
+  assert.equal(poti.arrive.estimated, true);               // ~19 nm at 8 kn from 07:00 → about 09:22
+  assert.match(poti.arrive.time, /^09:[1-3]\d$/);
   assert.deepEqual(poti.depart, { time: "18:00", estimated: false });
   const hund = times.get("stp_hund");
   assert.equal(hund.arrive.estimated, true);               // re-anchored by Potipot's 18:00; shown mod 24 h
   assert.match(hund.arrive.time, /^\d\d:\d\d$/);
 });
 
-test("estimateTimes: a zero-night stop with no departure time leaves when it arrives", () => {
+test("estimateTimes: a zero-night stop with no departure time leaves 2 h after it arrives, never past 23:59", () => {
   const it = sevenDays();
-  delete it.route.points[1].depart.time;                   // Anawangin: arrive ~09:40, depart estimated the same
+  delete it.route.points[1].depart.time;                   // Anawangin: arrive ~09:33, depart estimated ~11:33
   const t = core.estimateTimes(it).get("stp_anaw");
   assert.equal(t.depart.estimated, true);
-  assert.equal(t.depart.time, t.arrive.time);
+  assert.equal(t.depart.time, core.minutesToTime(core.timeToMinutes(t.arrive.time) + core.DAY_STOP_DWELL_MIN));
+  const late = sevenDays();
+  late.route.points[0].depart.time = "22:30";              // Subic leaves late: Anawangin arrives ~23:03, departs 23:59 not 01:03
+  delete late.route.points[1].depart.time;
+  assert.equal(core.estimateTimes(late).get("stp_anaw").depart.time, "23:59");
 });
 
 test("stopTimesLabel: Arr./Dep. with ~ for estimates, nights when more than one", () => {
@@ -118,7 +122,7 @@ test("stopTimesLabel: Arr./Dep. with ~ for estimates, nights when more than one"
   const stops = core.stopEntries(it.route.points).map((e) => e.point);
   assert.equal(core.stopTimesLabel(stops[0], times.get("stp_subic1")), "Dep. 09:00");
   assert.match(core.stopTimesLabel(stops[2], times.get("stp_capo")), /^Arr\. ~15:[0-2]\d · Dep\. 08:30$/);
-  assert.match(core.stopTimesLabel(stops[4], times.get("stp_poti")), /^Arr\. ~11:[1-3]\d · 2 nights · Dep\. 18:00$/);
+  assert.match(core.stopTimesLabel(stops[4], times.get("stp_poti")), /^Arr\. ~09:[1-3]\d · 2 nights · Dep\. 18:00$/);
   assert.equal(core.stopTimesLabel(stops[3], times.get("stp_herm")).startsWith("Arr. ~"), true);
   assert.equal(core.stopTimesLabel({ stop: true }, { arrive: null, depart: null }), "");
 });
@@ -421,7 +425,7 @@ test("A2 setDeparture: a later day cascades then recomputes; an earlier day drop
   assert.deepEqual(daysOf(night, "stp_hund"), [6, 7]);      // 20:00 + 4.57 h = 00:34, so the arrival rolls to day 6
   assert.deepEqual(core.estimateTimes(night).get("stp_hund").arrive, { time: "00:34", estimated: true });
   const cleared = core.setDeparture(it, "stp_poti", { time: "" });
-  assert.deepEqual(stopOf(cleared, "stp_poti").depart, { day: 5 });
+  assert.deepEqual(stopOf(cleared, "stp_poti").depart, { day: 5, time: "07:00" });   // no valid time → the T12 default (2 nights → 07:00)
   assert.equal(core.setDeparture(it, "stp_subic2", { day: 9 }), it);   // the terminus has no departure
 });
 
@@ -500,7 +504,7 @@ test("A2 legSummaries: distance, hours and the computed arrival of the leg leavi
   assert.ok(Math.abs(first.nm - 4.44) < 0.05);
   assert.ok(Math.abs(first.hours - 0.56) < 0.01);
   assert.deepEqual([first.toName, first.departTime, first.departEstimated, first.arriveTime, first.arriveDay, first.overnight], ["Anawangin", "09:00", false, "09:33", 1, false]);
-  assert.deepEqual([legs.get("stp_herm").departTime, legs.get("stp_herm").departEstimated], ["09:00", true]);
+  assert.deepEqual([legs.get("stp_herm").departTime, legs.get("stp_herm").departEstimated], ["07:00", true]);
   assert.equal(legs.get("stp_poti").arriveTime, "22:34");
   assert.equal(legs.has("stp_subic2"), false);
   const night = core.setDeparture(it, "stp_poti", { time: "20:00" });
@@ -538,4 +542,88 @@ test("A2 toUnassignedRoute: a new library record with the same stops, days and i
   assert.deepEqual(route.activities, it.activities);
   assert.equal("dirty_stop_ids" in route, false);
   assert.notEqual(route.points, it.route.points);                      // copies, not the same arrays
+});
+// ---- spec A2 round 2 ---------------------------------------------------------------------
+
+test("R2 defaultDepartTime: 07:00 with nights; arrival + 2 h for a day stop; clamped at 23:59; 07:00 without an estimate", () => {
+  const it = sevenDays();
+  assert.equal(core.defaultDepartTime(it, "stp_poti"), "07:00");                         // 2 nights
+  assert.equal(core.defaultDepartTime(it, "stp_herm"), "07:00");                         // 1 night
+  const anaw = core.estimateTimes(it).get("stp_anaw").arrive.time;                       // ~09:33
+  assert.equal(core.defaultDepartTime(it, "stp_anaw"), core.minutesToTime(core.timeToMinutes(anaw) + 120));
+  const late = sevenDays();
+  late.route.points[0].depart.time = "22:30";
+  assert.equal(core.defaultDepartTime(late, "stp_anaw"), "23:59");
+  assert.equal(core.defaultDepartTime(it, "stp_subic1"), "07:00");                       // the origin has no arrival estimate
+  assert.equal(core.defaultDepartTime(it, "stp_subic2"), "07:00");                       // the terminus has no departure
+  assert.equal(core.defaultDepartTime(it, "stp_nope"), "07:00");
+});
+
+test("R2 setDeparture: a stay change on a stop with no time stores the default; a picked time is stored as picked", () => {
+  const it = sevenDays();
+  const herm = core.setDeparture(it, "stp_herm", { day: 4 });                            // Hermana had no time: 2 nights now → 07:00
+  assert.deepEqual(stopOf(herm, "stp_herm").depart, { day: 4, time: "07:00" });
+  const dayStop = core.setDeparture(it, "stp_herm", { day: 2 });                         // becomes a day stop → arrival + 2 h
+  const arrive = core.estimateTimes(dayStop).get("stp_herm").arrive.time;
+  assert.deepEqual(stopOf(dayStop, "stp_herm").depart, { day: 2, time: core.minutesToTime(core.timeToMinutes(arrive) + 120) });
+  const picked = core.setDeparture(it, "stp_herm", { day: 4, time: "16:20" });
+  assert.deepEqual(stopOf(picked, "stp_herm").depart, { day: 4, time: "16:20" });
+  const kept = core.setDeparture(it, "stp_poti", { day: 6 });                            // Potipot keeps its 18:00
+  assert.deepEqual(stopOf(kept, "stp_poti").depart, { day: 6, time: "18:00" });
+});
+
+test("R2 keptStopsBefore: stops reached before the from-day", () => {
+  const it = sevenDays();
+  assert.equal(core.keptStopsBefore(it, 1, 7), 0);
+  assert.equal(core.keptStopsBefore(it, 2, 7), 3);                                       // Subic, Anawangin, Capones on day 1
+  assert.equal(core.keptStopsBefore(it, 4, 7), 5);                                       // + Hermana (day 2), Potipot (day 3)
+  assert.equal(core.keptStopsBefore(core.normalizeItinerary({}), 3, 7), 0);
+});
+
+test("R2 fitSentence: fits / short / over / kept stops / none, with day plurals", () => {
+  const it = sevenDays();
+  const match = core.fitSentence(core.fit(it, CHARTER_7), CHARTER_7, { stops: 7, fromDay: 1, kept: 0 });
+  assert.deepEqual(match, { tone: "ok", line1: "Ends Sun 18 Oct · fits the charter", line2: "7 stops · Mon 12 Oct to Sun 18 Oct" });
+  const short = core.fitSentence(core.fit(core.recomputeArrivals(it), CHARTER_7), CHARTER_7, { stops: 7, fromDay: 1, kept: 0 });
+  assert.deepEqual(short, { tone: "warn", line1: "Ends Sat 17 Oct · 1 day before the charter ends", line2: "7 stops · Mon 12 Oct to Sat 17 Oct · the charter ends Sun 18 Oct" });
+  const five = { start_date: "2026-10-12", end_date: "2026-10-16" };
+  const over = core.fitSentence(core.fit(it, five), five, { stops: 7, fromDay: 1, kept: 0 });
+  assert.deepEqual(over, { tone: "warn", line1: "Ends Sun 18 Oct · 2 days after the charter ends", line2: "7 stops · Mon 12 Oct to Sun 18 Oct · the charter ends Fri 16 Oct" });
+  const mid = core.fitSentence(core.fit(core.rebaseRecord(it, 3), { start_date: "2026-10-12", end_date: "2026-10-20" }), { start_date: "2026-10-12", end_date: "2026-10-20" }, { stops: 7, fromDay: 3, kept: 1 });
+  assert.deepEqual(mid, { tone: "ok", line1: "Ends Tue 20 Oct · fits the charter", line2: "Keeps the 1 stop reached before Wed 14 Oct, then 7 stops to Tue 20 Oct" });
+  const none = core.fitSentence(core.fit(core.normalizeItinerary({}), CHARTER_7), CHARTER_7, {});
+  assert.deepEqual(none, { tone: "none", line1: "No stops yet.", line2: "" });
+  assert.equal(core.fitSentence(null, CHARTER_7, {}).tone, "none");
+});
+
+test("R2 subBoxTimesLabel: arrival day, middle day, departure day, same-day stop, origin", () => {
+  const it = sevenDays();
+  const times = core.estimateTimes(it);
+  const stops = core.stopEntries(it.route.points).map((e) => e.point);
+  assert.match(core.subBoxTimesLabel(stops[4], times.get("stp_poti"), 3), /^Arr\. ~09:[1-3]\d$/);   // Potipot arrives day 3
+  assert.equal(core.subBoxTimesLabel(stops[4], times.get("stp_poti"), 4), "2 nights");
+  assert.equal(core.subBoxTimesLabel(stops[4], times.get("stp_poti"), 5), "Dep. 18:00");
+  assert.match(core.subBoxTimesLabel(stops[2], times.get("stp_capo"), 1), /^Arr\. ~15:[0-2]\d$/);     // Capones: in day 1, out day 2
+  assert.equal(core.subBoxTimesLabel(stops[2], times.get("stp_capo"), 2), "Dep. 08:30");
+  assert.match(core.subBoxTimesLabel(stops[1], times.get("stp_anaw"), 1), /^Arr\. ~09:[3-5]\d · Dep\. 14:00$/);   // same-day stop
+  assert.equal(core.subBoxTimesLabel(stops[0], times.get("stp_subic1"), 1), "Dep. 09:00");            // the origin
+  assert.equal(core.subBoxTimesLabel(stops[6], times.get("stp_subic2"), 7).startsWith("Arr. "), true);   // the terminus
+  assert.equal(core.subBoxTimesLabel(stops[4], times.get("stp_poti"), 6), "");
+  assert.equal(core.subBoxTimesLabel({ stop: true }, null, 1), "");
+});
+
+test("R2 timeOptions: the 15-minute grid, an off-grid minute kept once, blank first when allowed", () => {
+  const on = core.timeOptions("07:30");
+  assert.equal(on.hours.length, 24);
+  assert.deepEqual([on.hours[0], on.hours[23]], ["00", "23"]);
+  assert.deepEqual(on.minutes, ["00", "15", "30", "45"]);
+  assert.deepEqual([on.hour, on.minute], ["07", "30"]);
+  const off = core.timeOptions("09:20");
+  assert.deepEqual(off.minutes, ["00", "15", "20", "30", "45"]);
+  assert.deepEqual([off.hour, off.minute], ["09", "20"]);
+  const blank = core.timeOptions("", { allowBlank: true });
+  assert.deepEqual([blank.hours[0], blank.hours[1], blank.minutes[0], blank.minutes[1]], ["", "00", "", "00"]);
+  assert.deepEqual([blank.hour, blank.minute], ["", ""]);
+  assert.deepEqual(core.timeOptions("nonsense").minute, "");
+  assert.equal(core.MINUTE_STEP, 15);
 });

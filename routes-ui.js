@@ -85,5 +85,32 @@
 
   const closeModal = () => { if (current) current(); };
 
-  window.IolantheRoutesUi = Object.freeze({ ICONS, svg, el, fmtPos, openModal, closeModal });
+  // Spec A2 round 2 T13: a time as two native selects, hour (00–23) and minute (15-minute steps; a stored minute off the
+  // grid is kept as one extra option by IolantheItineraryCore.timeOptions). { root, hour, minute, get(), set(value) };
+  // onChange(value) fires on either select's change with the combined "HH:MM" (or "" when blank is allowed and the hour
+  // is blank). allowBlank adds a "—" option to both selects for item times; an hour picked with a blank minute reads :00.
+  function timeSelects({ value, allowBlank, onChange, cls, title }) {
+    const core = window.IolantheItineraryCore;
+    const hour = el("select", { class: "time-h", "aria-label": "Hour", title: title || null });
+    const minute = el("select", { class: "time-m", "aria-label": "Minutes", title: title || null });
+    const fill = (select, list, current) => select.replaceChildren(...list.map((v) => el("option", { value: v, selected: v === current || undefined }, v === "" ? "—" : v)));
+    const set = (v) => {
+      const o = core.timeOptions(v, { allowBlank: Boolean(allowBlank) });
+      fill(hour, o.hours, o.hour);
+      fill(minute, o.minutes, o.minute);
+    };
+    const get = () => (hour.value === "" ? "" : `${hour.value}:${minute.value || "00"}`);
+    const changed = () => {
+      if (hour.value === "") minute.value = "";
+      else if (minute.value === "") minute.value = "00";
+      if (onChange) onChange(get());
+    };
+    hour.addEventListener("change", changed);
+    minute.addEventListener("change", changed);
+    set(value || "");
+    const root = el("span", { class: `time-selects ${cls || ""}`.trim() }, hour, el("span", { class: "time-colon", "aria-hidden": "true" }, ":"), minute);
+    return { root, hour, minute, get, set };
+  }
+
+  window.IolantheRoutesUi = Object.freeze({ ICONS, svg, el, fmtPos, openModal, closeModal, timeSelects });
 })();

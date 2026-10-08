@@ -28,6 +28,7 @@
   let guard = null;      // page unsaved-changes guard
 
   const MAP_CENTER = [12.1, 120.0];
+  const STOP_ZOOM = 13;   // selecting a card zooms in at least this far (spec A2 round 2 T10)
   const STICKY_PX = 40;   // an anchorage stop dropped this close to its anchorage snaps back (spec A2 T5)
   let map = null;        // Leaflet map for the current panel
   const groups = {};     // Leaflet layer groups
@@ -457,7 +458,7 @@
     }
     if (panel !== mine || !mine.isConnected) return;
     destroyMap();
-    map = L.map(container, { zoomControl: false }).setView(MAP_CENTER, 10);
+    map = L.map(container, { zoomControl: false, keyboard: false }).setView(MAP_CENTER, 10);   // ← / → step the strip (T15)
     L.control.zoom({ position: "bottomright" }).addTo(map);
     L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
       maxZoom: 18, attribution: "Tiles &copy; Esri"
@@ -583,7 +584,7 @@
   }
   function panToStop(stopId) {
     const i = work.route.points.findIndex((p) => p.id === stopId);
-    if (map && i >= 0 && pointMarkers[i]) { map.closePopup(); map.panTo(pointMarkers[i].getLatLng()); }
+    if (map && i >= 0 && pointMarkers[i]) { map.closePopup(); map.setView(pointMarkers[i].getLatLng(), Math.max(map.getZoom(), STOP_ZOOM)); }
     highlightStop(stopId);
   }
 
@@ -847,14 +848,19 @@
     });
   }
 
-  // Spec A2 §5.8: import an unassigned route or another charter's record from a day. The server re-bases its days
-  // onto the from-day and brings its items unless stripped; nothing is refused for length (the fit pill reports).
+  // Spec A2 §5.8 / round 2 T14: import an unassigned route or another charter's record from a day. One grouped dropdown
+  // for the record (unassigned routes, then charters by year, newest first), "Starting on", a "Bring its items" switch and
+  // a result line from fitSentence. The server re-bases the record's days onto the from-day and brings its items unless
+  // stripped; nothing is refused for length. A charter source's record is fetched when it is chosen.
   // Spec A2 T7: open this charter's route with the Start from… dialog preselecting the route being edited.
   async function assignToCharter() {
     if (!work || !work.route.id) return;
     if (!(await guardDiscard())) return;
     await A().showCharterPanel("routes", { subject: "charter", startFrom: work.route.id });
   }
+
+  const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
   async function openStartFrom(preselectId) {
     if (!work || saving || !isCharter()) return;
@@ -877,63 +883,94 @@
       return Math.min(Math.max(Math.floor((Date.now() - start) / 86400000) + 1, 1), n);
     })();
     const hasStops = icore().stopEntries(record.route.points).length > 0;
+
+    // Sources by option value: { kind, id, name, stops, record } — a charter's record is null until fetched.
+    const sources = new Map();
+    const withStops = routes.filter((r) => r.points.some(core().isStop)).sort((a, b) => a.name.localeCompare(b.name));
+    withStops.forEach((r) => sources.set(`library:${r.id}`, { kind: "library", id: r.id, name: r.name, stops: r.points.filter(core().isStop).length, record: toRecord({ ...r, revision: 0 }) }));
+    const startOf = (ch) => icore().parseDateOnly(ch.charter && ch.charter.start_date);
+    const yearOf = (ch) => { const t = startOf(ch); return t === null ? null : new Date(t).getUTCFullYear(); };
+    const monthOf = (ch) => { const t = startOf(ch); return t === null ? "" : MONTHS[new Date(t).getUTCMonth()]; };
+    const byDate = charters.slice().sort((a, b) => (startOf(b) || 0) - (startOf(a) || 0) || a.name.localeCompare(b.name));
+    byDate.forEach((ch) => sources.set(`charter:${ch.id}`, { kind: "charter", id: ch.id, name: ch.name, stops: ch.stops, record: null }));
+    const years = [...new Set(byDate.map(yearOf).filter((y) => y !== null))].sort((a, b) => b - a);
+    const option = (value, text) => el("option", { value }, text);
+    const group = (label, options) => (options.length ? el("optgroup", { label }, ...options) : null);
+    const select = el("select", { id: "routes-source" },
+      group("Unassigned routes", withStops.map((r) => option(`library:${r.id}`, `${r.name} · ${plural(sources.get(`library:${r.id}`).stops, "stop")}`))),
+      ...years.map((y) => group(`Charters ${y}`, byDate.filter((ch) => yearOf(ch) === y).map((ch) => option(`charter:${ch.id}`, `${ch.name} · ${monthOf(ch)} · ${plural(ch.stops, "stop")}`)))),
+      group("Charters", byDate.filter((ch) => yearOf(ch) === null).map((ch) => option(`charter:${ch.id}`, `${ch.name} · ${plural(ch.stops, "stop")}`))));
+    if (preselectId && sources.has(`library:${preselectId}`)) select.value = `library:${preselectId}`;
+
     const fromDay = el("select", { id: "routes-from-day" }, ...Array.from({ length: n }, (_, i) => el("option", { value: String(i + 1), selected: i + 1 === (hasStops ? today : 1) || undefined }, `Day ${i + 1} · ${icore().dayDateLabel(subject.charter, i + 1)}`)));
-    const strip = el("input", { type: "checkbox", id: "routes-strip-items" });
-    let stripTouched = false;
-    strip.addEventListener("change", () => { stripTouched = true; });
-    const fitLabel = (route) => {
-      const f = icore().fit(icore().rebaseRecord(toRecord({ ...route, revision: 0 }), Number(fromDay.value)), subject.charter);
-      return f.state === "none" ? "" : ` · ${f.label}`;
+    const bring = el("input", { type: "checkbox", id: "routes-bring-items" });
+    let bringTouched = false;
+    bring.addEventListener("change", () => { bringTouched = true; });
+    const bringLabel = el("span", {}, "Bring its items");
+    const itemsField = el("div", { class: "field" }, el("label", { for: "routes-bring-items" }, "Itinerary items"), el("label", { class: "switch-row" }, bring, bringLabel));
+    const dot = el("span", { class: "result-dot" });
+    const line1 = el("div", { class: "result-l1" });
+    const line2 = el("div", { class: "result-l2 muted" });
+    const result = el("div", { class: "result" }, dot, el("div", { class: "result-text" }, line1, line2));
+
+    const chosen = () => sources.get(select.value) || null;
+    const recordOf = async (src) => {
+      if (src.record) return src.record;
+      const bundle = await A().api(`/api/admin/charter/${encodeURIComponent(src.id)}`);
+      src.record = icore().normalizeItinerary(bundle["itinerary.json"]);
+      return src.record;
     };
-    const sourceRows = [];
-    const row = (value, label, kind) => {
-      const input = el("input", { type: "radio", name: "routes-source", value, "data-kind": kind });
-      const text = el("span", {}, label);
-      input.addEventListener("change", () => { if (!stripTouched) strip.checked = kind === "charter"; });
-      sourceRows.push({ input, text, value, kind });
-      return el("label", {}, input, text);
+    const refresh = async () => {
+      const src = chosen();
+      if (!src) return;
+      let rec = src.record;
+      if (!rec) {
+        line1.textContent = "Loading…";
+        line2.textContent = "";
+        try { rec = await recordOf(src); } catch (error) { reportError(error); line1.textContent = "Could not load that charter."; return; }
+        if (chosen() !== src) return;
+      }
+      const items = rec.activities.length;
+      bringLabel.textContent = items ? `Bring its ${plural(items, "item")}` : "Bring its items";
+      itemsField.hidden = items === 0;
+      if (!bringTouched) bring.checked = src.kind === "library";
+      const day = Number(fromDay.value);
+      const f = icore().fit(icore().rebaseRecord(rec, day), subject.charter);
+      const s = icore().fitSentence(f, subject.charter, { stops: src.stops, fromDay: day, kept: icore().keptStopsBefore(record, day, n) });
+      dot.className = `result-dot ${s.tone}`;
+      line1.textContent = s.line1;
+      line2.textContent = s.line2;
     };
-    const withStops = routes.filter((r) => r.points.some(core().isStop));
-    const list = el("div", { class: "radio-list" },
-      withStops.length ? el("div", { class: "side-label" }, "Unassigned routes") : null,
-      ...withStops.map((r) => row(`library:${r.id}`, `${r.name} · ${r.points.filter(core().isStop).length} stops`, "library")),
-      charters.length ? el("div", { class: "side-label" }, "Other charters") : null,
-      ...charters.map((c) => row(`charter:${c.id}`, `${c.name} · ${c.stops} stops`, "charter")));
-    const refreshFit = () => sourceRows.forEach((s) => {
-      if (s.kind !== "library") return;
-      const r = routes.find((x) => `library:${x.id}` === s.value);
-      s.text.textContent = `${r.name} · ${r.points.filter(core().isStop).length} stops${fitLabel(r)}`;
-    });
-    fromDay.addEventListener("change", refreshFit);
-    refreshFit();
-    if (sourceRows.length) { sourceRows[0].input.checked = true; strip.checked = sourceRows[0].kind === "charter"; }
-    const pre = sourceRows.find((s) => s.value === `library:${preselectId}`);
-    if (pre) { pre.input.checked = true; strip.checked = false; }
+    select.addEventListener("change", refresh);
+    fromDay.addEventListener("change", refresh);
+    refresh();
+
     openModal({
       title: "Start from…", saveTitle: "Import", wide: true,
-      body: el("div", {},
-        sourceRows.length ? list : el("p", { class: "empty" }, "No unassigned routes or other charters with stops yet."),
-        el("div", { class: "grid2" },
-          el("div", { class: "field" }, el("label", { for: "routes-from-day" }, "From day"), fromDay),
-          el("div", { class: "field" }, el("label", { for: "routes-strip-items" }, "Items"), el("label", { class: "switch-row" }, strip, " Strip the record's items"))),
-        el("p", { class: "meta" }, "Stops reached before the from-day stay; the record's day 1 lands on it. The fit pill reports if the route runs short or over.")),
-      onSave: async () => {
-        const chosen = sourceRows.find((s) => s.input.checked);
-        if (!chosen) { status("Pick a record to start from.", "error"); return false; }
+      body: sources.size
+        ? el("div", {},
+          el("div", { class: "field" }, el("label", { for: "routes-source" }, "Record"), select),
+          el("div", { class: "grid2" },
+            el("div", { class: "field" }, el("label", { for: "routes-from-day" }, "Starting on"), fromDay),
+            itemsField),
+          result)
+        : el("div", { class: "result" }, el("span", { class: "result-dot none" }), el("div", { class: "result-text" }, el("div", { class: "result-l1" }, "No unassigned routes or other charters with stops yet"))),
+      onSave: sources.size ? async () => {
+        const src = chosen();
+        if (!src) { status("Pick a record to start from.", "error"); return false; }
         const day = Number(fromDay.value);
         const dropped = icore().itemsDroppedByImport(record, day, n);
         if (dropped.length && !(await askDrop({ days: [...new Set(dropped.map((a) => a.day))].sort((a, b) => a - b), items: dropped }, `Starting from day ${day}`))) return false;
-        const [type, id] = chosen.value.split(":");
         saving = true;
         renderActions();
         try {
-          const { itinerary } = await post(`/api/admin/charter/${encodeURIComponent(subject.charterId)}/itinerary/import`, { source: { type, id }, from_day: day, strip_items: strip.checked, base_revision: work.baseRevision });
+          const { itinerary } = await post(`/api/admin/charter/${encodeURIComponent(subject.charterId)}/itinerary/import`, { source: { type: src.kind, id: src.id }, from_day: day, strip_items: !bring.checked, base_revision: work.baseRevision });
           if (panel !== mine || !mine.isConnected) return true;
           subject = { ...subject, itinerary };
           setWork(charterRouteFromItinerary(itinerary));
           afterPersist();
           const f = icore().fit(toRecord(work.route), subject.charter);
-          status(`Started from "${chosen.text.textContent.split(" · ")[0]}" on day ${day} · revision ${itinerary.revision}${f.state === "match" ? " · fits the charter" : f.state === "none" ? "" : ` · ${f.label}`}`, "ok");
+          status(`Started from "${src.name}" on day ${day} · revision ${itinerary.revision}${f.state === "match" ? " · fits the charter" : f.state === "none" ? "" : ` · ${f.label}`}`, "ok");
           return true;
         } catch (error) {
           if (error.status === 409) {
@@ -947,7 +984,7 @@
           saving = false;
           if (panel === mine && mine.isConnected && work) renderActions();
         }
-      }
+      } : undefined
     });
   }
 
@@ -1061,6 +1098,7 @@
     }
   }
 
+  // Undo/redo and, since round 2 T15, ← / → to step the strip from anywhere on the page (not inside a field or a dialog).
   function bindKeyboard() {
     if (keyHandler) document.removeEventListener("keydown", keyHandler);
     keyHandler = (e) => {
@@ -1068,8 +1106,11 @@
       if (/^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || "")) return;
       if (document.querySelector(".routes-modal, .admin-decision-backdrop, #dialog-modal:not(.hidden)")) return;
       const key = (e.key || "").toLowerCase();
+      const plain = !e.ctrlKey && !e.metaKey && !e.altKey;
       if ((e.ctrlKey || e.metaKey) && key === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
       else if ((e.ctrlKey || e.metaKey) && (key === "y" || (key === "z" && e.shiftKey))) { e.preventDefault(); redo(); }
+      else if (plain && e.key === "ArrowLeft" && cards) { e.preventDefault(); cards.step(-1); }
+      else if (plain && e.key === "ArrowRight" && cards) { e.preventDefault(); cards.step(1); }
     };
     document.addEventListener("keydown", keyHandler);
   }
@@ -1156,11 +1197,11 @@
       getCharter: charterOrNull,
       getDayCount: dayCount,
       siteTitle: (id) => { const s = (siteLibrary.sites || []).find((x) => x && x.id === id); return s && s.title ? s.title : id; },
-      onStopClick: (stopId) => { if (cards) cards.select(stopId); }
+      onStopClick: (stopId) => { if (cards) cards.select(stopId, { reveal: true }); }   // T10: scroll the strip into view and zoom the map
     });
     days.render($("days"));
     cards = window.IolantheStopCards.create({
-      A: A(), core: icore(), rcore: core(), el, svg, openModal, places: myPlaces,
+      A: A(), core: icore(), rcore: core(), el, svg, openModal, timeSelects: window.IolantheRoutesUi.timeSelects, places: myPlaces,
       getWork: () => work, getCharter: charterOrNull, getDayCount: dayCount, getSiteLibrary: () => siteLibrary,
       readOnly, editRecord, askDrop,
       removeStop: (stopId) => { const i = work.route.points.findIndex((p) => p.id === stopId); if (i >= 0) removeStopAt(i); },

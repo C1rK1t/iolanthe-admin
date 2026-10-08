@@ -6,6 +6,12 @@
     department: "",
     authenticated: false,
     activeCharter: "",
+    storedActiveCharter: "",
+    forcedCharter: "",
+    todayOffsetDays: 0,
+    reservedPeriods: { revision: 0, periods: [] },
+    ganttZoom: "active",
+    gantt: null,
     charters: [],
     allowedSections: [],
     allowedDepartments: [],
@@ -1028,7 +1034,6 @@
     #panel-menu .menu-meta-row,
     #panel-menu .menu-section,
     #panel-menu .menu-note,
-    #panel-itinerary .itinerary-preview-list,
     #panel-drinks .menu-subtitle,
     #panel-drinks .menu-meta-row,
     #panel-drinks .menu-section,
@@ -1617,6 +1622,105 @@
     return state.selectedCharter;
   }
 
+  const GANTT_COLLAPSED_KEY = "iolanthe-admin.gantt.collapsed";
+
+  // Today as the server sees it: the browser's date corrected by the offset measured at bootstrap.
+  function adminToday() {
+    const core = window.IolantheChartersCore;
+    return core.addDays(core.todayLocal(), state.todayOffsetDays) || core.todayLocal();
+  }
+
+  // Re-derive the active and forced charter ids from the charter list (after a save that moved dates, or a Make active).
+  function recomputeActiveCharter() {
+    const core = window.IolantheChartersCore;
+    const today = adminToday();
+    state.activeCharter = core.activeCharterId(state.charters, state.storedActiveCharter, today);
+    state.forcedCharter = core.activeCharterId(state.charters.filter(charter => core.isInDate(charter, today)), "", today);
+  }
+
+  function ganttCollapsedDefault() {
+    try {
+      const stored = window.localStorage.getItem(GANTT_COLLAPSED_KEY);
+      if (stored === "true" || stored === "false") {
+        return stored === "true";
+      }
+    } catch (error) {
+      // localStorage unavailable: fall through to the panel default.
+    }
+    return state.sectionPanels.charter === "routes";
+  }
+
+  function rememberGanttCollapsed(collapsed) {
+    try {
+      window.localStorage.setItem(GANTT_COLLAPSED_KEY, collapsed ? "true" : "false");
+    } catch (error) {
+      // ignore
+    }
+  }
+
+  async function loadReservedPeriods() {
+    try {
+      const data = await api("/api/admin/reserved-periods");
+      state.reservedPeriods = {
+        revision: Number.isInteger(data && data.revision) ? data.revision : 0,
+        periods: Array.isArray(data && data.periods) ? data.periods : []
+      };
+    } catch (error) {
+      setStatus(error.message, "error");
+    }
+    return state.reservedPeriods;
+  }
+
+  function ganttContext() {
+    return {
+      charters: state.charters,
+      periods: state.reservedPeriods.periods,
+      selectedId: state.selectedCharter,
+      activeId: state.activeCharter,
+      forcedId: state.forcedCharter,
+      today: adminToday(),
+      zoom: state.ganttZoom,
+      collapsed: ganttCollapsedDefault(),
+      canManage: canManageCharterAdmin(),
+      onSelectCharter: async charterId => {
+        if (charterId === state.selectedCharter || !state.charters.some(charter => charter.id === charterId)) {
+          return;
+        }
+        if (!await confirmDiscardPageChanges()) {
+          return;
+        }
+        state.selectedCharter = charterId;
+        state.bundle = null;
+        renderCharter();
+      },
+      onOpenPeriod: periodId => openReservedPeriodModal(periodId),
+      onCreateCharter: openCreateCharterModal,
+      onDeleteCharter: openDeleteCharterModal,
+      onZoomChange: level => { state.ganttZoom = level; },
+      onToggleCollapsed: rememberGanttCollapsed
+    };
+  }
+
+  // Mounts (or refreshes) the band in the Charter section's host. Safe to call after every workspace render.
+  function mountCharterGantt() {
+    const host = document.getElementById("charter-gantt-host");
+    if (!host || !window.IolantheCharterGantt) {
+      state.gantt = null;
+      return;
+    }
+    if (state.gantt && state.gantt.host === host) {
+      state.gantt.handle.update(ganttContext());
+      return;
+    }
+    state.gantt = { host, handle: window.IolantheCharterGantt.mount(host, ganttContext()) };
+  }
+
+  function refreshCharterGantt() {
+    if (state.gantt && document.getElementById("charter-gantt-host") === state.gantt.host) {
+      state.gantt.handle.update(ganttContext());
+    }
+  }
+
   function activeCharterLabel() {
     const active = state.charters.find(charter => charter.id === state.activeCharter);
     return active ? (active.name || active.id) : (state.activeCharter || "None");
@@ -1826,6 +1930,11 @@
       state.department = data.department || "";
       state.authenticated = Boolean(data.authenticated);
       state.activeCharter = data.active_charter || "";
+      state.storedActiveCharter = data.stored_active_charter || "";
+      state.forcedCharter = data.forced_charter || "";
+      state.todayOffsetDays = data.today && window.IolantheChartersCore && window.IolantheChartersCore.isValidDate(data.today)
+        ? window.IolantheChartersCore.dayIndex(data.today) - window.IolantheChartersCore.dayIndex(window.IolantheChartersCore.todayLocal())
+        : 0;
       state.charters = Array.isArray(data.charters) ? data.charters : [];
       syncSelectedCharter();
       state.allowedSections = Array.isArray(data.allowed_sections) ? data.allowed_sections : [];
@@ -1915,37 +2024,21 @@
   }
 
   function sectionToolbarHtml(section) {
-    if (!["charter", "galley", "hotel"].includes(section)) {
+    if (section === "charter") {
+      return "";
+    }
+    if (!["galley", "hotel"].includes(section)) {
       return "";
     }
     const selectId = `${section}-charter-select`;
     const hasCharters = Array.isArray(state.charters) && state.charters.length > 0;
-    const showCharterSelector = !(section === "charter" && ["sites", "routes"].includes(state.sectionPanels.charter));
-    const showCharterActions = section === "charter"
-      && state.sectionPanels.charter === "info"
-      && canManageCharterAdmin();
-    const charterActions = showCharterActions
-      ? `
-          <div class="toolbar-actions">
-            ${iconButtonHtml("confirm", "Set active charter", ` id="charter-set-active"${hasCharters ? "" : " disabled"}`)}
-            ${iconButtonHtml("add", "Create new charter", ` id="charter-create"`)}
-            ${iconButtonHtml("remove", "Delete current charter", ` id="charter-delete"${hasCharters && state.charters.length > 1 ? "" : " disabled"}`)}
-          </div>
-      `
-      : "";
-    if (!showCharterSelector && !charterActions) {
-      return "";
-    }
     return `
       <div class="section-toolbar" data-toolbar="${section}">
-        ${showCharterSelector ? `
-          <label class="toolbar-field" for="${selectId}">Select Charter
-            <select id="${selectId}" ${hasCharters ? "" : "disabled"}>
-              ${charterOptionsHtml()}
-            </select>
-          </label>
-        ` : ""}
-        ${charterActions}
+        <label class="toolbar-field" for="${selectId}">Select Charter
+          <select id="${selectId}" ${hasCharters ? "" : "disabled"}>
+            ${charterOptionsHtml()}
+          </select>
+        </label>
       </div>
     `;
   }
@@ -1974,7 +2067,7 @@
             </div>
           `).join("")}
         </nav>
-        <div class="section-content">${toolbarHtml || ""}${contentHtml}</div>
+        <div class="section-content">${section === "charter" ? `<div id="charter-gantt-host" class="charter-gantt-host"></div>` : ""}${toolbarHtml || ""}${contentHtml}</div>
       </div>
     `;
   }
@@ -2145,22 +2238,6 @@
         state.bundle = null;
         rerender();
       });
-    }
-    if (section === "charter") {
-      const setActiveButton = document.getElementById("charter-set-active");
-      if (setActiveButton) {
-        setActiveButton.addEventListener("click", () => {
-          setActiveCharter(state.selectedCharter);
-        });
-      }
-      const createButton = document.getElementById("charter-create");
-      if (createButton) {
-        createButton.addEventListener("click", openCreateCharterModal);
-      }
-      const deleteButton = document.getElementById("charter-delete");
-      if (deleteButton) {
-        deleteButton.addEventListener("click", openDeleteCharterModal);
-      }
     }
     if (section === "galley" || section === "hotel") {
       const notesButton = document.getElementById(`${section}-notes-button`);
@@ -4502,21 +4579,6 @@
     return normalizedSaved;
   }
 
-  function charterDayCountTitle(charterInfo) {
-    const startMatch = String(charterInfo?.start_date || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    const endMatch = String(charterInfo?.end_date || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (!startMatch || !endMatch) {
-      return "Charter Information";
-    }
-    const start = Date.UTC(Number(startMatch[1]), Number(startMatch[2]) - 1, Number(startMatch[3]));
-    const end = Date.UTC(Number(endMatch[1]), Number(endMatch[2]) - 1, Number(endMatch[3]));
-    const days = Math.round((end - start) / 86400000) + 1;
-    if (!Number.isFinite(days) || days < 1) {
-      return "Charter Information";
-    }
-    return `Charter Information - ${days} ${days === 1 ? "Day" : "Days"}`;
-  }
-
   function parseLocalDateOnly(value) {
     const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (!match) {
@@ -4532,127 +4594,113 @@
     return date;
   }
 
-  function localTodayDate() {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  function charterInfoField(id, label, inputHtml, extra) {
+    return `<label${extra && extra.full ? ` class="full"` : ""}>${escapeHtml(label)}${inputHtml}${extra && extra.hint ? `<span class="field-hint" id="${id}-hint">${escapeHtml(extra.hint)}</span>` : ""}</label>`;
   }
 
-  function activeCharterDateStatus(charter) {
-    const info = charter && charter.charter ? charter.charter : {};
-    const start = parseLocalDateOnly(info.start_date);
-    const end = parseLocalDateOnly(info.end_date);
-    if (!start || !end || end < start) {
-      return "incomplete";
-    }
-    const today = localTodayDate();
-    if (today > end) {
-      return "completed";
-    }
-    if (today < start) {
-      return "future";
-    }
-    return "current";
+  // The pill and the Make active button's state for the Info header.
+  function charterInfoHeaderState(charterInfo) {
+    const core = window.IolantheChartersCore;
+    const summary = currentCharterSummary() || { id: state.selectedCharter, charter: charterInfo };
+    const pill = core.pillFor({ id: summary.id, charter: charterInfo }, { activeId: state.activeCharter, today: adminToday() });
+    const forced = state.forcedCharter && state.forcedCharter !== summary.id
+      ? state.charters.find(charter => charter.id === state.forcedCharter)
+      : null;
+    const makeActiveDisabled = !canChangeActiveCharter() || summary.id === state.activeCharter || Boolean(state.forcedCharter);
+    const makeActiveTitle = summary.id === state.activeCharter
+      ? "This is the active charter"
+      : (state.forcedCharter
+        ? `${forced ? (forced.name || forced.id) : "A charter"} is in date and stays active until ${forced && forced.charter ? core.fmtShort(forced.charter.end_date) : "it ends"}`
+        : "Make active");
+    return { summary, pill, makeActiveDisabled, makeActiveTitle };
   }
 
-  async function confirmActiveCharterDateStatus(charter) {
-    const status = activeCharterDateStatus(charter);
-    if (status === "completed") {
-      setStatus("This charter has completed and cannot be set as active.", "error");
-      return false;
+  function syncCharterInfoHeader(charterInfo) {
+    const header = charterInfoHeaderState(charterInfo);
+    const pill = document.getElementById("charter-info-pill");
+    const star = document.getElementById("charter-make-active");
+    if (pill) {
+      pill.className = `status-pill status-pill--${header.pill.tone}`;
+      pill.textContent = header.pill.text;
     }
-    if (status === "future") {
-      return showAdminConfirm({
-        title: "Charter Not Started",
-        message: "This charter has not started yet. Set it as active anyway?",
-        confirmLabel: "Set active",
-        cancelLabel: "Cancel",
-        tone: "warning"
-      });
+    if (star) {
+      star.disabled = header.makeActiveDisabled;
+      star.title = header.makeActiveTitle;
+      star.setAttribute("aria-label", header.makeActiveTitle);
     }
-    if (status === "incomplete") {
-      return showAdminConfirm({
-        title: "Incomplete Dates",
-        message: "This charter has incomplete dates. Set it as active anyway?",
-        confirmLabel: "Set active",
-        cancelLabel: "Cancel",
-        tone: "warning"
-      });
-    }
-    return true;
   }
 
   function renderCharterInfoPanel(charterInfo) {
+    const core = window.IolantheChartersCore;
+    const { summary, pill, makeActiveDisabled, makeActiveTitle } = charterInfoHeaderState(charterInfo);
+    const nights = core.nights(charterInfo);
     return `
-      <section class="card full">
+      <section class="card full charter-info-panel">
         <div class="card-header">
-          <h2>${escapeHtml(charterDayCountTitle(charterInfo))}</h2>
-          <div class="button-row align-right">
-            ${iconSubmitButtonHtml("save", "Save Charter Information", ` form="charter-info-form"`)}
+          <h2 id="charter-info-title">${escapeHtml(charterInfo.name || summary.name || summary.id)}</h2>
+          <div class="header-actions">
+            <span class="status-pill status-pill--${pill.tone}" id="charter-info-pill">${escapeHtml(pill.text)}</span>
+            ${iconButtonHtml("star", makeActiveTitle, ` id="charter-make-active"${makeActiveDisabled ? " disabled" : ""}`)}
+            <span class="header-sep"></span>
+            ${iconSubmitButtonHtml("save", "Save Charter Information", ` form="charter-info-form" id="charter-info-save"`)}
             ${iconButtonHtml("cancel", "Cancel changes", ` id="cancel-charter-info"`)}
           </div>
         </div>
-        <form id="charter-info-form" class="form-grid">
-          <label>Charter Name
-            <input id="charter-info-name" value="${escapeAttribute(charterInfo.name || "")}" required>
-          </label>
-          <label>Guest Count
-            <input id="charter-info-guest-count" type="number" min="1" step="1" value="${escapeAttribute(normalizeGuestCount(charterInfo.guest_count))}">
-          </label>
-          <label>Start Date
-            <input id="charter-info-start-date" type="date" value="${escapeAttribute(charterInfo.start_date || "")}">
-          </label>
-          <label>End Date
-            <input id="charter-info-end-date" type="date" value="${escapeAttribute(charterInfo.end_date || "")}">
-          </label>
-          <p class="muted full"><strong>Arrival</strong></p>
-          <label>Arrival Date
-            <input id="charter-info-arrival-date" type="date" value="${escapeAttribute(charterInfo.arrival?.date || "")}">
-          </label>
-          <label>Arrival Time
-            <input id="charter-info-arrival-time" type="time" value="${escapeAttribute(charterInfo.arrival?.time || "")}">
-          </label>
-          <label>Arrival Flight
-            <input id="charter-info-arrival-flight" value="${escapeAttribute(charterInfo.arrival?.flight || "")}">
-          </label>
-          <label>Charter Style
-            <input id="charter-info-charter-style" value="${escapeAttribute(charterInfo.charter_style || "flexible")}">
-          </label>
-          <p class="muted full"><strong>Primary Contact</strong></p>
-          <label>Primary Contact Name
-            <input id="charter-info-primary-contact-name" value="${escapeAttribute(charterInfo.primary_contact?.name || "")}">
-          </label>
-          <label>Diving Guest Count
-            <input id="charter-info-diving-guest-count" type="number" min="0" step="1" value="${escapeAttribute(normalizeNonNegativeInteger(charterInfo.diving_guest_count))}">
-          </label>
-          <label class="full">Primary Contact Phones
-            <textarea id="charter-info-primary-contact-phones" placeholder="One phone number per line">${escapeHtml(charterPhoneListText(charterInfo.primary_contact?.phones || []))}</textarea>
-          </label>
-          <p class="muted full"><strong>Preferences & Logistics</strong></p>
-          <label class="inline-check">
-            <input id="charter-info-non-swimmers-present" type="checkbox" ${charterInfo.non_swimmers_present ? "checked" : ""}>
-            Non-swimmers present
-          </label>
-          <label class="inline-check">
-            <input id="charter-info-diving-planned" type="checkbox" ${charterInfo.diving_planned ? "checked" : ""}>
-            Diving planned
-          </label>
-          <label class="inline-check">
-            <input id="charter-info-medical-notes-present" type="checkbox" ${charterInfo.medical_notes_present ? "checked" : ""}>
-            Medical notes present
-          </label>
-          <label class="inline-check">
-            <input id="charter-info-dietary-restrictions-present" type="checkbox" ${charterInfo.dietary_restrictions_present ? "checked" : ""}>
-            Dietary restrictions present
-          </label>
-          <label class="full">Charter Preference Notes
-            <textarea id="charter-info-charter-preference-notes">${escapeHtml(charterInfo.charter_preference_notes || "")}</textarea>
-          </label>
-          <label class="full">Drink Preferences Notes
-            <textarea id="charter-info-drink-preferences-notes">${escapeHtml(charterInfo.drink_preferences_notes || "")}</textarea>
-          </label>
-          <label class="full">Charter Notes
-            <textarea id="charter-info-notes">${escapeHtml(charterInfo.notes || "")}</textarea>
-          </label>
+        <div class="stat-tiles">
+          <div class="stat-tile"><b id="charter-tile-nights">${nights === null ? "–" : nights}</b><span>Nights</span></div>
+          <div class="stat-tile"><b id="charter-tile-guests">${escapeHtml(String(normalizeGuestCount(charterInfo.guest_count)))}</b><span>Guests</span></div>
+          <div class="stat-tile"><b>${escapeHtml(String(Number(summary.stops) || 0))}</b><span>Stops</span></div>
+          <div class="stat-tile"><b id="charter-tile-divers">${escapeHtml(String(normalizeNonNegativeInteger(charterInfo.diving_guest_count)))}</b><span>Divers</span></div>
+        </div>
+        <form id="charter-info-form" class="charter-info-columns">
+          <div>
+            <section class="form-section">
+              <h3>Charter</h3>
+              <div class="form-grid">
+                ${charterInfoField("charter-info-name", "Name", `<input id="charter-info-name" value="${escapeAttribute(charterInfo.name || "")}" required>`)}
+                ${charterInfoField("charter-info-charter-style", "Style", `<input id="charter-info-charter-style" value="${escapeAttribute(charterInfo.charter_style || "flexible")}">`)}
+                ${charterInfoField("charter-info-start-date", "Start date", `<input id="charter-info-start-date" type="date" value="${escapeAttribute(charterInfo.start_date || "")}">`)}
+                ${charterInfoField("charter-info-end-date", "End date", `<input id="charter-info-end-date" type="date" value="${escapeAttribute(charterInfo.end_date || "")}">`)}
+                <p class="field-error full" id="charter-info-overlap" role="alert"></p>
+                ${charterInfoField("charter-info-guest-count", "Guests", `<input id="charter-info-guest-count" type="number" min="1" step="1" value="${escapeAttribute(normalizeGuestCount(charterInfo.guest_count))}">`)}
+                ${charterInfoField("charter-info-diving-guest-count", "Diving guests", `<input id="charter-info-diving-guest-count" type="number" min="0" step="1" value="${escapeAttribute(normalizeNonNegativeInteger(charterInfo.diving_guest_count))}">`)}
+              </div>
+            </section>
+            <section class="form-section">
+              <h3>Arrival</h3>
+              <div class="form-grid">
+                ${charterInfoField("charter-info-arrival-date", "Date", `<input id="charter-info-arrival-date" type="date" value="${escapeAttribute(charterInfo.arrival?.date || "")}">`)}
+                ${charterInfoField("charter-info-arrival-time", "Time", `<input id="charter-info-arrival-time" type="time" value="${escapeAttribute(charterInfo.arrival?.time || "")}">`)}
+                ${charterInfoField("charter-info-arrival-flight", "Flight", `<input id="charter-info-arrival-flight" value="${escapeAttribute(charterInfo.arrival?.flight || "")}">`, { full: true })}
+              </div>
+            </section>
+            <section class="form-section">
+              <h3>Primary contact</h3>
+              <div class="form-grid">
+                ${charterInfoField("charter-info-primary-contact-name", "Name", `<input id="charter-info-primary-contact-name" value="${escapeAttribute(charterInfo.primary_contact?.name || "")}">`)}
+                ${charterInfoField("charter-info-primary-contact-phones", "Phones", `<textarea id="charter-info-primary-contact-phones" placeholder="One phone number per line">${escapeHtml(charterPhoneListText(charterInfo.primary_contact?.phones || []))}</textarea>`)}
+              </div>
+            </section>
+          </div>
+          <div>
+            <section class="form-section">
+              <h3>Preferences &amp; flags</h3>
+              <div class="form-grid">
+                <label class="inline-check"><input id="charter-info-non-swimmers-present" type="checkbox" ${charterInfo.non_swimmers_present ? "checked" : ""}> Non-swimmers present</label>
+                <label class="inline-check"><input id="charter-info-diving-planned" type="checkbox" ${charterInfo.diving_planned ? "checked" : ""}> Diving planned</label>
+                <label class="inline-check"><input id="charter-info-medical-notes-present" type="checkbox" ${charterInfo.medical_notes_present ? "checked" : ""}> Medical notes present</label>
+                <label class="inline-check"><input id="charter-info-dietary-restrictions-present" type="checkbox" ${charterInfo.dietary_restrictions_present ? "checked" : ""}> Dietary restrictions present</label>
+                ${charterInfoField("charter-info-charter-preference-notes", "Charter preferences", `<textarea id="charter-info-charter-preference-notes">${escapeHtml(charterInfo.charter_preference_notes || "")}</textarea>`, { full: true })}
+                ${charterInfoField("charter-info-drink-preferences-notes", "Drink preferences", `<textarea id="charter-info-drink-preferences-notes">${escapeHtml(charterInfo.drink_preferences_notes || "")}</textarea>`, { full: true })}
+              </div>
+            </section>
+            <section class="form-section">
+              <h3>Notes</h3>
+              <div class="form-grid">
+                ${charterInfoField("charter-info-notes", "Charter notes", `<textarea id="charter-info-notes" rows="8">${escapeHtml(charterInfo.notes || "")}</textarea>`, { full: true })}
+              </div>
+            </section>
+          </div>
         </form>
       </section>
     `;
@@ -4827,55 +4875,53 @@
       setStatus("Only Charter Admin on Bridge can create charters.", "error");
       return;
     }
-    const modal = openDialogModal("Create New Charter", `
-      <form id="create-charter-form" class="form-grid">
-        <label>Charter Name
-          <input id="new-charter-name" required placeholder="Display Name" data-autofocus>
-        </label>
-        <label>Generated Charter ID
-          <input id="new-charter-id" readonly aria-readonly="true">
-        </label>
-        <label>Start Date
-          <input id="new-charter-start-date" type="date">
-        </label>
-        <label>End Date
-          <input id="new-charter-end-date" type="date">
-        </label>
-        <label class="full">Charter Notes
-          <textarea id="new-charter-notes"></textarea>
-        </label>
-        <label>Guest Count
-          <input id="new-charter-guest-count" type="number" min="1" step="1" value="1">
-        </label>
-        <label>Clone From Existing Charter
-          <select id="clone-from">
-            <option value="">Blank charter</option>
-            ${state.charters.map(charter => `<option value="${charter.id}">${escapeHtml(charter.name || charter.id)}</option>`).join("")}
-          </select>
-        </label>
-        <div class="full clone-panel">
-          <p class="muted">Copy selected files from the clone source.</p>
-          <div class="check-grid">
-            ${[
-              ["itinerary", "itinerary"],
-              ["crew", "crew"],
-              ["menus", "menus"],
-              ["drinks", "guest drinks"],
-              ["route", "route"]
-            ].map(([value, label]) => `<label><input type="checkbox" name="copy" value="${value}"> ${label}</label>`).join("")}
+    const core = window.IolantheChartersCore;
+    const sources = state.charters.slice().sort((a, b) => String((b.charter || {}).start_date || "").localeCompare(String((a.charter || {}).start_date || "")));
+    const modal = openDialogModal("New charter", `
+      <form id="create-charter-form" class="form-section">
+        <div class="form-grid">
+          <label class="full">Charter name
+            <input id="new-charter-name" required placeholder="Display name" data-autofocus>
+            <span class="field-hint">Folder id: <code id="new-charter-id">—</code></span>
+          </label>
+          <label>Start date
+            <input id="new-charter-start-date" type="date">
+          </label>
+          <label>End date
+            <input id="new-charter-end-date" type="date">
+            <span class="field-hint" id="new-charter-nights"></span>
+          </label>
+          <p class="modal-overlap-warning full" id="new-charter-overlap" role="alert"></p>
+          <label>Guests
+            <input id="new-charter-guest-count" type="number" min="1" step="1" value="1">
+          </label>
+          <label>Copy from
+            <select id="clone-from">
+              <option value="">— nothing —</option>
+              ${sources.map(charter => `<option value="${escapeAttribute(charter.id)}">${escapeHtml(charter.name || charter.id)}${(charter.charter || {}).start_date ? ` · ${escapeHtml(core.fmtShort(charter.charter.start_date))}` : ""}</option>`).join("")}
+            </select>
+          </label>
+          <div class="full">
+            <span class="field-hint">Copy</span>
+            <div class="check-grid">
+              ${[["itinerary", "Route & itinerary"], ["crew", "Crew"], ["menus", "Menus"], ["drinks", "Drinks"]].map(([value, label]) => `
+                <label class="inline-check"><input type="checkbox" name="copy" value="${value}" disabled> ${label}</label>
+              `).join("")}
+            </div>
           </div>
+          <p id="create-charter-error" class="modal-error full" role="alert"></p>
+          ${modalActionButtonsHtml({ submitKind: "save", submitLabel: "Create charter", submitAttributes: ` id="create-charter-submit"` })}
         </div>
-        <label class="inline-check full"><input type="checkbox" id="set-active-new" checked> Set as active</label>
-        <p id="create-charter-error" class="modal-error full" role="alert"></p>
-        ${modalActionButtonsHtml({ submitKind: "add", submitLabel: "Create charter" })}
       </form>
     `, { cardClass: "modal-wide", hideClose: true });
     const nameInput = modal.querySelector("#new-charter-name");
-    const idInput = modal.querySelector("#new-charter-id");
+    const idLabel = modal.querySelector("#new-charter-id");
+    const startInput = modal.querySelector("#new-charter-start-date");
+    const endInput = modal.querySelector("#new-charter-end-date");
     const cloneSelect = modal.querySelector("#clone-from");
     const copyInputs = Array.from(modal.querySelectorAll("input[name='copy']"));
     const syncGeneratedId = () => {
-      idInput.value = slugify(nameInput.value);
+      idLabel.textContent = slugify(nameInput.value) || "—";
     };
     const syncCopyAvailability = () => {
       const enabled = Boolean(cloneSelect.value);
@@ -4886,10 +4932,21 @@
         }
       });
     };
+    const syncDates = () => {
+      const nights = core.nights({ start_date: startInput.value, end_date: endInput.value });
+      modal.querySelector("#new-charter-nights").textContent = nights === null ? "" : `${nights} ${nights === 1 ? "night" : "nights"}`;
+      const clashes = core.findOverlaps({ id: "", start_date: startInput.value, end_date: endInput.value }, core.overlapEntries(state.charters, state.reservedPeriods.periods), "charter");
+      const message = dateOrderMessage(core, { start_date: startInput.value, end_date: endInput.value }) || (clashes.length ? `${core.overlapMessage(clashes)}. Choose other dates.` : "");
+      modal.querySelector("#new-charter-overlap").textContent = message;
+      modal.querySelector("#create-charter-submit").disabled = Boolean(message);
+    };
     nameInput.addEventListener("input", syncGeneratedId);
     cloneSelect.addEventListener("change", syncCopyAvailability);
+    startInput.addEventListener("input", syncDates);
+    endInput.addEventListener("input", syncDates);
     syncGeneratedId();
     syncCopyAvailability();
+    syncDates();
     modal.querySelector("#create-charter-form").addEventListener("submit", createCharter);
   }
 
@@ -4904,6 +4961,10 @@
       errorField.textContent = "Charter name is required.";
       return;
     }
+    if (state.charters.some(charter => charter.id === charterId)) {
+      errorField.textContent = `A charter with the id ${charterId} already exists.`;
+      return;
+    }
     const copy = {};
     form.querySelectorAll("input[name='copy']").forEach(input => {
       copy[input.value] = input.checked;
@@ -4913,19 +4974,19 @@
       name,
       start_date: form.querySelector("#new-charter-start-date").value,
       end_date: form.querySelector("#new-charter-end-date").value,
-      notes: form.querySelector("#new-charter-notes").value,
+      notes: "",
       guest_count: normalizeGuestCount(form.querySelector("#new-charter-guest-count").value),
       clone_from: form.querySelector("#clone-from").value,
-      copy,
-      set_active: form.querySelector("#set-active-new").checked
+      copy
     };
     try {
-      state.selectedCharter = charterId;
       await api("/api/admin/charters/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body)
       });
+      state.selectedCharter = charterId;
+      state.sectionPanels.charter = "info";
       markModalSaved(document.getElementById("dialog-modal"));
       closeDialogModal();
       setStatus("Charter created.", "ok");
@@ -4992,6 +5053,136 @@
       await loadBootstrap();
     } catch (error) {
       errorField.textContent = error.message;
+    }
+  }
+
+  const RESERVED_PERIOD_TYPES = Object.freeze(Object.entries(window.IolantheChartersCore ? window.IolantheChartersCore.PERIOD_LABELS : { maintenance: "Maintenance", unavailable: "Unavailable", other: "Other" }));
+
+  // Spec-charters §8. periodId null = new.
+  function openReservedPeriodModal(periodId) {
+    if (!canManageCharterAdmin()) {
+      setStatus("Only Charter Admin on Bridge can edit reserved periods.", "error");
+      return;
+    }
+    const core = window.IolantheChartersCore;
+    const existing = periodId ? state.reservedPeriods.periods.find(period => period.id === periodId) : null;
+    const period = existing || { id: "", type: "maintenance", title: "", start_date: "", end_date: "", description: "" };
+    const modal = openDialogModal(existing ? "Reserved period" : "New reserved period", `
+      <form id="reserved-period-form" class="form-section">
+        <div class="form-grid">
+          <div class="full">
+            <span class="field-hint">Type</span>
+            <div class="segmented" role="radiogroup" aria-label="Type">
+              ${RESERVED_PERIOD_TYPES.map(([value, label]) => `<label><input type="radio" name="period-type" value="${value}" ${period.type === value ? "checked" : ""}>${label}</label>`).join("")}
+            </div>
+          </div>
+          <label class="full">Title
+            <input id="period-title" required maxlength="80" value="${escapeAttribute(period.title)}" data-autofocus>
+          </label>
+          <label>Start date
+            <input id="period-start" type="date" required value="${escapeAttribute(period.start_date)}">
+          </label>
+          <label>End date
+            <input id="period-end" type="date" required value="${escapeAttribute(period.end_date)}">
+            <span class="field-hint" id="period-days"></span>
+          </label>
+          <p class="modal-overlap-warning full" id="period-overlap" role="alert"></p>
+          <label class="full">Description
+            <textarea id="period-description" rows="4">${escapeHtml(period.description || "")}</textarea>
+          </label>
+          <p id="period-error" class="modal-error full" role="alert"></p>
+          ${modalActionButtonsHtml({ submitKind: "save", submitLabel: existing ? "Save period" : "Add period", submitAttributes: ` id="period-submit"` })}
+        </div>
+      </form>
+    `, {
+      headerActionsHtml: existing ? `<div class="button-row modal-title-actions">${iconButtonHtml("remove", "Delete period", ` id="period-delete"`)}</div>` : "",
+      hideClose: true
+    });
+    const startInput = modal.querySelector("#period-start");
+    const endInput = modal.querySelector("#period-end");
+    const syncDates = () => {
+      const nights = core.nights({ start_date: startInput.value, end_date: endInput.value });
+      modal.querySelector("#period-days").textContent = nights === null ? "" : `${nights + 1} ${nights === 0 ? "day" : "days"}`;
+      const others = core.overlapEntries(state.charters, state.reservedPeriods.periods.filter(other => other.id !== period.id));
+      const clashes = core.findOverlaps({ id: period.id, start_date: startInput.value, end_date: endInput.value }, others, "period");
+      const message = dateOrderMessage(core, { start_date: startInput.value, end_date: endInput.value }) || (clashes.length ? `${core.overlapMessage(clashes)}. Choose other dates.` : "");
+      modal.querySelector("#period-overlap").textContent = message;
+      modal.querySelector("#period-submit").disabled = Boolean(message);
+    };
+    startInput.addEventListener("input", syncDates);
+    endInput.addEventListener("input", syncDates);
+    syncDates();
+
+    modal.querySelector("#reserved-period-form").addEventListener("submit", async event => {
+      event.preventDefault();
+      const errorField = modal.querySelector("#period-error");
+      errorField.textContent = "";
+      const draft = {
+        id: period.id,
+        type: (modal.querySelector("input[name='period-type']:checked") || {}).value || "maintenance",
+        title: modal.querySelector("#period-title").value.trim(),
+        start_date: startInput.value,
+        end_date: endInput.value,
+        description: modal.querySelector("#period-description").value
+      };
+      const periods = existing
+        ? state.reservedPeriods.periods.map(other => (other.id === period.id ? draft : other))
+        : state.reservedPeriods.periods.concat([draft]);
+      const submit = modal.querySelector("#period-submit");
+      submit.disabled = true;   // one request at a time: a second POST would carry a stale base_revision
+      try {
+        if (await saveReservedPeriods(periods, errorField)) {
+          markModalSaved(document.getElementById("dialog-modal"));
+          closeDialogModal();
+          setStatus(existing ? "Reserved period saved." : "Reserved period added.", "ok");
+        }
+      } finally {
+        submit.disabled = false;
+      }
+    });
+
+    const deleteButton = modal.querySelector("#period-delete");
+    if (deleteButton) {
+      deleteButton.addEventListener("click", async () => {
+        if (!await showAdminConfirm({ title: "Delete reserved period", message: `Delete "${period.title}"?`, confirmLabel: "Delete", cancelLabel: "Cancel", tone: "danger" })) {
+          return;
+        }
+        if (await saveReservedPeriods(state.reservedPeriods.periods.filter(other => other.id !== period.id), modal.querySelector("#period-error"))) {
+          markModalSaved(document.getElementById("dialog-modal"));
+          closeDialogModal();
+          setStatus("Reserved period deleted.", "ok");
+        }
+      });
+    }
+  }
+
+  // Posts the whole list with base_revision; on 409 offers a reload. Returns true when saved.
+  async function saveReservedPeriods(periods, errorField) {
+    try {
+      const saved = await api("/api/admin/reserved-periods/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ periods, base_revision: state.reservedPeriods.revision })
+      });
+      state.reservedPeriods = { revision: saved.revision, periods: Array.isArray(saved.periods) ? saved.periods : [] };
+      refreshCharterGantt();
+      return true;
+    } catch (error) {
+      if (error && error.status === 409) {
+        const reload = await showAdminConfirm({ title: "Reserved periods changed", message: `${error.message} Reload them now? Your edit will be lost.`, confirmLabel: "Reload", cancelLabel: "Cancel", tone: "warning" });
+        if (reload) {
+          await loadReservedPeriods();
+          refreshCharterGantt();
+          closeDialogModal({ force: true });   // the user has just chosen to drop the edit
+        }
+        return false;
+      }
+      if (errorField) {
+        errorField.textContent = error.message;
+      } else {
+        setStatus(error.message, "error");
+      }
+      return false;
     }
   }
 
@@ -6108,136 +6299,127 @@
     });
   }
 
+  function cloneCharterInfo(charterInfo) {
+    return JSON.parse(JSON.stringify(charterInfo || {}));
+  }
+
+  function readCharterInfoForm(charterInfo) {
+    const value = id => document.getElementById(id).value;
+    const checked = id => document.getElementById(id).checked;
+    return {
+      ...charterInfo,
+      name: value("charter-info-name").trim(),
+      start_date: value("charter-info-start-date"),
+      end_date: value("charter-info-end-date"),
+      arrival: { date: value("charter-info-arrival-date"), time: value("charter-info-arrival-time"), flight: value("charter-info-arrival-flight").trim() },
+      primary_contact: { name: value("charter-info-primary-contact-name").trim(), phones: normalizeCharterPhoneList(value("charter-info-primary-contact-phones")) },
+      charter_style: value("charter-info-charter-style").trim() || "flexible",
+      non_swimmers_present: checked("charter-info-non-swimmers-present"),
+      diving_planned: checked("charter-info-diving-planned"),
+      diving_guest_count: normalizeNonNegativeInteger(value("charter-info-diving-guest-count")),
+      medical_notes_present: checked("charter-info-medical-notes-present"),
+      dietary_restrictions_present: checked("charter-info-dietary-restrictions-present"),
+      charter_preference_notes: value("charter-info-charter-preference-notes"),
+      drink_preferences_notes: value("charter-info-drink-preferences-notes"),
+      notes: value("charter-info-notes"),
+      guest_count: normalizeGuestCount(value("charter-info-guest-count"))
+    };
+  }
+
+  // "" when the dates are in order (or incomplete), else the message to show.
+  function dateOrderMessage(core, range) {
+    return core.isValidDate(range.start_date) && core.isValidDate(range.end_date) && range.end_date < range.start_date
+      ? "The end date is before the start date."
+      : "";
+  }
+
+  // Spec-charters §4: the live overlap check. Returns the message ("" when clear) and toggles Save.
+  function syncCharterInfoOverlap() {
+    const core = window.IolantheChartersCore;
+    const warning = document.getElementById("charter-info-overlap");
+    const save = document.getElementById("charter-info-save");
+    if (!warning) {
+      return "";
+    }
+    const candidate = { id: state.selectedCharter, start_date: document.getElementById("charter-info-start-date").value, end_date: document.getElementById("charter-info-end-date").value };
+    const clashes = core.findOverlaps(candidate, core.overlapEntries(state.charters, state.reservedPeriods.periods), "charter");
+    const message = dateOrderMessage(core, candidate) || (clashes.length ? `${core.overlapMessage(clashes)}. Choose other dates.` : "");
+    warning.textContent = message;
+    if (save) {
+      save.disabled = Boolean(message);
+    }
+    return message;
+  }
+
   function bindCharterInfoPanel(charterInfo) {
     const form = document.getElementById("charter-info-form");
     if (!form) {
       return;
     }
+    const core = window.IolantheChartersCore;
     let savedCharterInfo = cloneCharterInfo(charterInfo);
-    const cancelButton = document.getElementById("cancel-charter-info");
-    if (cancelButton) {
-      cancelButton.addEventListener("click", () => {
-        fillCharterInfoForm(savedCharterInfo);
-        setStatus("Charter info changes cancelled.", "ok");
-      });
-    }
-    form.addEventListener("submit", async event => {
-      event.preventDefault();
-      charterInfo.name = document.getElementById("charter-info-name").value.trim();
-      charterInfo.start_date = document.getElementById("charter-info-start-date").value;
-      charterInfo.end_date = document.getElementById("charter-info-end-date").value;
-      charterInfo.arrival = {
-        date: document.getElementById("charter-info-arrival-date").value,
-        time: document.getElementById("charter-info-arrival-time").value,
-        flight: document.getElementById("charter-info-arrival-flight").value.trim()
-      };
-      charterInfo.primary_contact = {
-        name: document.getElementById("charter-info-primary-contact-name").value.trim(),
-        phones: normalizeCharterPhoneList(document.getElementById("charter-info-primary-contact-phones").value)
-      };
-      charterInfo.charter_style = document.getElementById("charter-info-charter-style").value.trim() || "flexible";
-      charterInfo.non_swimmers_present = document.getElementById("charter-info-non-swimmers-present").checked;
-      charterInfo.diving_planned = document.getElementById("charter-info-diving-planned").checked;
-      charterInfo.diving_guest_count = normalizeNonNegativeInteger(document.getElementById("charter-info-diving-guest-count").value);
-      charterInfo.medical_notes_present = document.getElementById("charter-info-medical-notes-present").checked;
-      charterInfo.dietary_restrictions_present = document.getElementById("charter-info-dietary-restrictions-present").checked;
-      charterInfo.charter_preference_notes = document.getElementById("charter-info-charter-preference-notes").value;
-      charterInfo.drink_preferences_notes = document.getElementById("charter-info-drink-preferences-notes").value;
-      charterInfo.notes = document.getElementById("charter-info-notes").value;
-      charterInfo.guest_count = normalizeGuestCount(document.getElementById("charter-info-guest-count").value);
-      const saved = await saveCharterFile("charter.json", charterInfo, "Charter info saved.");
-      if (saved) {
+    const syncTiles = () => {
+      const draft = readCharterInfoForm(charterInfo);
+      const nights = core.nights(draft);
+      document.getElementById("charter-tile-nights").textContent = nights === null ? "–" : String(nights);
+      document.getElementById("charter-tile-guests").textContent = String(draft.guest_count);
+      document.getElementById("charter-tile-divers").textContent = String(draft.diving_guest_count);
+      document.getElementById("charter-info-title").textContent = draft.name || savedCharterInfo.name || state.selectedCharter;
+    };
+    ["charter-info-start-date", "charter-info-end-date"].forEach(id => {
+      document.getElementById(id).addEventListener("input", syncCharterInfoOverlap);
+    });
+    form.addEventListener("input", syncTiles);
+    syncCharterInfoOverlap();
+
+    bindSettingsFormController({
+      formId: "charter-info-form",
+      cancelButtonId: "cancel-charter-info",
+      readState: () => readCharterInfoForm(charterInfo),
+      save: async () => {
+        if (syncCharterInfoOverlap()) {
+          throw new Error("These dates overlap another charter or a reserved period.");
+        }
+        Object.assign(charterInfo, readCharterInfoForm(charterInfo));
+        // Not saveCharterFile(): its catch would swallow the server's message, and the controller needs the throw to keep the form dirty.
+        const payload = await api(`/api/admin/charter/${encodeURIComponent(state.selectedCharter)}/save`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ file: "charter.json", data: charterInfo })
+        });
+        const saved = payload && typeof payload === "object" && Object.prototype.hasOwnProperty.call(payload, "data") ? payload.data : payload;
+        if (state.bundle) {
+          state.bundle["charter.json"] = cloneData(saved);
+        }
+        setStatus("Charter info saved.", "ok");
         const normalizedSaved = normalizeCharterInfo(saved);
         Object.assign(charterInfo, normalizedSaved);
         const summary = currentCharterSummary();
         if (summary) {
           summary.name = normalizedSaved.name || summary.id;
           summary.charter = cloneCharterInfo(normalizedSaved);
+          summary.nights = core.nights(normalizedSaved);
+          summary.status = core.charterStatus(normalizedSaved, adminToday());
         }
         savedCharterInfo = cloneCharterInfo(normalizedSaved);
+        recomputeActiveCharter();
         syncTopbar();
-        renderCharter();
+        refreshCharterGantt();
+        syncCharterInfoHeader(charterInfo);
+      },
+      reload: async () => {
+        await renderCharter();
       }
     });
-  }
 
-  function cloneCharterInfo(charterInfo) {
-    return JSON.parse(JSON.stringify(charterInfo || {}));
-  }
-
-  function fillCharterInfoForm(charterInfo) {
-    const info = charterInfo || {};
-    const name = document.getElementById("charter-info-name");
-    const guestCount = document.getElementById("charter-info-guest-count");
-    const startDate = document.getElementById("charter-info-start-date");
-    const endDate = document.getElementById("charter-info-end-date");
-    const arrivalDate = document.getElementById("charter-info-arrival-date");
-    const arrivalTime = document.getElementById("charter-info-arrival-time");
-    const arrivalFlight = document.getElementById("charter-info-arrival-flight");
-    const primaryContactName = document.getElementById("charter-info-primary-contact-name");
-    const primaryContactPhones = document.getElementById("charter-info-primary-contact-phones");
-    const charterStyle = document.getElementById("charter-info-charter-style");
-    const nonSwimmersPresent = document.getElementById("charter-info-non-swimmers-present");
-    const divingPlanned = document.getElementById("charter-info-diving-planned");
-    const divingGuestCount = document.getElementById("charter-info-diving-guest-count");
-    const medicalNotesPresent = document.getElementById("charter-info-medical-notes-present");
-    const dietaryRestrictionsPresent = document.getElementById("charter-info-dietary-restrictions-present");
-    const charterPreferenceNotes = document.getElementById("charter-info-charter-preference-notes");
-    const drinkPreferencesNotes = document.getElementById("charter-info-drink-preferences-notes");
-    const notes = document.getElementById("charter-info-notes");
-    if (name) {
-      name.value = info.name || "";
-    }
-    if (guestCount) {
-      guestCount.value = normalizeGuestCount(info.guest_count);
-    }
-    if (startDate) {
-      startDate.value = info.start_date || "";
-    }
-    if (endDate) {
-      endDate.value = info.end_date || "";
-    }
-    if (arrivalDate) {
-      arrivalDate.value = info.arrival && info.arrival.date ? info.arrival.date : "";
-    }
-    if (arrivalTime) {
-      arrivalTime.value = info.arrival && info.arrival.time ? info.arrival.time : "";
-    }
-    if (arrivalFlight) {
-      arrivalFlight.value = info.arrival && info.arrival.flight ? info.arrival.flight : "";
-    }
-    if (primaryContactName) {
-      primaryContactName.value = info.primary_contact && info.primary_contact.name ? info.primary_contact.name : "";
-    }
-    if (primaryContactPhones) {
-      primaryContactPhones.value = charterPhoneListText(info.primary_contact && info.primary_contact.phones ? info.primary_contact.phones : []);
-    }
-    if (charterStyle) {
-      charterStyle.value = info.charter_style || "flexible";
-    }
-    if (nonSwimmersPresent) {
-      nonSwimmersPresent.checked = Boolean(info.non_swimmers_present);
-    }
-    if (divingPlanned) {
-      divingPlanned.checked = Boolean(info.diving_planned);
-    }
-    if (divingGuestCount) {
-      divingGuestCount.value = normalizeNonNegativeInteger(info.diving_guest_count);
-    }
-    if (medicalNotesPresent) {
-      medicalNotesPresent.checked = Boolean(info.medical_notes_present);
-    }
-    if (dietaryRestrictionsPresent) {
-      dietaryRestrictionsPresent.checked = Boolean(info.dietary_restrictions_present);
-    }
-    if (charterPreferenceNotes) {
-      charterPreferenceNotes.value = info.charter_preference_notes || "";
-    }
-    if (drinkPreferencesNotes) {
-      drinkPreferencesNotes.value = info.drink_preferences_notes || "";
-    }
-    if (notes) {
-      notes.value = info.notes || "";
+    const makeActive = document.getElementById("charter-make-active");
+    if (makeActive) {
+      makeActive.addEventListener("click", async () => {
+        // The form and its unsaved-changes guard stay as they are; only the header and the band change.
+        if (await setActiveCharter(state.selectedCharter)) {
+          syncCharterInfoHeader(charterInfo);
+        }
+      });
     }
   }
 
@@ -6357,25 +6539,36 @@
     ];
     const activePanel = panels.some(panel => panel.id === state.sectionPanels.charter) ? state.sectionPanels.charter : "info";
     state.sectionPanels.charter = activePanel;
-    els.workspace.innerHTML = sectionShell("charter", panels, activePanel, `<section class="card"><p class="muted">Loading charter data...</p></section>`, sectionToolbarHtml("charter"));
-    bindSectionNav("charter", renderCharter);
-    bindSectionToolbar("charter", renderCharter);
+    const paint = contentHtml => {
+      clearPageUnsavedGuard();
+      els.workspace.innerHTML = sectionShell("charter", panels, activePanel, contentHtml, "");
+      bindSectionNav("charter", renderCharter);
+      const host = document.getElementById("charter-gantt-host");
+      if (state.gantt && host) {
+        // Keep the mounted band (scale, scroll, listeners); just move it into the new host.
+        state.gantt.host = host;
+        state.gantt.handle.attach(host);
+        state.gantt.handle.update(ganttContext());
+      } else {
+        mountCharterGantt();
+      }
+    };
+    paint(`<section class="card"><p class="muted">Loading charter data...</p></section>`);
     const selectedCharter = syncSelectedCharter();
     if (!selectedCharter) {
-      els.workspace.innerHTML = sectionShell("charter", panels, activePanel, `
+      paint(`
         <section class="card full">
           <div class="card-header"><h2>No Charters</h2></div>
-          <p class="muted">Use the plus button in the Charter toolbar to create your first charter.</p>
+          <p class="muted">Use the + button in the timeline above to create your first charter.</p>
         </section>
-      `, sectionToolbarHtml("charter"));
-      bindSectionNav("charter", renderCharter);
-      bindSectionToolbar("charter", renderCharter);
+      `);
       return;
     }
     try {
       const [bundle, siteLibrary] = await Promise.all([
         loadCharter(selectedCharter),
-        loadSites()
+        loadSites(),
+        loadReservedPeriods()
       ]);
       const charterInfo = normalizeCharterInfo(bundle["charter.json"]);
       const itinerary = bundle["itinerary.json"] || {};
@@ -6383,20 +6576,16 @@
       const guestList = normalizeGuestList(bundle["guest_list.json"]);
       const crewList = normalizeCrewEditorList(bundle["crew_list.json"]);
       const content = charterPanelContent(activePanel, charterInfo, itinerary, guestList, crewList, siteLibrary);
-      els.workspace.innerHTML = sectionShell("charter", panels, activePanel, content, sectionToolbarHtml("charter"));
-      bindSectionNav("charter", renderCharter);
-      bindSectionToolbar("charter", renderCharter);
+      paint(content);
       bindCharterPanel(activePanel, charterInfo, itinerary, guestList, crewList, siteLibrary);
     } catch (error) {
       setStatus(error.message, "error");
-      els.workspace.innerHTML = sectionShell("charter", panels, activePanel, `
+      paint(`
         <section class="card full">
           <div class="card-header"><h2>Charter</h2></div>
           <p class="muted">${escapeHtml(error.message)}</p>
         </section>
-      `, sectionToolbarHtml("charter"));
-      bindSectionNav("charter", renderCharter);
-      bindSectionToolbar("charter", renderCharter);
+      `);
     }
   }
 
@@ -7791,6 +7980,13 @@
         </svg>
       `;
     }
+    if (kind === "star") {
+      return `
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M12 3.5l2.6 5.6 6.1.7-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6L3.3 9.8l6.1-.7z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"></path>
+        </svg>
+      `;
+    }
     if (kind === "cancel") {
       return `
         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -7823,6 +8019,9 @@
   function iconButtonTone(kind) {
     if (kind === "preview") {
       return "preview";
+    }
+    if (kind === "star") {
+      return "gold";
     }
     if (kind === "purchase" || kind === "confirm" || kind === "save") {
       return "success";
@@ -13459,24 +13658,21 @@
   async function setActiveCharter(charterId) {
     if (!canChangeActiveCharter()) {
       setStatus("Only Charter Admin on Bridge can change the active charter.", "error");
-      return;
+      return false;
     }
     const charter = state.charters.find(candidate => candidate.id === charterId);
     if (!charterId || !charter) {
       setStatus("Unknown charter.", "error");
-      return;
+      return false;
     }
-    if (!await confirmActiveCharterDateStatus(charter)) {
-      return;
-    }
-    if (activeCharterDateStatus(charter) === "current" && !await showAdminConfirm({
-      title: "Set Active Charter",
-      message: `Set ${charterId} as the active charter?`,
-      confirmLabel: "Set active",
+    if (!await showAdminConfirm({
+      title: "Make Active",
+      message: `Make ${charter.name || charterId} the active charter? Guest tablets will show it.`,
+      confirmLabel: "Make active",
       cancelLabel: "Cancel",
       tone: "normal"
     })) {
-      return;
+      return false;
     }
     try {
       const result = await api("/api/admin/active-charter", {
@@ -13484,14 +13680,15 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ charter_id: charterId })
       });
-      state.activeCharter = result.active_charter;
-      state.selectedCharter = result.active_charter;
-      syncSelectedCharter();
+      state.storedActiveCharter = result.active_charter;
+      recomputeActiveCharter();
       syncTopbar();
-      renderSection();
+      refreshCharterGantt();
       setStatus("Active charter updated.", "ok");
+      return true;
     } catch (error) {
       setStatus(error.message, "error");
+      return false;
     }
   }
 

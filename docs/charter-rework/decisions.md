@@ -332,3 +332,84 @@ workplace per charter.
 - **A2-T13 (question) time picker usability:** the native `<input type="time">` is fiddly on the tablet; consider a
   pair of selects (hour, 5-minute steps) or ±15-min buttons beside it.
 
+
+## Charter setup spec: the Gantt band and the active rule (2026-10-08)
+
+Brainstormed with the visual companion (`.superpowers/brainstorm/31923-*/content/`). Written up as
+[spec-charters.md](spec-charters.md).
+
+- **C-D1. The Gantt is the charter selector** above every Charter panel; the Charter section's dropdown goes (Galley and
+  Hotel keep theirs). Collapsed by default to a strip on the Route page, remembered per browser.
+- **C-D2. Active = in date, else the crew's choice.** In date = the day before start to the end date; forced. Otherwise
+  the stored choice (any charter), else the most recently ended. No end-of-charter buffer; on a back-to-back turnaround
+  the next charter wins on the last day. Rule runs on the server; `DEFAULT_ACTIVE_CHARTER` goes.
+- **C-D3. No overlapping dates** between charters and reserved periods; refused on create / save, checked live in the
+  admin. The day-before window is not part of the check.
+- **C-D4. Make active is a button on the charter's Info header**, disabled while any charter is in date. Gold on the
+  Gantt. Past charters may be made active (old "completed" refusal removed).
+- **C-D5. The Gantt is read-only:** drag pans, wheel zooms, arrows and scrollbar pan; click a charter to select it, click a
+  reserved period to open its card. No drag-create, no date dragging, no context menu.
+- **C-D6. Reserved periods** (maintenance / unavailable / other) in `data/reserved-periods.json` with revision + 409;
+  created from a button beside New charter; edited / deleted in the same card. Never active, invisible to guests.
+- **C-D7. Info page layout B** (two columns on wide screens), Route-page style via new shared `admin.css` classes
+  (stat tiles, form sections, status pill, segmented control, gold icon tone). `routes.css` untouched.
+- **C-D8. New charter keeps Copy from**, drops Set active, lands on the new charter's Info.
+- Rollout: server `feat/charter-gantt` then admin `feat/charter-gantt` (`admin-charters-1`); no migration.
+- **A2-T14 Start from… dialog (the captain: "a confusing mess", 2026-10-08).** Rebuilt as shape C: one grouped
+  native dropdown for the record (Unassigned routes, then charters by year, newest first, each with its stop count),
+  "Starting on", a positive "Bring its N items" switch, and a result line with a coloured dot ("Ends Mon 9 Nov · 1 day
+  before the charter ends") that replaces the help paragraph and the "−1 d" suffix. Shapes A (list beside settings)
+  and B (two steps) were drawn and rejected for width. Scales to twenty past charters without a server change.
+- **A2-T15 Arrow keys (the captain).** ← / → only worked while the card had focus; they now step the strip page-wide
+  (same guards as undo/redo) and Leaflet keyboard panning is off.
+- **A2-T13 decided:** hour and minute selects, minutes in 15-minute steps; an off-grid stored value is kept as one extra
+  option. T12 confirmed: 07:00 with nights, arrival + 2 h for a day stop, clamp 23:59; seeds move to 07:00 both sides.
+- **Round 2 design approved (David, 2026-10-08)** section by section; spec `spec-a2-round2.md` (T8–T15 + housekeeping);
+  read-only guard stays off with a reminder for mid-November 2026. Next: plan `plans/a2-04-round2.md`.
+- **2026-10-08 plan A2-04 (round 2) WRITTEN and dry-run:** `plans/a2-04-round2.md`, 9 tasks. Core code and tests assembled
+  from the plan text pass 117/117 (111 + 6 new; 5 expectations moved with the 07:00 seed and the defaulted cleared time);
+  the four browser modules parse after the plan's replacements. Decisions taken while planning: the card's own ← / →
+  handler is deleted (the page-wide handler covers a focused card too, no double step); a charter source's record is
+  fetched lazily from `GET /api/admin/charter/<id>` for the item count and the result line; a stop with no stored time
+  shows the default in the selects with "· assumed" in the hint; the server's `extraDaysForLeg` default test moves to an
+  18-hour leg. Next: David's go → execute with Sonnet implementers on `feat/itinerary-a2-round2`.
+
+
+- **2026-10-08 plan ch-01 (server) EXECUTED, review fixes PENDING.** Branch `iolanthe-server` `feat/charter-gantt`, 7 commits
+  (`fe89d8e`..`eb61b0e`), 92 tests, scratch server runs it (`/api/charter` active = csaba). Final Sonnet review said
+  Request changes: (1) CRITICAL `/api/charter` crashes the process when the rule yields "" (`readAvailableAlcohol` /
+  `buildPurchasedAlcoholGuestSummary` throw; public handler has no try/catch); (2) `loadTrack("")` writes
+  `data/charters/track.json`; (3) `charter.json` save should only run the overlap check when the dates changed;
+  (4) duplicate period ids defeat the overlap check; (5) error-detail passthrough should apply only to app errors
+  (statusCode set), not fs `code`; (6) period-vs-charter overlap should report the row field + errors. Decided fix for
+  (1): amend the rule so after "most recently ended" it falls back to the earliest upcoming, then any charter (first
+  id), then "" (fixture case "nothing ended yet" expects smith; spec §3 and plan ch-02 charters-core must mirror it).
+  A patch script for all six sits in the session scratchpad (`review_fixes.py`, needs its CRLF-aware `rw()` repaired);
+  the working tree is clean. NEXT: apply the fixes + tests, re-run 92+, run `scripts/check-charter-endpoints.sh`
+  (needs David to log in to the scratch admin), PR, `./update.sh` on the vessel, then execute plan ch-02 (admin).
+
+- **2026-10-08 server review fixes DONE** (`7a23db7`, 97 tests): the rule gained two fallbacks (earliest upcoming, then any
+  charter) so `/api/charter` and track logging never see an empty id with charters present; the public charter route
+  is wrapped in try/catch; `loadTrack("")` stays in memory; `charter.json` saves only run the overlap check when the
+  dates changed; admin error details pass through only for app-raised errors; reserved periods reject duplicate ids,
+  require an integer `base_revision`, and report charter overlaps per row. Spec §3 and plan ch-02 updated to match.
+  Captain's multi-visit anchorage request logged in BACKLOG.md. NEXT: endpoint checks (David logs in), PR, vessel
+  `./update.sh`, then plan ch-02.
+- **2026-10-08 plan A2-04 (round 2) EXECUTED** on admin `feat/itinerary-a2-round2` (7 code commits, 117 tests) and server
+  `feat/seed-depart-0700` (1 commit, 65 tests); Sonnet implementers for the code tasks, Haiku for housekeeping and the
+  server constant, every diff reviewed against the plan by this session (all verbatim). Browser pass on the shared scratch
+  server (csaba + two seeded charters Hoffmann 2025 / Reyes 2026): dialog year groups and result-line states, items switch
+  per source kind, import with items (csaba now revision 5), time selects (blank item option, off-grid 09:20 kept), Days
+  tab headers and gaps, line → card → map zoom 7 → 13, arrows after a map click and guarded in a select, date change stores
+  07:00, phone width, no console errors. Not re-exercised: a drop onto a different anchorage. PRs iolanthe-admin#8 and
+  iolanthe-server#4 open; merge on David's word. Lesson: both sessions share one working tree per repo, so the other
+  session's docs commits landed on this branch (docs only) and a Haiku implementer briefly switched the server checkout
+  off the other session's branch (restored at once) — give implementers in a shared checkout an explicit "do not checkout".
+
+
+- **2026-10-08 server PR #3 OPEN and verified** (C1rK1t/iolanthe-server#3, `7a23db7`, 97 tests). Endpoint checks run from the
+  logged-in scratch admin: charters/bootstrap payload fields, reserved periods GET / 409 stale / 400 invalid / 400 overlap /
+  400 duplicate id, create overlap 400, make-active 200; and the day-before rule live (Larry moved to start tomorrow ->
+  forced active + guest payload flips, make-active Csaba -> 409 "Larry is in date…", restore -> Csaba). No conflict with
+  server PR #4 (itinerary.js only). Admin main is at 117 tests (round-2 work), so plan ch-02 totals read +6. ch-02 starts
+  with the new files; index.html / CLAUDE.md wiring waits for admin PR #8. NEXT: David merges #3 + `./update.sh`.

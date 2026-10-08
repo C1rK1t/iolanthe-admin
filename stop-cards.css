@@ -42,7 +42,14 @@
 .routes-panel .tile input.tile-time { width: 92px; }
 .routes-panel .tile input.tile-date { width: 150px; }
 .routes-panel .tile input.tile-nights { width: 64px; min-height: 0; height: 28px; font: inherit; font-size: 13px; font-weight: 700; padding: 0 6px; border: 1px solid var(--line); border-radius: 5px; background: #fff; color: var(--ink); }
-.routes-panel .tile input:disabled { opacity: .7; }
+.routes-panel .tile input:disabled, .routes-panel .tile select:disabled { opacity: .7; }
+/* Round 2 T9/T11: the stay and the departure time are two labelled rows inside the Depart tile */
+.routes-panel .depart-stack { display: flex; flex-direction: column; gap: 4px; }
+.routes-panel .tile-k2 { margin-top: 6px; }
+/* Round 2 T13: hour and minute selects */
+.routes-panel .time-selects { display: inline-flex; align-items: center; gap: 2px; }
+.routes-panel .time-selects select { min-height: 0; height: 28px; width: auto; font: inherit; font-size: 13px; font-weight: 700; padding: 0 4px; border: 1px solid var(--line); border-radius: 5px; background: #fff; color: var(--ink); }
+.routes-panel .time-colon { font-weight: 700; color: var(--muted); }
 
 /* Day tabs and the ⚙ tab */
 .routes-panel .card-body { display: flex; flex-direction: column; gap: 8px; }
@@ -73,7 +80,8 @@
 .routes-panel .item.source { opacity: .35; }
 .routes-panel .item.editing { display: block; padding: 6px; cursor: default; }
 .routes-panel .item-edit { display: flex; flex-direction: column; gap: 6px; }
-.routes-panel .item-edit-row { display: grid; grid-template-columns: minmax(0, 1fr) 100px 72px auto; gap: 6px; align-items: center; }
+.routes-panel .item-edit-row { display: grid; grid-template-columns: minmax(0, 1fr) auto 72px auto; gap: 6px; align-items: center; }
+.routes-panel .item-edit .time-selects select { height: 26px; font-weight: 400; }
 .routes-panel .item-edit input, .routes-panel .item-edit textarea { font: inherit; font-size: 13px; min-height: 0; padding: 4px 6px; border: 1px solid var(--line); border-radius: 4px; background: #fff; color: var(--ink); }
 .routes-panel .item-edit textarea { resize: vertical; min-height: 40px; }
 .routes-panel .items-add { position: relative; display: flex; align-items: center; gap: 6px; }

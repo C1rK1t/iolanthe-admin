@@ -1,6 +1,6 @@
-// Routes panel: the read-only Days tab (spec A2 §5.2). The spec A tube-line day view: stop titles left, the line, day
-// boxes with one sub-box per stop holding that day's items. No editing here; stops and items are edited on the cards.
-// Created once per bind() by routes.js.
+// Routes panel: the read-only Days tab (spec A2 §5.2, round 2 T8). The tube line on the left, day boxes on the right with
+// one sub-box per stop and day; each sub-box is headed by the stop's name and that day's Arr/Dep line, then the items.
+// No editing here; stops and items are edited on the cards. Created once per bind() by routes.js.
 (function () {
   "use strict";
 
@@ -25,8 +25,14 @@
         a.time ? el("span", { class: "days-item-time" }, a.time) : null,
         el("span", {}, a.title || (a.site_id ? ctx.siteTitle(a.site_id) : "Untitled")));
     }
-    function subBox(stop, day) {
-      return el("div", { class: "days-sub", "data-stop-id": stop.id, "data-day": String(day) }, ...stop.activities.map(itemRow));
+    // stop: a deriveDays() stop entry ({ id, name, arrive, depart, activities }); times: estimateTimes() map.
+    function subBox(stop, day, times) {
+      const label = c.subBoxTimesLabel(stop, times.get(stop.id), day);
+      return el("div", { class: "days-sub", "data-stop-id": stop.id, "data-day": String(day) },
+        el("div", { class: "days-sub-head", onclick: () => ctx.onStopClick(stop.id) },
+          el("span", { class: "days-stop-name" }, stop.name || "Stop"),
+          label ? el("span", { class: `days-stop-times muted${/~/.test(label) ? " est" : ""}` }, label) : null),
+        ...stop.activities.map(itemRow));
     }
     // "Underway · Potipot to Hundred Islands" for a day with no stops.
     function passageLabel(record, dayNumber) {
@@ -35,19 +41,18 @@
       const after = stops.find((s) => s.arrive && s.arrive.day > dayNumber);
       return before && after ? `Underway · ${before.name || "previous stop"} to ${after.name || "next stop"}` : "At sea";
     }
-    function dayBox(record, day) {
+    function dayBox(record, day, times) {
       const charter = ctx.getCharter();
       const date = charter ? c.dayDateLabel(charter, day.day) : "";
       return el("div", { class: "days-day", "data-day": String(day.day) },
         el("div", { class: "days-day-title" }, `Day ${day.day}`, date ? el("span", { class: "muted" }, ` · ${date}`) : null),
-        ...day.stops.map((stop) => subBox(stop, day.day)),
+        ...day.stops.map((stop) => subBox(stop, day.day, times)),
         day.stops.length ? null : el("div", { class: "days-passage muted" }, passageLabel(record, day.day)));
     }
 
-    // Measures each sub-box, asks core for the geometry, then draws the SVG and places the titles.
-    function drawLine(board, record, daysList) {
+    // Measures each sub-box, asks core for the geometry, then draws the SVG (the names live in the sub-box headers, T8).
+    function drawLine(board, daysList) {
       const svg = board.querySelector(".days-line");
-      const titles = board.querySelector(".days-titles");
       const list = board.querySelector(".days-list");
       const boardTop = board.getBoundingClientRect().top;
       const centres = new Map();
@@ -60,12 +65,8 @@
       svg.setAttribute("width", "32");
       svg.setAttribute("height", String(height));
       svg.replaceChildren();
-      titles.replaceChildren();
-      titles.style.height = `${height}px`;
       const geo = c.lineGeometry(daysList, centres);
       if (!geo.shapes.length) return;
-      const stopsById = new Map(c.stopEntries(record.route.points).map((e) => [e.point.id, e.point]));
-      const times = c.estimateTimes(record);
       svg.append(svgEl("line", { class: "days-trunk", x1: LINE_X, y1: geo.top, x2: LINE_X, y2: geo.bottom }));
       geo.shapes.forEach((shape) => {
         if (shape.terminal === "origin") {
@@ -77,14 +78,6 @@
         } else {
           svg.append(svgEl("circle", { class: "days-dot", cx: LINE_X, cy: shape.y1, r: DOT_R }));
         }
-        const stop = stopsById.get(shape.stopId);
-        if (!stop) return;
-        const label = c.stopTimesLabel(stop, times.get(shape.stopId));
-        const title = el("div", { class: "days-stop-title", "data-stop-id": shape.stopId, onclick: () => ctx.onStopClick(shape.stopId) },
-          el("div", { class: "days-stop-name" }, stop.name || "Stop"),
-          el("div", { class: `days-stop-times muted${/~/.test(label) ? " est" : ""}` }, label));
-        title.style.top = `${(shape.y1 + shape.y2) / 2}px`;
-        titles.append(title);
         svg.lastElementChild.classList.add("days-clickable");
         svg.lastElementChild.addEventListener("click", () => ctx.onStopClick(shape.stopId));
       });
@@ -103,12 +96,12 @@
         return;
       }
       const daysList = c.deriveDays(record, n);
+      const times = c.estimateTimes(record);
       const board = el("div", { class: "days-board" },
-        el("div", { class: "days-titles" }),
         svgEl("svg", { class: "days-line", "aria-hidden": "true" }),
-        el("div", { class: "days-list" }, ...daysList.map((d) => dayBox(record, d))));
+        el("div", { class: "days-list" }, ...daysList.map((d) => dayBox(record, d, times))));
       box.replaceChildren(board);
-      const draw = () => { if (box && box.contains(board) && board.offsetWidth) drawLine(board, record, daysList); };
+      const draw = () => { if (box && box.contains(board) && board.offsetWidth) drawLine(board, daysList); };
       requestAnimationFrame(draw);
       observer = new ResizeObserver(draw);
       observer.observe(board);
