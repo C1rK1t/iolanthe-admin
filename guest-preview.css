@@ -15,13 +15,16 @@
 .guest-preview .gp-btn svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
 /* Slider strip */
+/* Title line above, then a fixed row: ‹ track › ◎ (the track's width never depends on the title) */
 .guest-preview .gp-strip {
-  display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 8px 10px;
+  display: flex; flex-direction: column; gap: 4px; margin-top: 12px; padding: 8px 10px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
 }
-.guest-preview .gp-readout { min-width: 150px; display: flex; flex-direction: column; }
-.guest-preview .gp-readout b { font-size: 17px; font-variant-numeric: tabular-nums; }
-.guest-preview .gp-readout span { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+.guest-preview .gp-readout { display: flex; align-items: baseline; gap: 8px; min-width: 0; white-space: nowrap; overflow: hidden; }
+.guest-preview .gp-readout b { font-size: 16px; font-variant-numeric: tabular-nums; flex: none; }
+.guest-preview .gp-readout span { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.guest-preview .gp-readout span::before { content: "· "; }
+.guest-preview .gp-slide { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .guest-preview .gp-track {
   flex: 1; min-width: 0; position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr);
   align-items: end; padding: 14px 0 2px; cursor: pointer; touch-action: none; user-select: none; outline: none; border-radius: 6px;
@@ -61,7 +64,5 @@
 .guest-preview .gp-text-btn { min-height: 36px; border: 0; border-radius: 6px; padding: 0 12px; background: var(--accent); color: #fff; font-weight: 700; cursor: pointer; }
 
 @media (max-width: 760px) {
-  .guest-preview .gp-strip { flex-wrap: wrap; }
-  .guest-preview .gp-readout { order: -1; flex: 1 0 100%; }
   .guest-preview .gp-tick-w { display: none; }
 }

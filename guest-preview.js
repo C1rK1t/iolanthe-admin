@@ -104,7 +104,8 @@
           el("span", { class: "gp-sep" }),
           iconBtn("reload", "Reload", reload),
           iconBtn("open", "Open full screen in a new tab", () => window.open(currentUrl(), "_blank", "noopener")))),
-      el("div", { class: "gp-strip" }, prevBtn, el("div", { class: "gp-readout" }, readDate, readSub), track, nextBtn, todayBtn),
+      // The title sits on its own line above the slider, so its changing length never moves the track (David, 2026-10-08).
+      el("div", { class: "gp-strip" }, el("div", { class: "gp-readout" }, readDate, readSub), el("div", { class: "gp-slide" }, prevBtn, track, nextBtn, todayBtn)),
       stage);
 
     function currentHash() {
