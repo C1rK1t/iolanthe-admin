@@ -425,3 +425,10 @@ Brainstormed with the visual companion (`.superpowers/brainstorm/31923-*/content
   Scratch data keeps a test charter "hoffmann-two". Deferred minors from the review: `charter-gantt.js` has no automated
   test (a Playwright bar-click smoke test would have caught the blocker); tooltip edge flip; localStorage fallback.
   Merge order: server #3 -> vessel `./update.sh` -> admin #9 (resolve `index.html` ?v= and CLAUDE.md against #8).
+- **2026-10-08 round 2 LIVE.** Admin PR #8 merged by David (with the charter-management PR #9; main `7c8339a`, assets
+  `admin-charters-1`, 140 tests) and pulled onto the vessel; server PR #4 merged `4aaaff2` and deployed with the manual
+  pull + rebuild (seed 07:00, `live_version` 5, `/api/charter` and `/api/planned-route` 200). Pre-merge check: the other
+  session's work touched none of the round-2 files; arrows still step the cards on the merged main. Branch
+  `feat/itinerary-a2-round2` deleted. Next: the captain's second look; plan 5 Task 8 shims; specs B and C; restore the
+  ended-charter read-only guard when the reminder fires (2026-11-16).
+
