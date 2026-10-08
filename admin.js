@@ -6,6 +6,12 @@
     department: "",
     authenticated: false,
     activeCharter: "",
+    storedActiveCharter: "",
+    forcedCharter: "",
+    serverToday: "",
+    reservedPeriods: { revision: 0, periods: [] },
+    ganttZoom: "active",
+    gantt: null,
     charters: [],
     allowedSections: [],
     allowedDepartments: [],
@@ -1616,6 +1622,91 @@
     return state.selectedCharter;
   }
 
+  const GANTT_COLLAPSED_KEY = "iolanthe-admin.gantt.collapsed";
+
+  function ganttCollapsedDefault() {
+    try {
+      const stored = window.localStorage.getItem(GANTT_COLLAPSED_KEY);
+      if (stored === "true" || stored === "false") {
+        return stored === "true";
+      }
+    } catch (error) {
+      // localStorage unavailable: fall through to the panel default.
+    }
+    return state.sectionPanels.charter === "routes";
+  }
+
+  function rememberGanttCollapsed(collapsed) {
+    try {
+      window.localStorage.setItem(GANTT_COLLAPSED_KEY, collapsed ? "true" : "false");
+    } catch (error) {
+      // ignore
+    }
+  }
+
+  async function loadReservedPeriods() {
+    try {
+      const data = await api("/api/admin/reserved-periods");
+      state.reservedPeriods = {
+        revision: Number.isInteger(data && data.revision) ? data.revision : 0,
+        periods: Array.isArray(data && data.periods) ? data.periods : []
+      };
+    } catch (error) {
+      setStatus(error.message, "error");
+    }
+    return state.reservedPeriods;
+  }
+
+  function ganttContext() {
+    return {
+      charters: state.charters,
+      periods: state.reservedPeriods.periods,
+      selectedId: state.selectedCharter,
+      activeId: state.activeCharter,
+      forcedId: state.forcedCharter,
+      today: window.IolantheChartersCore.todayLocal(),
+      zoom: state.ganttZoom,
+      collapsed: ganttCollapsedDefault(),
+      canManage: canManageCharterAdmin(),
+      onSelectCharter: async charterId => {
+        if (charterId === state.selectedCharter || !state.charters.some(charter => charter.id === charterId)) {
+          return;
+        }
+        if (!await confirmDiscardPageChanges()) {
+          return;
+        }
+        state.selectedCharter = charterId;
+        state.bundle = null;
+        renderCharter();
+      },
+      onOpenPeriod: periodId => openReservedPeriodModal(periodId),
+      onCreateCharter: openCreateCharterModal,
+      onDeleteCharter: openDeleteCharterModal,
+      onZoomChange: level => { state.ganttZoom = level; },
+      onToggleCollapsed: rememberGanttCollapsed
+    };
+  }
+
+  // Mounts (or refreshes) the band in the Charter section's host. Safe to call after every workspace render.
+  function mountCharterGantt() {
+    const host = document.getElementById("charter-gantt-host");
+    if (!host || !window.IolantheCharterGantt) {
+      state.gantt = null;
+      return;
+    }
+    if (state.gantt && state.gantt.host === host) {
+      state.gantt.handle.update(ganttContext());
+      return;
+    }
+    state.gantt = { host, handle: window.IolantheCharterGantt.mount(host, ganttContext()) };
+  }
+
+  function refreshCharterGantt() {
+    if (state.gantt && document.getElementById("charter-gantt-host") === state.gantt.host) {
+      state.gantt.handle.update(ganttContext());
+    }
+  }
+
   function activeCharterLabel() {
     const active = state.charters.find(charter => charter.id === state.activeCharter);
     return active ? (active.name || active.id) : (state.activeCharter || "None");
@@ -1825,6 +1916,9 @@
       state.department = data.department || "";
       state.authenticated = Boolean(data.authenticated);
       state.activeCharter = data.active_charter || "";
+      state.storedActiveCharter = data.stored_active_charter || "";
+      state.forcedCharter = data.forced_charter || "";
+      state.serverToday = data.today || "";
       state.charters = Array.isArray(data.charters) ? data.charters : [];
       syncSelectedCharter();
       state.allowedSections = Array.isArray(data.allowed_sections) ? data.allowed_sections : [];
@@ -1914,37 +2008,21 @@
   }
 
   function sectionToolbarHtml(section) {
-    if (!["charter", "galley", "hotel"].includes(section)) {
+    if (section === "charter") {
+      return "";
+    }
+    if (!["galley", "hotel"].includes(section)) {
       return "";
     }
     const selectId = `${section}-charter-select`;
     const hasCharters = Array.isArray(state.charters) && state.charters.length > 0;
-    const showCharterSelector = !(section === "charter" && ["sites", "routes"].includes(state.sectionPanels.charter));
-    const showCharterActions = section === "charter"
-      && state.sectionPanels.charter === "info"
-      && canManageCharterAdmin();
-    const charterActions = showCharterActions
-      ? `
-          <div class="toolbar-actions">
-            ${iconButtonHtml("confirm", "Set active charter", ` id="charter-set-active"${hasCharters ? "" : " disabled"}`)}
-            ${iconButtonHtml("add", "Create new charter", ` id="charter-create"`)}
-            ${iconButtonHtml("remove", "Delete current charter", ` id="charter-delete"${hasCharters && state.charters.length > 1 ? "" : " disabled"}`)}
-          </div>
-      `
-      : "";
-    if (!showCharterSelector && !charterActions) {
-      return "";
-    }
     return `
       <div class="section-toolbar" data-toolbar="${section}">
-        ${showCharterSelector ? `
-          <label class="toolbar-field" for="${selectId}">Select Charter
-            <select id="${selectId}" ${hasCharters ? "" : "disabled"}>
-              ${charterOptionsHtml()}
-            </select>
-          </label>
-        ` : ""}
-        ${charterActions}
+        <label class="toolbar-field" for="${selectId}">Select Charter
+          <select id="${selectId}" ${hasCharters ? "" : "disabled"}>
+            ${charterOptionsHtml()}
+          </select>
+        </label>
       </div>
     `;
   }
@@ -1973,7 +2051,7 @@
             </div>
           `).join("")}
         </nav>
-        <div class="section-content">${toolbarHtml || ""}${contentHtml}</div>
+        <div class="section-content">${section === "charter" ? `<div id="charter-gantt-host" class="charter-gantt-host"></div>` : ""}${toolbarHtml || ""}${contentHtml}</div>
       </div>
     `;
   }
@@ -2144,22 +2222,6 @@
         state.bundle = null;
         rerender();
       });
-    }
-    if (section === "charter") {
-      const setActiveButton = document.getElementById("charter-set-active");
-      if (setActiveButton) {
-        setActiveButton.addEventListener("click", () => {
-          setActiveCharter(state.selectedCharter);
-        });
-      }
-      const createButton = document.getElementById("charter-create");
-      if (createButton) {
-        createButton.addEventListener("click", openCreateCharterModal);
-      }
-      const deleteButton = document.getElementById("charter-delete");
-      if (deleteButton) {
-        deleteButton.addEventListener("click", openDeleteCharterModal);
-      }
     }
     if (section === "galley" || section === "hotel") {
       const notesButton = document.getElementById(`${section}-notes-button`);
@@ -4536,50 +4598,6 @@
     return new Date(now.getFullYear(), now.getMonth(), now.getDate());
   }
 
-  function activeCharterDateStatus(charter) {
-    const info = charter && charter.charter ? charter.charter : {};
-    const start = parseLocalDateOnly(info.start_date);
-    const end = parseLocalDateOnly(info.end_date);
-    if (!start || !end || end < start) {
-      return "incomplete";
-    }
-    const today = localTodayDate();
-    if (today > end) {
-      return "completed";
-    }
-    if (today < start) {
-      return "future";
-    }
-    return "current";
-  }
-
-  async function confirmActiveCharterDateStatus(charter) {
-    const status = activeCharterDateStatus(charter);
-    if (status === "completed") {
-      setStatus("This charter has completed and cannot be set as active.", "error");
-      return false;
-    }
-    if (status === "future") {
-      return showAdminConfirm({
-        title: "Charter Not Started",
-        message: "This charter has not started yet. Set it as active anyway?",
-        confirmLabel: "Set active",
-        cancelLabel: "Cancel",
-        tone: "warning"
-      });
-    }
-    if (status === "incomplete") {
-      return showAdminConfirm({
-        title: "Incomplete Dates",
-        message: "This charter has incomplete dates. Set it as active anyway?",
-        confirmLabel: "Set active",
-        cancelLabel: "Cancel",
-        tone: "warning"
-      });
-    }
-    return true;
-  }
-
   function renderCharterInfoPanel(charterInfo) {
     return `
       <section class="card full">
@@ -4933,6 +4951,8 @@
       errorField.textContent = error.message;
     }
   }
+
+  function openReservedPeriodModal() { setStatus("Reserved periods are not available yet.", "error"); }
 
   function openDeleteCharterModal() {
     if (!canManageCharterAdmin()) {
@@ -6356,25 +6376,28 @@
     ];
     const activePanel = panels.some(panel => panel.id === state.sectionPanels.charter) ? state.sectionPanels.charter : "info";
     state.sectionPanels.charter = activePanel;
-    els.workspace.innerHTML = sectionShell("charter", panels, activePanel, `<section class="card"><p class="muted">Loading charter data...</p></section>`, sectionToolbarHtml("charter"));
-    bindSectionNav("charter", renderCharter);
-    bindSectionToolbar("charter", renderCharter);
+    const paint = contentHtml => {
+      state.gantt = null;
+      els.workspace.innerHTML = sectionShell("charter", panels, activePanel, contentHtml, "");
+      bindSectionNav("charter", renderCharter);
+      mountCharterGantt();
+    };
+    paint(`<section class="card"><p class="muted">Loading charter data...</p></section>`);
     const selectedCharter = syncSelectedCharter();
     if (!selectedCharter) {
-      els.workspace.innerHTML = sectionShell("charter", panels, activePanel, `
+      paint(`
         <section class="card full">
           <div class="card-header"><h2>No Charters</h2></div>
-          <p class="muted">Use the plus button in the Charter toolbar to create your first charter.</p>
+          <p class="muted">Use the + button in the timeline above to create your first charter.</p>
         </section>
-      `, sectionToolbarHtml("charter"));
-      bindSectionNav("charter", renderCharter);
-      bindSectionToolbar("charter", renderCharter);
+      `);
       return;
     }
     try {
       const [bundle, siteLibrary] = await Promise.all([
         loadCharter(selectedCharter),
-        loadSites()
+        loadSites(),
+        loadReservedPeriods()
       ]);
       const charterInfo = normalizeCharterInfo(bundle["charter.json"]);
       const itinerary = bundle["itinerary.json"] || {};
@@ -6382,20 +6405,16 @@
       const guestList = normalizeGuestList(bundle["guest_list.json"]);
       const crewList = normalizeCrewEditorList(bundle["crew_list.json"]);
       const content = charterPanelContent(activePanel, charterInfo, itinerary, guestList, crewList, siteLibrary);
-      els.workspace.innerHTML = sectionShell("charter", panels, activePanel, content, sectionToolbarHtml("charter"));
-      bindSectionNav("charter", renderCharter);
-      bindSectionToolbar("charter", renderCharter);
+      paint(content);
       bindCharterPanel(activePanel, charterInfo, itinerary, guestList, crewList, siteLibrary);
     } catch (error) {
       setStatus(error.message, "error");
-      els.workspace.innerHTML = sectionShell("charter", panels, activePanel, `
+      paint(`
         <section class="card full">
           <div class="card-header"><h2>Charter</h2></div>
           <p class="muted">${escapeHtml(error.message)}</p>
         </section>
-      `, sectionToolbarHtml("charter"));
-      bindSectionNav("charter", renderCharter);
-      bindSectionToolbar("charter", renderCharter);
+      `);
     }
   }
 
@@ -13458,24 +13477,21 @@
   async function setActiveCharter(charterId) {
     if (!canChangeActiveCharter()) {
       setStatus("Only Charter Admin on Bridge can change the active charter.", "error");
-      return;
+      return false;
     }
     const charter = state.charters.find(candidate => candidate.id === charterId);
     if (!charterId || !charter) {
       setStatus("Unknown charter.", "error");
-      return;
+      return false;
     }
-    if (!await confirmActiveCharterDateStatus(charter)) {
-      return;
-    }
-    if (activeCharterDateStatus(charter) === "current" && !await showAdminConfirm({
-      title: "Set Active Charter",
-      message: `Set ${charterId} as the active charter?`,
-      confirmLabel: "Set active",
+    if (!await showAdminConfirm({
+      title: "Make Active",
+      message: `Make ${charter.name || charterId} the active charter? Guest tablets will show it.`,
+      confirmLabel: "Make active",
       cancelLabel: "Cancel",
       tone: "normal"
     })) {
-      return;
+      return false;
     }
     try {
       const result = await api("/api/admin/active-charter", {
@@ -13484,13 +13500,14 @@
         body: JSON.stringify({ charter_id: charterId })
       });
       state.activeCharter = result.active_charter;
-      state.selectedCharter = result.active_charter;
-      syncSelectedCharter();
+      state.storedActiveCharter = result.active_charter;
       syncTopbar();
-      renderSection();
+      refreshCharterGantt();
       setStatus("Active charter updated.", "ok");
+      return true;
     } catch (error) {
       setStatus(error.message, "error");
+      return false;
     }
   }
 
