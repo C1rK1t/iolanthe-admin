@@ -228,3 +228,5 @@ workplace per charter.
 - **A2-S4 Guest, data, rollout (approved).** Guest app untouched; its stylised paper-list itinerary look is to be
   preserved as it is for now. Migration v5; rollout server (rehearsed) → admin; the Itinerary panel and the Apply
   dialog go in the same admin release that adds the strip.
+- **A2-D19 (notes, 2026-10-08):** clicking a card edge jumps to that card; ← / → scroll the carousel; map stop →
+  card and card → map pan are both-ways. **Spec A2 approved by David**; next = implementation plans.

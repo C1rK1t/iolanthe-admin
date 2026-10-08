@@ -157,9 +157,10 @@ popup in §5.7 first.
 ### 5.4 The strip
 
 Docked under the map, full width. Every stop is a card; the open card is in full, the others are stacked edges either
-side, widths shrinking with distance from the open card, each edge showing its number and short name. Edge colours:
-plain; **red** when the stop is in `dirty_stop_ids`; **green** on the last card when fit is exact. Previous / Next
-icon buttons, ← / → keys and a horizontal swipe move the strip. Spinning to a red card removes it from the dirty
+side, widths shrinking with distance from the open card, each edge showing its number and short name. **Clicking an
+edge jumps to that card.** Edge colours: plain; **red** when the stop is in `dirty_stop_ids`; **green** on the last
+card when fit is exact. Previous / Next icon buttons, the ← / → keys and a horizontal swipe scroll the strip.
+**Selecting a card, by any of these means, pans the map to its stop; clicking a stop on the map selects its card.** Spinning to a red card removes it from the dirty
 list (no confirm). On a narrow screen the strip keeps full width below the map.
 
 ### 5.5 The card
