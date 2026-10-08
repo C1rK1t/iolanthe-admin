@@ -112,6 +112,205 @@ button.admin-icon-button--success:focus {
   background: #237347;
 }
 
+/* ---- shared Route-page look (spec-charters §9): the first slice of the admin style rollout ---- */
+:root {
+  --gold: #c9a24a;
+  --gold-dark: #a8842f;
+  --soft: #eef2f4;
+}
+
+button.admin-icon-button--gold {
+  background: var(--gold);
+  color: var(--ink);
+}
+
+button.admin-icon-button--gold:hover,
+button.admin-icon-button--gold:focus {
+  background: var(--gold-dark);
+  color: #fff;
+}
+
+.stat-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.6rem;
+}
+
+.stat-tile {
+  background: var(--soft);
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+  min-width: 0;
+}
+
+.stat-tile b {
+  display: block;
+  font-size: 1.5rem;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-tile span {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.form-section {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.9rem 1rem;
+  background: #fff;
+  display: grid;
+  gap: 0.7rem;
+  align-content: start;
+}
+
+.form-section > h3 {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+}
+
+.form-section .form-grid {
+  gap: 0.7rem;
+}
+
+.form-section label:not(.inline-check) {
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.form-section .field-hint {
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+
+.form-section .field-error,
+.modal-overlap-warning {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--danger);
+  background: #f7e3e1;
+  border-radius: 6px;
+  padding: 0.5rem 0.7rem;
+}
+
+.form-section .field-error:empty,
+.modal-overlap-warning:empty {
+  display: none;
+}
+
+.status-pill {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.status-pill--active { background: var(--gold); color: var(--ink); }
+.status-pill--upcoming { background: #d9e8ea; color: var(--accent-dark); }
+.status-pill--ended { background: #e3e7e9; color: var(--muted); }
+.status-pill--none { background: #f7e3e1; color: var(--danger); }
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.segmented button,
+.segmented label {
+  min-height: 36px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0 0.75rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+
+.segmented button + button,
+.segmented label + label {
+  border-left: 1px solid var(--line);
+}
+
+.segmented button:hover,
+.segmented label:hover {
+  background: var(--soft);
+  color: var(--ink);
+}
+
+.segmented button[aria-pressed="true"],
+.segmented label:has(input:checked) {
+  background: var(--accent);
+  color: #fff;
+}
+
+.segmented input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  margin: 0;
+}
+
+.card-header .header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.card-header .header-sep {
+  width: 1px;
+  height: 28px;
+  background: var(--line);
+  margin: 0 0.15rem;
+}
+
+.charter-info-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+  align-items: start;
+}
+
+.charter-info-columns > div {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.charter-gantt-host:empty {
+  display: none;
+}
+
 button:disabled,
 button:disabled:hover,
 button:disabled:focus {
@@ -2412,6 +2611,9 @@ button.admin-icon-button--preview:focus {
 }
 
 @media (max-width: 900px) {
+  .charter-info-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .topbar {
     flex-wrap: wrap;
     align-items: stretch;
