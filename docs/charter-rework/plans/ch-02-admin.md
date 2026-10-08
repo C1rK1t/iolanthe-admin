@@ -306,7 +306,7 @@ Append to the file for now:
 ```
 
 Run: `node --test test/charters-core.test.js`
-Expected: `# pass 18`, `# fail 0` (14 fixture cases + 4).
+Expected: `# pass 19`, `# fail 0` (15 fixture cases + 4).
 
 - [ ] **Step 5: Commit**
 
@@ -458,7 +458,7 @@ Replace the temporary `return {...}; });` at the end of `charters-core.js` with:
 - [ ] **Step 4: Run the tests**
 
 Run: `node --test`
-Expected: `# pass 133`, `# fail 0`.
+Expected: `# pass 134`, `# fail 0`.
 
 - [ ] **Step 5: Commit**
 
@@ -1976,11 +1976,11 @@ In the Stack list add after the `itinerary-core.js` bullet:
   "Select Charter" dropdowns.
 ```
 
-Change the tests line to `node --test` runs the tests in `test/` (133 tests), which cover `routes-core`, `itinerary-core` and `charters-core`.
+Change the tests line to `node --test` runs the tests in `test/` (134 tests), which cover `routes-core`, `itinerary-core` and `charters-core`.
 
 - [ ] **Step 2: Full test run and the browser checklist**
 
-Run: `node --test` → `# pass 133`, `# fail 0`.
+Run: `node --test` → `# pass 134`, `# fail 0`.
 
 Browser checklist (scratch server, Charter Admin). To see the changeover colours, give Csaba dates around today through its Info page (start = tomorrow, end = tomorrow + 8), then:
 1. Band: Csaba gold without any button press (in date from today); ★ on Larry disabled with the tooltip naming Csaba and its end date; restore Csaba's dates afterwards.
