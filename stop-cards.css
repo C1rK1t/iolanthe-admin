@@ -30,7 +30,7 @@
 .routes-panel .icon-btn.small.quiet:hover { background: #f7e3e1; color: var(--danger); }
 
 /* Tiles: Arrive · Depart · Next leg */
-.routes-panel .tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.routes-panel .tiles { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) minmax(0, 1fr); gap: 8px; }   /* Depart is wider: date + time on one row */
 .routes-panel .tile { background: var(--soft); border-radius: 8px; padding: 8px 10px; min-height: 64px; }
 .routes-panel .tile.blank { background: transparent; }
 .routes-panel .tile-k { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
@@ -40,12 +40,10 @@
 .routes-panel .tile-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .routes-panel .tile input.tile-time, .routes-panel .tile input.tile-date { min-height: 0; height: 28px; font: inherit; font-size: 13px; font-weight: 700; padding: 0 6px; border: 1px solid var(--line); border-radius: 5px; background: #fff; color: var(--ink); }
 .routes-panel .tile input.tile-time { width: 92px; }
-.routes-panel .tile input.tile-date { width: 150px; }
+.routes-panel .tile input.tile-date { width: 128px; padding: 0 2px 0 6px; }
 .routes-panel .tile input.tile-nights { width: 64px; min-height: 0; height: 28px; font: inherit; font-size: 13px; font-weight: 700; padding: 0 6px; border: 1px solid var(--line); border-radius: 5px; background: #fff; color: var(--ink); }
 .routes-panel .tile input:disabled, .routes-panel .tile select:disabled { opacity: .7; }
-/* Round 2 T9/T11: the stay and the departure time are two labelled rows inside the Depart tile */
-.routes-panel .depart-stack { display: flex; flex-direction: column; gap: 4px; }
-.routes-panel .tile-k2 { margin-top: 6px; }
+/* Captain 2026-10-08: the stay and the departure time share one row inside the Depart tile */
 /* Round 2 T13: hour and minute selects */
 .routes-panel .time-selects { display: inline-flex; align-items: center; gap: 2px; }
 .routes-panel .time-selects select { min-height: 0; height: 28px; width: auto; font: inherit; font-size: 13px; font-weight: 700; padding: 0 4px; border: 1px solid var(--line); border-radius: 5px; background: #fff; color: var(--ink); }
@@ -118,7 +116,6 @@
   .routes-panel .strip-edges.right { order: 2; }
   .routes-panel .strip-edge { height: 22px; }
   .routes-panel .tiles { grid-template-columns: minmax(0, 1fr); }
-  .routes-panel .tile input.tile-date { width: 140px; }
   .routes-panel .item { grid-template-columns: 4px 48px minmax(0, 1fr) auto auto; }
   .routes-panel .item-site { display: none; }
   .routes-panel .strip-edge-label { display: none; }

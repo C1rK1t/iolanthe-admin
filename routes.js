@@ -256,9 +256,14 @@
   function renderPills() {
     const f = icore().fit(toRecord(work.route), charterOrNull());
     const dirty = (work.route.dirty_stop_ids || []).length;
+    // A styled tooltip (not title=) so a long sentence wraps; shown on hover and keyboard focus.
+    const pill = (cls, tip, ...content) => el("span", { class: `pill ${cls}`, tabindex: "0", "aria-label": tip }, ...content, el("span", { class: "pill-tip", "aria-hidden": "true" }, tip));
+    const warn = f.state === "short" || f.state === "over";
+    const fitPill = pill(`fit-${f.state}`, f.title, warn ? "" : f.label);
+    if (warn) fitPill.insertAdjacentHTML("afterbegin", svg("warn"));
     $("pills").replaceChildren(...[
-      el("span", { class: `pill fit-${f.state}`, title: f.title, "aria-label": `Fit: ${f.title}` }, f.label),
-      dirty ? el("span", { class: "pill check", title: "Stops whose dates moved under them. Open each card to clear it." }, `${dirty} to check`) : null
+      fitPill,
+      dirty ? pill("check", "Stops whose dates moved under them. Open each card to clear it.", `${dirty} to check`) : null
     ].filter(Boolean));   // replaceChildren(null) would insert the text "null"
   }
 
@@ -970,7 +975,7 @@
           setWork(charterRouteFromItinerary(itinerary));
           afterPersist();
           const f = icore().fit(toRecord(work.route), subject.charter);
-          status(`Started from "${src.name}" on day ${day} · revision ${itinerary.revision}${f.state === "match" ? " · fits the charter" : f.state === "none" ? "" : ` · ${f.label}`}`, "ok");
+          status(`Started from "${src.name}" on day ${day} · revision ${itinerary.revision}${f.state === "match" ? " · fits the charter" : f.state === "none" ? "" : ` · ${Math.abs(f.delta)} day${Math.abs(f.delta) === 1 ? "" : "s"} ${f.state === "over" ? "longer" : "shorter"} than the charter`}`, "ok");
           return true;
         } catch (error) {
           if (error.status === 409) {

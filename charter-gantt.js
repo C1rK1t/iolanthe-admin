@@ -1,6 +1,6 @@
 // The charter Gantt band (spec-charters §6). Read-only: drag pans, wheel zooms, click selects / opens.
 // mount(host, ctx) → {update(ctx), destroy()}. ctx: {charters, periods, selectedId, activeId, forcedId, today,
-// zoom, collapsed, canManage, onSelectCharter(id), onOpenPeriod(id|null), onCreateCharter(), onDeleteCharter(),
+// zoom, collapsed, canManage, onSelectCharter(id), onOpenPeriod(id|null), onCreateCharter(),
 // onZoomChange(level), onToggleCollapsed(bool)}.
 (function () {
   "use strict";
@@ -17,7 +17,6 @@
     today: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>',
     add: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
     reserve: '<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 9h16M8 3v4M16 3v4M7 13l4 4 6-7"/></svg>',
-    trash: '<svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg>',
     collapse: '<svg viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg>',
     expand: '<svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>'
   };
@@ -301,7 +300,6 @@
         el("span", { class: "gantt-sep" }),
         iconBtn("add", "New charter", { disabled: !ctx.canManage, onclick: () => ctx.onCreateCharter() }),
         iconBtn("reserve", "Reserved period", { disabled: !ctx.canManage, onclick: () => ctx.onOpenPeriod(null) }),
-        iconBtn("trash", "Delete charter", { tone: "danger", disabled: !ctx.canManage || !ctx.selectedId || (ctx.charters || []).length < 2, onclick: () => ctx.onDeleteCharter() }),
         el("span", { class: "gantt-sep" }),
         iconBtn("collapse", "Collapse", { onclick: () => { ctx.collapsed = true; ctx.onToggleCollapsed(true); render(); } })
       ]);

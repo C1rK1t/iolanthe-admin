@@ -168,7 +168,7 @@
     }
 
     // Depart (charter mode: a date no earlier than the arrival day) or Stop duration (unassigned route: a nights count),
-    // then a "Departure time" label over the hour/minute selects. A stop with no stored time shows the T12 default with
+    // with the hour/minute selects on the same line (captain, 2026-10-08). A stop with no stored time shows the T12 default with
     // "assumed" in the hint; the first stay change stores it. Spec A2 D1, §5.6, §5.7; round 2 T11, T12, T13.
     function departTile(stop, rec) {
       const p = stop.point;
@@ -205,10 +205,7 @@
         onChange: (v) => ctx.editRecord((r) => c.setDeparture(r, p.id, { time: v }))
       });
       const stay = stop.position === "origin" ? (nights ? `${nights} night${nights === 1 ? "" : "s"} aboard before sailing` : "sails on day 1") : (nights ? `${nights} night${nights === 1 ? "" : "s"}` : "day stop");
-      const value = el("div", { class: "depart-stack" },
-        el("div", { class: "tile-row" }, dayInput, start === null ? el("span", { class: "muted" }, "nights") : null),
-        el("div", { class: "tile-k tile-k2" }, "Departure time"),
-        el("div", { class: "tile-row" }, time.root));
+      const value = el("div", { class: "tile-row" }, dayInput, start === null ? el("span", { class: "muted" }, "nights") : null, time.root);
       return tile(title, value, assumed ? el("span", {}, stay, el("em", { class: "muted" }, " · assumed")) : stay);
     }
 
