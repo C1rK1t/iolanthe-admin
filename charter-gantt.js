@@ -10,7 +10,6 @@
   const MIN_PX_PER_DAY = 1.2;      // 3 years on ~1300 px
   const MAX_PX_PER_DAY = 80;       // ~2 weeks on ~1100 px
   const DRAG_THRESHOLD_PX = 4;
-  const PERIOD_LABELS = { maintenance: "Maintenance", unavailable: "Unavailable", other: "Reserved" };
 
   const ICONS = {
     left: '<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>',
@@ -51,13 +50,14 @@
       status: core.charterStatus(c, ctx.today)
     }));
     const periods = (ctx.periods || []).map((p) => ({
-      kind: "period", id: p.id, type: p.type, name: `${PERIOD_LABELS[p.type] || "Reserved"} · ${p.title}`, title: p.title,
+      kind: "period", id: p.id, type: p.type, name: core.periodName(p), title: p.title,
       start_date: p.start_date, end_date: p.end_date, description: p.description || ""
     }));
     return { charters, periods };
   }
 
-  function mount(host, initialCtx) {
+  function mount(initialHost, initialCtx) {
+    let host = initialHost;
     let ctx = initialCtx;
     let pxPerDay = 0;
     let range = { start: "", end: "" };
@@ -77,11 +77,30 @@
     function viewStart() { return dateAtX(viewport.scrollLeft); }
     function viewEnd() { return dateAtX(viewport.scrollLeft + viewport.clientWidth); }
 
+    // The smallest scale: never narrower than the viewport, and small enough that "3 years" fits on a phone.
+    function minScale() {
+      const { charters, periods } = barsOf(ctx);
+      const r = core.scrollRange(charters.concat(periods), ctx.today);
+      const totalDays = Math.max(1, core.dayIndex(r.end) - core.dayIndex(r.start));
+      return Math.max(viewport.clientWidth / totalDays, Math.min(MIN_PX_PER_DAY, viewport.clientWidth / core.ZOOM_DAYS["3years"]));
+    }
+
+    function clampScale(px) {
+      return Math.max(minScale(), Math.min(MAX_PX_PER_DAY, px));
+    }
+
     function applyZoom(level) {
       const span = core.zoomSpan(level, { active: activeBar() ? (activeBar().charter || activeBar()) : null, today: ctx.today });
       const days = core.dayIndex(span.end) - core.dayIndex(span.start);
-      setScale(Math.max(MIN_PX_PER_DAY, Math.min(MAX_PX_PER_DAY, viewport.clientWidth / days)));
+      setScale(clampScale(viewport.clientWidth / days));
       viewport.scrollLeft = xOf(span.start);
+      syncTitle();
+    }
+
+    // Re-draw at a known scale with a known left edge (after a re-render or a re-host).
+    function restoreView(view) {
+      setScale(clampScale(view.px));
+      viewport.scrollLeft = xOf(view.date);
       syncTitle();
     }
 
@@ -99,10 +118,12 @@
       const rect = viewport.getBoundingClientRect();
       const localX = clientX - rect.left;
       const dayUnder = (viewport.scrollLeft + localX) / pxPerDay;
-      const next = Math.max(MIN_PX_PER_DAY, Math.min(MAX_PX_PER_DAY, pxPerDay * factor));
+      const next = clampScale(pxPerDay * factor);
       if (next === pxPerDay) return;
       setScale(next);
       viewport.scrollLeft = dayUnder * pxPerDay - localX;
+      ctx.zoom = "";   // a free zoom matches no preset
+      syncZoomButtons();
       syncTitle();
     }
 
@@ -205,41 +226,52 @@
 
     // ---- pointer panning ----
     function bindPan() {
-      let startX = 0;
-      let startScroll = 0;
+      // Pointer capture is taken only once the pointer has moved past the drag threshold. Capturing on pointerdown
+      // would retarget pointerup (and so the click) to the viewport, and bar clicks would never fire.
+      let down = null;   // { id, x, scroll } while a button is held
       let dragging = false;
       viewport.addEventListener("pointerdown", (e) => {
         if (e.button !== 0) return;
-        startX = e.clientX;
-        startScroll = viewport.scrollLeft;
+        const rect = viewport.getBoundingClientRect();
+        if (e.clientY - rect.top > viewport.clientHeight) return;   // on the native scrollbar
+        down = { id: e.pointerId, x: e.clientX, scroll: viewport.scrollLeft };
         dragging = false;
-        viewport.setPointerCapture(e.pointerId);
       });
       viewport.addEventListener("pointermove", (e) => {
-        if (!viewport.hasPointerCapture(e.pointerId)) return;
-        const dx = e.clientX - startX;
-        if (!dragging && Math.abs(dx) < DRAG_THRESHOLD_PX) return;
-        dragging = true;
-        viewport.classList.add("is-dragging");
-        viewport.scrollLeft = startScroll - dx;
+        if (!down || e.pointerId !== down.id) return;
+        const dx = e.clientX - down.x;
+        if (!dragging) {
+          if (Math.abs(dx) < DRAG_THRESHOLD_PX) return;
+          dragging = true;
+          viewport.classList.add("is-dragging");
+          try { viewport.setPointerCapture(e.pointerId); } catch (error) { /* capture is best effort */ }
+        }
+        viewport.scrollLeft = down.scroll - dx;
       });
       const end = (e) => {
+        if (!down || e.pointerId !== down.id) return;
         if (viewport.hasPointerCapture(e.pointerId)) viewport.releasePointerCapture(e.pointerId);
         viewport.classList.remove("is-dragging");
         if (dragging) suppressClickUntil = Date.now() + 150;
         dragging = false;
+        down = null;
         syncTitle();
       };
       viewport.addEventListener("pointerup", end);
       viewport.addEventListener("pointercancel", end);
       viewport.addEventListener("scroll", syncTitle, { passive: true });
       viewport.addEventListener("wheel", (e) => {
+        // Horizontal wheel / trackpad swipe: leave it to the native scroll. Vertical wheel: zoom around the pointer.
+        if (Math.abs(e.deltaX) > Math.abs(e.deltaY) || e.deltaY === 0) return;
         e.preventDefault();
-        zoomAround(e.clientX, e.deltaY < 0 ? 1.15 : 1 / 1.15);
+        const step = e.deltaMode === 1 ? e.deltaY * 16 : (e.deltaMode === 2 ? e.deltaY * 400 : e.deltaY);
+        zoomAround(e.clientX, Math.max(0.7, Math.min(1.4, Math.exp(-step * 0.0015))));
       }, { passive: false });
       root.addEventListener("keydown", (e) => {
+        if (e.altKey || e.ctrlKey || e.metaKey) return;
         if (e.target.closest("input, select, textarea")) return;
         if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+          e.stopPropagation();   // the Route page steps its stop cards on the same keys
           e.preventDefault();
           viewport.scrollLeft += (e.key === "ArrowLeft" ? -7 : 7) * pxPerDay;
           syncTitle();
@@ -291,7 +323,7 @@
       ]);
     }
 
-    function render() {
+    function render(view) {
       hideTip();
       host.replaceChildren();
       root = el("section", { class: `charter-gantt${ctx.collapsed ? " is-collapsed" : ""}`, tabindex: "0", "aria-label": "Charter timeline" });
@@ -310,7 +342,15 @@
       }
       bindPan();
       // Width is only known once laid out. A timeout, not requestAnimationFrame: rAF never fires in a hidden tab.
-      afterLayout(() => { if (viewport.isConnected) applyZoom(ctx.zoom); });
+      afterLayout(() => {
+        if (!viewport.isConnected) return;
+        if (view) restoreView(view); else applyZoom(ctx.zoom);
+      });
+    }
+
+    // The current scale and left edge, or null when nothing is drawn.
+    function currentView() {
+      return pxPerDay && viewport && viewport.isConnected && !ctx.collapsed ? { px: pxPerDay, date: viewStart() } : null;
     }
 
     render();
@@ -319,10 +359,17 @@
 
     return {
       update(next) {
-        const keepScroll = viewport && viewport.isConnected && !ctx.collapsed && !next.collapsed ? viewport.scrollLeft : null;
+        const view = next.collapsed ? null : currentView();
         ctx = next;
-        render();
-        if (keepScroll !== null) afterLayout(() => { if (viewport.isConnected) { setScale(pxPerDay); viewport.scrollLeft = keepScroll; syncTitle(); } });
+        render(view);
+      },
+      // Move the band into a freshly rendered host, keeping its scale and scroll position.
+      attach(nextHost) {
+        hideTip();
+        const view = currentView();
+        host = nextHost;
+        host.replaceChildren(root);
+        if (view) afterLayout(() => { if (viewport.isConnected) restoreView(view); });
       },
       destroy() {
         hideTip();

@@ -8,7 +8,7 @@
     activeCharter: "",
     storedActiveCharter: "",
     forcedCharter: "",
-    serverToday: "",
+    todayOffsetDays: 0,
     reservedPeriods: { revision: 0, periods: [] },
     ganttZoom: "active",
     gantt: null,
@@ -1624,6 +1624,20 @@
 
   const GANTT_COLLAPSED_KEY = "iolanthe-admin.gantt.collapsed";
 
+  // Today as the server sees it: the browser's date corrected by the offset measured at bootstrap.
+  function adminToday() {
+    const core = window.IolantheChartersCore;
+    return core.addDays(core.todayLocal(), state.todayOffsetDays) || core.todayLocal();
+  }
+
+  // Re-derive the active and forced charter ids from the charter list (after a save that moved dates, or a Make active).
+  function recomputeActiveCharter() {
+    const core = window.IolantheChartersCore;
+    const today = adminToday();
+    state.activeCharter = core.activeCharterId(state.charters, state.storedActiveCharter, today);
+    state.forcedCharter = core.activeCharterId(state.charters.filter(charter => core.isInDate(charter, today)), "", today);
+  }
+
   function ganttCollapsedDefault() {
     try {
       const stored = window.localStorage.getItem(GANTT_COLLAPSED_KEY);
@@ -1664,7 +1678,7 @@
       selectedId: state.selectedCharter,
       activeId: state.activeCharter,
       forcedId: state.forcedCharter,
-      today: window.IolantheChartersCore.todayLocal(),
+      today: adminToday(),
       zoom: state.ganttZoom,
       collapsed: ganttCollapsedDefault(),
       canManage: canManageCharterAdmin(),
@@ -1918,7 +1932,9 @@
       state.activeCharter = data.active_charter || "";
       state.storedActiveCharter = data.stored_active_charter || "";
       state.forcedCharter = data.forced_charter || "";
-      state.serverToday = data.today || "";
+      state.todayOffsetDays = data.today && window.IolantheChartersCore && window.IolantheChartersCore.isValidDate(data.today)
+        ? window.IolantheChartersCore.dayIndex(data.today) - window.IolantheChartersCore.dayIndex(window.IolantheChartersCore.todayLocal())
+        : 0;
       state.charters = Array.isArray(data.charters) ? data.charters : [];
       syncSelectedCharter();
       state.allowedSections = Array.isArray(data.allowed_sections) ? data.allowed_sections : [];
@@ -4578,20 +4594,15 @@
     return date;
   }
 
-  function localTodayDate() {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  }
-
   function charterInfoField(id, label, inputHtml, extra) {
     return `<label${extra && extra.full ? ` class="full"` : ""}>${escapeHtml(label)}${inputHtml}${extra && extra.hint ? `<span class="field-hint" id="${id}-hint">${escapeHtml(extra.hint)}</span>` : ""}</label>`;
   }
 
-  function renderCharterInfoPanel(charterInfo) {
+  // The pill and the Make active button's state for the Info header.
+  function charterInfoHeaderState(charterInfo) {
     const core = window.IolantheChartersCore;
     const summary = currentCharterSummary() || { id: state.selectedCharter, charter: charterInfo };
-    const pill = core.pillFor({ id: summary.id, charter: charterInfo }, { activeId: state.activeCharter, today: core.todayLocal() });
-    const nights = core.nights(charterInfo);
+    const pill = core.pillFor({ id: summary.id, charter: charterInfo }, { activeId: state.activeCharter, today: adminToday() });
     const forced = state.forcedCharter && state.forcedCharter !== summary.id
       ? state.charters.find(charter => charter.id === state.forcedCharter)
       : null;
@@ -4601,6 +4612,28 @@
       : (state.forcedCharter
         ? `${forced ? (forced.name || forced.id) : "A charter"} is in date and stays active until ${forced && forced.charter ? core.fmtShort(forced.charter.end_date) : "it ends"}`
         : "Make active");
+    return { summary, pill, makeActiveDisabled, makeActiveTitle };
+  }
+
+  function syncCharterInfoHeader(charterInfo) {
+    const header = charterInfoHeaderState(charterInfo);
+    const pill = document.getElementById("charter-info-pill");
+    const star = document.getElementById("charter-make-active");
+    if (pill) {
+      pill.className = `status-pill status-pill--${header.pill.tone}`;
+      pill.textContent = header.pill.text;
+    }
+    if (star) {
+      star.disabled = header.makeActiveDisabled;
+      star.title = header.makeActiveTitle;
+      star.setAttribute("aria-label", header.makeActiveTitle);
+    }
+  }
+
+  function renderCharterInfoPanel(charterInfo) {
+    const core = window.IolantheChartersCore;
+    const { summary, pill, makeActiveDisabled, makeActiveTitle } = charterInfoHeaderState(charterInfo);
+    const nights = core.nights(charterInfo);
     return `
       <section class="card full charter-info-panel">
         <div class="card-header">
@@ -4903,8 +4936,9 @@
       const nights = core.nights({ start_date: startInput.value, end_date: endInput.value });
       modal.querySelector("#new-charter-nights").textContent = nights === null ? "" : `${nights} ${nights === 1 ? "night" : "nights"}`;
       const clashes = core.findOverlaps({ id: "", start_date: startInput.value, end_date: endInput.value }, core.overlapEntries(state.charters, state.reservedPeriods.periods), "charter");
-      modal.querySelector("#new-charter-overlap").textContent = clashes.length ? `${core.overlapMessage(clashes)}. Choose other dates.` : "";
-      modal.querySelector("#create-charter-submit").disabled = clashes.length > 0;
+      const message = dateOrderMessage(core, { start_date: startInput.value, end_date: endInput.value }) || (clashes.length ? `${core.overlapMessage(clashes)}. Choose other dates.` : "");
+      modal.querySelector("#new-charter-overlap").textContent = message;
+      modal.querySelector("#create-charter-submit").disabled = Boolean(message);
     };
     nameInput.addEventListener("input", syncGeneratedId);
     cloneSelect.addEventListener("change", syncCopyAvailability);
@@ -5022,7 +5056,7 @@
     }
   }
 
-  const RESERVED_PERIOD_TYPES = Object.freeze([["maintenance", "Maintenance"], ["unavailable", "Unavailable"], ["other", "Other"]]);
+  const RESERVED_PERIOD_TYPES = Object.freeze(Object.entries(window.IolantheChartersCore ? window.IolantheChartersCore.PERIOD_LABELS : { maintenance: "Maintenance", unavailable: "Unavailable", other: "Other" }));
 
   // Spec-charters §8. periodId null = new.
   function openReservedPeriodModal(periodId) {
@@ -5071,8 +5105,9 @@
       modal.querySelector("#period-days").textContent = nights === null ? "" : `${nights + 1} ${nights === 0 ? "day" : "days"}`;
       const others = core.overlapEntries(state.charters, state.reservedPeriods.periods.filter(other => other.id !== period.id));
       const clashes = core.findOverlaps({ id: period.id, start_date: startInput.value, end_date: endInput.value }, others, "period");
-      modal.querySelector("#period-overlap").textContent = clashes.length ? `${core.overlapMessage(clashes)}. Choose other dates.` : "";
-      modal.querySelector("#period-submit").disabled = clashes.length > 0;
+      const message = dateOrderMessage(core, { start_date: startInput.value, end_date: endInput.value }) || (clashes.length ? `${core.overlapMessage(clashes)}. Choose other dates.` : "");
+      modal.querySelector("#period-overlap").textContent = message;
+      modal.querySelector("#period-submit").disabled = Boolean(message);
     };
     startInput.addEventListener("input", syncDates);
     endInput.addEventListener("input", syncDates);
@@ -5093,10 +5128,16 @@
       const periods = existing
         ? state.reservedPeriods.periods.map(other => (other.id === period.id ? draft : other))
         : state.reservedPeriods.periods.concat([draft]);
-      if (await saveReservedPeriods(periods, errorField)) {
-        markModalSaved(document.getElementById("dialog-modal"));
-        closeDialogModal();
-        setStatus(existing ? "Reserved period saved." : "Reserved period added.", "ok");
+      const submit = modal.querySelector("#period-submit");
+      submit.disabled = true;   // one request at a time: a second POST would carry a stale base_revision
+      try {
+        if (await saveReservedPeriods(periods, errorField)) {
+          markModalSaved(document.getElementById("dialog-modal"));
+          closeDialogModal();
+          setStatus(existing ? "Reserved period saved." : "Reserved period added.", "ok");
+        }
+      } finally {
+        submit.disabled = false;
       }
     });
 
@@ -5132,7 +5173,7 @@
         if (reload) {
           await loadReservedPeriods();
           refreshCharterGantt();
-          closeDialogModal();
+          closeDialogModal({ force: true });   // the user has just chosen to drop the edit
         }
         return false;
       }
@@ -6285,6 +6326,13 @@
     };
   }
 
+  // "" when the dates are in order (or incomplete), else the message to show.
+  function dateOrderMessage(core, range) {
+    return core.isValidDate(range.start_date) && core.isValidDate(range.end_date) && range.end_date < range.start_date
+      ? "The end date is before the start date."
+      : "";
+  }
+
   // Spec-charters §4: the live overlap check. Returns the message ("" when clear) and toggles Save.
   function syncCharterInfoOverlap() {
     const core = window.IolantheChartersCore;
@@ -6295,7 +6343,7 @@
     }
     const candidate = { id: state.selectedCharter, start_date: document.getElementById("charter-info-start-date").value, end_date: document.getElementById("charter-info-end-date").value };
     const clashes = core.findOverlaps(candidate, core.overlapEntries(state.charters, state.reservedPeriods.periods), "charter");
-    const message = clashes.length ? `${core.overlapMessage(clashes)}. Choose other dates.` : "";
+    const message = dateOrderMessage(core, candidate) || (clashes.length ? `${core.overlapMessage(clashes)}. Choose other dates.` : "");
     warning.textContent = message;
     if (save) {
       save.disabled = Boolean(message);
@@ -6351,10 +6399,13 @@
           summary.name = normalizedSaved.name || summary.id;
           summary.charter = cloneCharterInfo(normalizedSaved);
           summary.nights = core.nights(normalizedSaved);
-          summary.status = core.charterStatus(normalizedSaved, core.todayLocal());
+          summary.status = core.charterStatus(normalizedSaved, adminToday());
         }
         savedCharterInfo = cloneCharterInfo(normalizedSaved);
+        recomputeActiveCharter();
         syncTopbar();
+        refreshCharterGantt();
+        syncCharterInfoHeader(charterInfo);
       },
       reload: async () => {
         await renderCharter();
@@ -6364,11 +6415,9 @@
     const makeActive = document.getElementById("charter-make-active");
     if (makeActive) {
       makeActive.addEventListener("click", async () => {
-        if (!await confirmDiscardPageChanges()) {
-          return;
-        }
+        // The form and its unsaved-changes guard stay as they are; only the header and the band change.
         if (await setActiveCharter(state.selectedCharter)) {
-          renderCharter();
+          syncCharterInfoHeader(charterInfo);
         }
       });
     }
@@ -6491,13 +6540,18 @@
     const activePanel = panels.some(panel => panel.id === state.sectionPanels.charter) ? state.sectionPanels.charter : "info";
     state.sectionPanels.charter = activePanel;
     const paint = contentHtml => {
-      if (state.gantt) {
-        state.gantt.handle.destroy();
-        state.gantt = null;
-      }
+      clearPageUnsavedGuard();
       els.workspace.innerHTML = sectionShell("charter", panels, activePanel, contentHtml, "");
       bindSectionNav("charter", renderCharter);
-      mountCharterGantt();
+      const host = document.getElementById("charter-gantt-host");
+      if (state.gantt && host) {
+        // Keep the mounted band (scale, scroll, listeners); just move it into the new host.
+        state.gantt.host = host;
+        state.gantt.handle.attach(host);
+        state.gantt.handle.update(ganttContext());
+      } else {
+        mountCharterGantt();
+      }
     };
     paint(`<section class="card"><p class="muted">Loading charter data...</p></section>`);
     const selectedCharter = syncSelectedCharter();
@@ -13626,8 +13680,8 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ charter_id: charterId })
       });
-      state.activeCharter = result.active_charter;
       state.storedActiveCharter = result.active_charter;
+      recomputeActiveCharter();
       syncTopbar();
       refreshCharterGantt();
       setStatus("Active charter updated.", "ok");

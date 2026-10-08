@@ -131,12 +131,17 @@
     return f ? `Overlaps ${f.name} (${f.start_date} – ${f.end_date})` : "";
   }
 
+  const PERIOD_LABELS = Object.freeze({ maintenance: "Maintenance", unavailable: "Unavailable", other: "Other" });
+
+  function periodName(period) {
+    return `${PERIOD_LABELS[period.type] || "Reserved"} · ${period.title}`;
+  }
+
   // The entries the overlap check compares against: every charter and every reserved period.
   function overlapEntries(charters, periods) {
-    const PERIOD_LABELS = { maintenance: "Maintenance", unavailable: "Unavailable", other: "Reserved" };
     return (Array.isArray(charters) ? charters : [])
       .map((c) => ({ kind: "charter", id: c.id, name: c.name || c.id, start_date: (c.charter || {}).start_date, end_date: (c.charter || {}).end_date }))
-      .concat((Array.isArray(periods) ? periods : []).map((p) => ({ kind: "period", id: p.id, name: `${PERIOD_LABELS[p.type] || "Reserved"} · ${p.title}`, start_date: p.start_date, end_date: p.end_date })));
+      .concat((Array.isArray(periods) ? periods : []).map((p) => ({ kind: "period", id: p.id, name: periodName(p), start_date: p.start_date, end_date: p.end_date })));
   }
 
   // {tone: active|upcoming|ended|none, text}
@@ -230,7 +235,7 @@
   }
 
   return {
-    MS_DAY, ZOOM_DAYS, isValidDate, dayIndex, dateFromIndex, addDays, todayLocal, fmtDate, fmtShort, fmtRange,
+    MS_DAY, ZOOM_DAYS, PERIOD_LABELS, periodName, isValidDate, dayIndex, dateFromIndex, addDays, todayLocal, fmtDate, fmtShort, fmtRange,
     datesOf, nights, charterStatus, isInDate, activeCharterId, rangesOverlap, findOverlaps, overlapMessage, overlapEntries, pillFor,
     packRows, zoomSpan, scrollRange, visibleMonths, visibleWeeks
   };
