@@ -48,7 +48,8 @@
       anchorageList.forEach((a) => {
         const isStopKind = a.kind === "stop";
         if (isStopKind ? !shownLayers.stops : !shownLayers.anchorages) return;
-        const html = `<div class="mk-anch${isStopKind ? " kind-stop" : ""} ${used.has(a.id) ? "" : "dim"}">${isStopKind ? STOP_SVG : ANCHOR_SVG}</div><div class="mk-label">${A.escapeHtml(a.name)}</div>`;
+        // Captain round 3 (R3-2): the name is a hover tooltip (the marker's title) and in the tap popup, not a label on the map.
+        const html = `<div class="mk-anch${isStopKind ? " kind-stop" : ""} ${used.has(a.id) ? "" : "dim"}">${isStopKind ? STOP_SVG : ANCHOR_SVG}</div>`;
         const title = `${a.name}${a.depth_m ? ` · ${a.depth_m} m` : ""}`;
         L.marker(ll(a), { icon: icon(html), title, draggable: o.mode === "anchorage", zIndexOffset: 200 })
           .on("click", () => (o.onAnchorageClick || noop)(a))

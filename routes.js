@@ -332,6 +332,7 @@
         b("redo", "Redo (Ctrl+Y)", redo, "", ro || !history.redo.length),
         el("span", { class: "icon-sep" }),
         b("start", "Start from an unassigned route or another charter…", () => openStartFrom(), "", ro || saving),
+        b("trash", "Clear this route (start afresh)", clearRoute, "", ro || saving || !work.route.points.length),
         b("saveAs", "Save as an unassigned route (items kept)", () => saveAs(false), "", work.route.points.length < 2),
         b("import", "Import KML / GPX", () => io.openImport(), "", ro),
         b("export", "Export GPX / KML", () => io.openExport(), "", work.route.points.length < 2),
@@ -538,7 +539,7 @@
         html = `<div class="mk-stop${p.anchorage_id ? "" : " plain"}${selected ? " selected" : ""}">${stopNo}</div>${p.anchorage_id ? '<div class="mk-anchor-badge"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2"/><path d="M12 7v14M5 13a7 7 0 0 0 14 0M8 10h8"/></svg></div>' : ""}${flagged ? '<div class="mk-badge">!</div>' : ""}`;
       }
       else html = `<div class="mk-wp ${p.name ? "named" : ""}"></div>`;
-      const m = L.marker(ll(p), { icon: divIcon(html), draggable: ui.mode !== "delete" && !readOnly(), title: p.name || "Waypoint", zIndexOffset: c.isStop(p) ? 1100 : 1000 });
+      const m = L.marker(ll(p), { icon: divIcon(html), draggable: ui.mode !== "delete" && !readOnly(), title: c.isStop(p) ? (p.name || "Stop") : (p.name || ""), zIndexOffset: c.isStop(p) ? 1100 : 1000 });   // R3-2: plain waypoints have no tooltip
       m.on("click", () => onPointClick(i));
       m.on("drag", (e) => {
         const q = e.target.getLatLng();
@@ -616,6 +617,22 @@
       });
     });
   }
+  // Captain round 3 (R3-1): start afresh. Empties the charter route, points and items, after the popup names the
+  // items it drops (or a plain confirm when there are none). The blank canvas is unsaved: Save keeps it, Cancel
+  // brings everything back.
+  async function clearRoute() {
+    if (!work || saving || !isCharter() || readOnly() || !work.route.points.length) return;
+    const items = toRecord(work.route).activities;
+    if (items.length) {
+      if (!(await askDrop({ days: [...new Set(items.map((a) => a.day))].sort((a, b) => a - b), items }, "Clearing the route"))) return;
+    } else if (!(await A().showAdminConfirm({ title: "Clear this route?", message: "Every stop and waypoint goes. The charter route stays blank until you save.", confirmLabel: "Clear", cancelLabel: "Cancel", tone: "danger" }))) {
+      return;
+    }
+    if (map) map.closePopup();
+    editRecord((r) => ({ ...r, route: { ...r.route, points: [] }, activities: [], dirty_stop_ids: [] }), { map: true });
+    status("Route cleared · Save to keep it, Cancel to bring it back", "ok");
+  }
+
   // Deleting a point or turning a stop back into a waypoint drops that stop's items: ask first when there are any.
   async function deletePoint(i) {
     const p = work.route.points[i];

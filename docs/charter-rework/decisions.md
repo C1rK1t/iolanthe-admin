@@ -518,4 +518,12 @@ Brainstormed with the visual companion (`.superpowers/brainstorm/31923-*/content
   "open this unassigned route" still goes to the library.
 - Plan: `plans/r3-captain-round3.md`. No other session is running; David will warn the next one to look for recent
   changes.
+- **2026-10-09 round 3 EXECUTED** on `feat/captain-round3` (6 commits, 146 tests, assets `admin-captain-r3`), one Sonnet
+  implementer for Tasks 1–5 (all replacements verbatim), browser pass by this session on the scratch server at
+  `127.0.0.1:8000` (the pane refuses `localhost:8000`): band at Quarter with gridlines, banding, legend and the VIEWING
+  tag; locked on Charter Admin, overlay elsewhere (host held at the strip's 52 px so the page does not shift), collapsing
+  on pick / page change / Collapse; Clear this route on Larry (popup, empty canvas, Cancel restores); anchorage labels
+  gone with tooltips kept; Route opens on the charter route; topbar "Next Active Charter"; no console errors. Not
+  exercised: LAST / ACTIVE CHARTER headings (need a past or running active charter). PR iolanthe-admin#15 open; merge
+  on David's word.
 
