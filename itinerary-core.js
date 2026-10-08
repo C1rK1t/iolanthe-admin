@@ -18,6 +18,10 @@
   const MAX_SPEED_KN = 30;
   const MAX_TITLE_LENGTH = 120;
   const MAX_NOTES_LENGTH = 2000;
+  const MIN_DURATION_MIN = 5;
+  const MAX_DURATION_MIN = 1440;
+  const DEFAULT_DURATION_MIN = 60;     // an item with no duration occupies an hour (spec A2 D12)
+  const SEED_DEPART_TIME = "09:00";    // a stop with no departure time is assumed to leave at 09:00 (spec A2 D4)
   const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
   const METRES_PER_NM = 1852;
   const EARTH_RADIUS_M = 6371000;
@@ -123,6 +127,9 @@
       notes: toStr(a.notes, MAX_NOTES_LENGTH)
     };
     if (typeof a.time === "string" && TIME_RE.test(a.time.trim())) out.time = a.time.trim();
+    // null, "" and booleans mean "no duration" (Number() would turn them into 0, which the bounds check rejects). Same as the server.
+    const duration = a.duration_min === null || a.duration_min === "" || typeof a.duration_min === "boolean" ? NaN : Number(a.duration_min);
+    if (Number.isInteger(duration)) out.duration_min = duration;
     const siteId = toStr(a.site_id);
     if (siteId) out.site_id = siteId;
     return out;
@@ -131,6 +138,9 @@
     const v = toObj(value);
     const route = toObj(v.route);
     const revision = Number(v.revision);
+    const points = (Array.isArray(route.points) ? route.points : []).map((p) => normalizePoint(p, random)).filter(Boolean);
+    const stopIds = new Set(points.filter(isStop).map((p) => p.id));
+    const dirty = Array.isArray(v.dirty_stop_ids) ? v.dirty_stop_ids : [];
     return {
       version: ITINERARY_VERSION,
       revision: Number.isInteger(revision) && revision >= 0 ? revision : 0,
@@ -139,16 +149,17 @@
       route: {
         source: route.source && typeof route.source === "object" && !Array.isArray(route.source) ? route.source : null,
         speed_kn: cleanSpeed(route.speed_kn, DEFAULT_SPEED_KN),
-        points: (Array.isArray(route.points) ? route.points : []).map((p) => normalizePoint(p, random)).filter(Boolean)
+        points
       },
-      activities: (Array.isArray(v.activities) ? v.activities : []).map((a) => normalizeActivity(a, random)).filter(Boolean)
+      activities: (Array.isArray(v.activities) ? v.activities : []).map((a) => normalizeActivity(a, random)).filter(Boolean),
+      dirty_stop_ids: [...new Set(dirty.filter((id) => typeof id === "string" && stopIds.has(id)))]
     };
   }
 
   // What counts as "changed" for the Save button: everything the captain edits, not revision or source.
   function itinerarySnapshot(itinerary) {
     const it = toObj(itinerary);
-    return JSON.stringify({ welcome_message: it.welcome_message, summary: it.summary, speed_kn: toObj(it.route).speed_kn, points: toObj(it.route).points, activities: it.activities });
+    return JSON.stringify({ welcome_message: it.welcome_message, summary: it.summary, speed_kn: toObj(it.route).speed_kn, points: toObj(it.route).points, activities: it.activities, dirty_stop_ids: it.dirty_stop_ids || [] });
   }
 
   // ---- days (same rules as the server) --------------------------------------
@@ -214,8 +225,6 @@
       if (isLast && p.depart) push(`${field}.depart`, "The last stop is the terminus and has no departure.");
       if (!isLast && !p.depart) push(`${field}.depart`, `${label} needs a departure day.`);
       if (p.arrive && p.depart && p.arrive.day > p.depart.day) push(`${field}.depart`, `${label} departs before it arrives.`);
-      if (p.arrive && dayCount && p.arrive.day > dayCount) push(`${field}.arrive.day`, `Day ${p.arrive.day} is after the charter's last day (${dayCount}).`);
-      if (p.depart && dayCount && p.depart.day > dayCount) push(`${field}.depart.day`, `Day ${p.depart.day} is after the charter's last day (${dayCount}).`);
       const prev = stops[i - 1];
       if (prev && prev.point.depart && p.arrive && prev.point.depart.day > p.arrive.day) {
         push(`${field}.arrive`, `${label} is reached before ${prev.point.name || "the previous stop"} leaves.`);
@@ -235,6 +244,9 @@
         push(`${field}.day`, `Activity "${name}" is on day ${a.day}, outside ${stop.point.name || "its stop"}'s days ${stop.span.from}–${stop.span.to}.`);
       }
       if (!a.title) push(`${field}.title`, "An activity needs a title.");
+      if (a.duration_min !== undefined && (a.duration_min < MIN_DURATION_MIN || a.duration_min > MAX_DURATION_MIN)) {
+        push(`${field}.duration_min`, `Activity "${name}" duration must be between ${MIN_DURATION_MIN} minutes and ${MAX_DURATION_MIN / 60} hours.`);
+      }
       if (a.site_id && !(stop.point.site_ids || []).includes(a.site_id)) {
         push(`${field}.site_id`, `${stop.point.name || "That stop"} does not serve site ${a.site_id}.`);
       }
@@ -280,6 +292,8 @@
         depart = { time: p.depart.time, estimated: false };
       } else if (p.depart && nights === 0 && arrive) {
         depart = { time: arrive.time, estimated: true };
+      } else if (p.depart) {
+        depart = { time: SEED_DEPART_TIME, estimated: true };   // overnight stop with no departure time: assume 09:00
       }
       out.set(p.id, { arrive, depart });
       prevDepart = depart ? { minutes: timeToMinutes(depart.time), index: entry.index } : null;
@@ -337,90 +351,6 @@
     const span = stopSpan(stops[i].point, positionOf(i, stops.length), dayCount);
     const activities = itinerary.activities.map((a) => (a.stop_id !== stopId ? a : { ...a, day: Math.min(Math.max(a.day, span.from), span.to) }));
     return { ...itinerary, activities: renumberActivities(activities) };
-  }
-
-  // One entry per edge d = 1..dayCount-1: { day, kind: "dwell"|"leg"|"none", stopId?, fromStopId?, toStopId?, stopIndex?, fromIndex? }
-  function edgeStates(itinerary, dayCount) {
-    const stops = stopEntries(toObj(toObj(itinerary).route).points);
-    const spans = stops.map((e, i) => stopSpan(e.point, positionOf(i, stops.length), dayCount));
-    const out = [];
-    for (let d = 1; d < dayCount; d += 1) {
-      let state = { day: d, kind: "none" };
-      for (let k = 0; k < stops.length; k += 1) {
-        if (spans[k].from <= d && spans[k].to >= d + 1) { state = { day: d, kind: "dwell", stopId: stops[k].point.id, stopIndex: k }; break; }
-        const next = stops[k + 1];
-        if (next && spans[k].to <= d && spans[k + 1].from >= d + 1) {
-          state = { day: d, kind: "leg", fromStopId: stops[k].point.id, toStopId: next.point.id, fromIndex: k };
-          break;
-        }
-      }
-      out.push(state);
-    }
-    return out;
-  }
-
-  // Spec §4.2 table. direction: "down" (later) | "up" (earlier). Returns a new itinerary, or null when refused.
-  function moveEdge(itinerary, edgeDay, direction, dayCount) {
-    const state = edgeStates(itinerary, dayCount)[edgeDay - 1];
-    if (!state || state.kind === "none") return null;
-    const stops = stopEntries(itinerary.route.points);
-    const change = (k, field, day) => {
-      const entry = stops[k];
-      const current = entry.point[field];
-      if (!current) return null;                       // origin has no arrive, terminus has no depart
-      const point = { ...entry.point, [field]: { ...current, day } };
-      return clampActivities(replacePoint(itinerary, entry.index, point), point.id, dayCount);
-    };
-    if (state.kind === "dwell") {
-      return direction === "down" ? change(state.stopIndex, "depart", edgeDay) : change(state.stopIndex, "arrive", edgeDay + 1);
-    }
-    return direction === "down" ? change(state.fromIndex + 1, "arrive", edgeDay) : change(state.fromIndex, "depart", edgeDay + 1);
-  }
-
-  // Spec §4.3. Returns { itinerary } or { error }. A departure change cascades to every later stop; an arrival change
-  // moves only that stop.
-  function setStopDays(itinerary, stopId, change, dayCount) {
-    const stops = stopEntries(itinerary.route.points);
-    const k = stops.findIndex((e) => e.point.id === stopId);
-    if (k < 0) return { error: "Unknown stop." };
-    const stop = stops[k].point;
-    const name = stop.name || `stop ${k + 1}`;
-    let next = itinerary;
-
-    if (Number.isInteger(change.arriveDay)) {
-      if (!stop.arrive) return { error: `${name} is the origin and has no arrival.` };
-      const prev = stops[k - 1];
-      if (prev && prev.point.depart && change.arriveDay < prev.point.depart.day) return { error: `${prev.point.name || "The previous stop"} leaves on day ${prev.point.depart.day}; ${name} cannot arrive before that.` };
-      if (stop.depart && change.arriveDay > stop.depart.day) return { error: `${name} departs on day ${stop.depart.day}; it cannot arrive after that.` };
-      if (change.arriveDay < 1 || change.arriveDay > dayCount) return { error: `Day ${dayCount} is the last day.` };
-      next = replacePoint(next, stops[k].index, { ...stop, arrive: { ...stop.arrive, day: change.arriveDay } });
-      next = clampActivities(next, stopId, dayCount);
-    }
-
-    if (Number.isInteger(change.departDay)) {
-      const current = stopEntries(next.route.points)[k].point;
-      if (!current.depart) return { error: `${name} is the terminus and has no departure.` };
-      const arriveDay = current.arrive ? current.arrive.day : 1;
-      if (change.departDay < arriveDay) return { error: `${name} arrives on day ${arriveDay}; it cannot depart before it arrives.` };
-      const delta = change.departDay - current.depart.day;
-      const shifted = stopEntries(next.route.points).map((e, i) => {
-        if (i < k) return e.point;
-        if (i === k) return { ...e.point, depart: { ...e.point.depart, day: change.departDay } };
-        const p = { ...e.point };
-        if (p.arrive) p.arrive = { ...p.arrive, day: p.arrive.day + delta };
-        if (p.depart) p.depart = { ...p.depart, day: p.depart.day + delta };
-        return p;
-      });
-      const last = shifted[shifted.length - 1];
-      const lastDay = last.arrive ? last.arrive.day : (last.depart ? last.depart.day : 1);
-      if (lastDay > dayCount) return { error: `Day ${dayCount} is the last day; this would put ${last.name || "the terminus"} on day ${lastDay}.` };
-      if (shifted.some((p) => (p.arrive && p.arrive.day < 1) || (p.depart && p.depart.day < 1))) return { error: "Day 1 is the first day." };
-      let points = next.route.points;
-      stopEntries(points).forEach((e, i) => { points = points.map((p, idx) => (idx === e.index ? shifted[i] : p)); });
-      next = { ...next, route: { ...next.route, points } };
-      shifted.slice(k).forEach((p) => { next = clampActivities(next, p.id, dayCount); });
-    }
-    return { itinerary: next };
   }
 
   // field: "arrive" | "depart"; time "HH:MM" sets, "" clears. Invalid input returns the same itinerary.
@@ -528,6 +458,10 @@
         const time = toStr(p.time);
         if (time && TIME_RE.test(time)) out.time = time; else delete out.time;
       }
+      if ("duration_min" in p) {
+        const duration = Number(p.duration_min);
+        if (Number.isInteger(duration) && duration >= MIN_DURATION_MIN && duration <= MAX_DURATION_MIN) out.duration_min = duration; else delete out.duration_min;
+      }
       return out;
     });
     return { ...itinerary, activities };
@@ -535,30 +469,6 @@
 
   function removeActivity(itinerary, activityId) {
     return { ...itinerary, activities: renumberActivities(itinerary.activities.filter((a) => a.id !== activityId)) };
-  }
-
-  // Spec §3.3 / §4.6: the charter route as a library route. target: { id, revision } to overwrite, or { name } for new.
-  function promoteRoute(itinerary, target) {
-    const t = toObj(target);
-    const points = itinerary.route.points.map((p) => {
-      if (!isStop(p)) return { ...p };
-      const { id, arrive, depart, ...rest } = p;
-      const out = { ...rest };
-      if (depart) {
-        out.nights = depart.day - (arrive ? arrive.day : 1);
-        if (depart.time) out.depart_time = depart.time;
-      }
-      return out;
-    });
-    return {
-      id: toStr(t.id),
-      name: toStr(t.name, MAX_TITLE_LENGTH) || "",
-      description: "",
-      revision: Number.isInteger(Number(t.revision)) ? Number(t.revision) : 0,
-      speed_kn: itinerary.route.speed_kn,
-      source: { type: "planner" },
-      points
-    };
   }
 
   // ---- Route panel charter mode (spec §5) -------------------------------------------
@@ -597,7 +507,7 @@
         } else if (i === stops.length - 1) {
           const prevDay = prev.depart ? prev.depart.day : (prev.arrive ? prev.arrive.day : 1);
           if (!prev.depart) prev.depart = { day: prevDay };                              // old terminus becomes a middle stop
-          s.arrive = { day: Math.min(Math.max(prevDay, 1), dayCount || prevDay) };
+          s.arrive = { day: Math.max(prevDay, 1) };
         } else {
           const day = prev.depart ? prev.depart.day : (prev.arrive ? prev.arrive.day : 1);
           s.arrive = { day };
@@ -624,16 +534,10 @@
       const arriveDay = stops[i].arrive ? stops[i].arrive.day : prevDepart;
       if (arriveDay < prevDepart || reseededFrom) {
         if (!reseededFrom) reseededFrom = stops[i].name || `stop ${i + 1}`;
-        const day = dayCount ? Math.min(prevDepart, dayCount) : prevDepart;
+        const day = prevDepart;
         stops[i].arrive = { ...(stops[i].arrive || {}), day };
         if (stops[i].depart) stops[i].depart = { ...stops[i].depart, day };
       }
-    }
-    if (dayCount) {
-      stops.forEach((s) => {
-        if (s.arrive && s.arrive.day > dayCount) s.arrive.day = dayCount;
-        if (s.depart && s.depart.day > dayCount) s.depart.day = dayCount;
-      });
     }
 
     entries.forEach((e, i) => { points[e.index] = stops[i]; });
@@ -644,14 +548,15 @@
 
   return {
     ITINERARY_VERSION, DEFAULT_SPEED_KN, MAX_TITLE_LENGTH, MAX_NOTES_LENGTH, TIME_RE,
+    MIN_DURATION_MIN, MAX_DURATION_MIN, DEFAULT_DURATION_MIN, SEED_DEPART_TIME,
     distM, distNm, newId, isStop, parseDateOnly, charterDayCount, dayDateLabel,
     normalizePoint, normalizeItinerary, itinerarySnapshot,
     stopEntries, positionOf, stopSpan, deriveDays, validateItinerary,
     legHours, timeToMinutes, minutesToTime, estimateTimes, stopTimesLabel,
     lineGeometry,
-    clampActivities, edgeStates, moveEdge,
-    setStopDays, setStopTime, setStopSites, sitesByDistance,
-    renumberActivities, canDropActivity, moveActivity, addActivity, updateActivity, removeActivity, promoteRoute,
+    clampActivities,
+    setStopTime, setStopSites, sitesByDistance,
+    renumberActivities, canDropActivity, moveActivity, addActivity, updateActivity, removeActivity,
     reconcileRoutePoints
   };
 });
