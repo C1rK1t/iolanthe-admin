@@ -374,3 +374,16 @@ Brainstormed with the visual companion (`.superpowers/brainstorm/31923-*/content
   shows the default in the selects with "· assumed" in the hint; the server's `extraDaysForLeg` default test moves to an
   18-hour leg. Next: David's go → execute with Sonnet implementers on `feat/itinerary-a2-round2`.
 
+
+- **2026-10-08 plan ch-01 (server) EXECUTED, review fixes PENDING.** Branch `iolanthe-server` `feat/charter-gantt`, 7 commits
+  (`fe89d8e`..`eb61b0e`), 92 tests, scratch server runs it (`/api/charter` active = csaba). Final Sonnet review said
+  Request changes: (1) CRITICAL `/api/charter` crashes the process when the rule yields "" (`readAvailableAlcohol` /
+  `buildPurchasedAlcoholGuestSummary` throw; public handler has no try/catch); (2) `loadTrack("")` writes
+  `data/charters/track.json`; (3) `charter.json` save should only run the overlap check when the dates changed;
+  (4) duplicate period ids defeat the overlap check; (5) error-detail passthrough should apply only to app errors
+  (statusCode set), not fs `code`; (6) period-vs-charter overlap should report the row field + errors. Decided fix for
+  (1): amend the rule so after "most recently ended" it falls back to the earliest upcoming, then any charter (first
+  id), then "" (fixture case "nothing ended yet" expects smith; spec §3 and plan ch-02 charters-core must mirror it).
+  A patch script for all six sits in the session scratchpad (`review_fixes.py`, needs its CRLF-aware `rw()` repaired);
+  the working tree is clean. NEXT: apply the fixes + tests, re-run 92+, run `scripts/check-charter-endpoints.sh`
+  (needs David to log in to the scratch admin), PR, `./update.sh` on the vessel, then execute plan ch-02 (admin).
