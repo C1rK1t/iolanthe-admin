@@ -6,7 +6,7 @@
 
 **Architecture:** Pure logic (steps, the stop slept at each night, default step, URL, scale) in a new UMD module `guest-preview-core.js` with `node --test` coverage. The panel is a new browser module `guest-preview.js` (`window.IolantheGuestPreviewPanel.render()` / `.bind(ctx)`, DOM built with its own `el()`, Route-panel-style square icon buttons) with its own `guest-preview.css` scoped under `.guest-preview`. `admin.js` adds the panel to `renderCharter` and passes the context; `routes.js` adds the eye button through the existing `IolantheAdmin.showCharterPanel` (which already runs the unsaved-changes prompt).
 
-**Tech Stack:** Plain JS, no build, `node --test` (140 tests → 146). Admin repo from `main` at `8388b6a` or later. Plans b-01 (server) and b-02 (guest) run first; this plan's browser task needs all three worktrees.
+**Tech Stack:** Plain JS, no build, `node --test` (140 tests → 146). Admin repo from `main` at `b3815aa` or later. Plans b-01 (server) and b-02 (guest) run first; this plan's browser task needs all three worktrees.
 
 **Dry-run (done while planning):** every block below was applied from this plan's text onto a copy of the committed repo: `node --test` 146/146; `node --check` clean on `guest-preview-core.js`, `guest-preview.js`, `admin.js`, `routes.js`, `routes-ui.js`, `stop-cards.js`.
 
@@ -761,31 +761,31 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - [ ] **Step 1: `index.html`, the stylesheet.** OLD:
 
 ```html
-  <link rel="stylesheet" href="/admin/charter-gantt.css?v=admin-charters-2">
+  <link rel="stylesheet" href="/admin/charter-gantt.css?v=admin-charters-3">
 ```
 
 NEW:
 
 ```html
-  <link rel="stylesheet" href="/admin/charter-gantt.css?v=admin-charters-2">
-  <link rel="stylesheet" href="/admin/guest-preview.css?v=admin-charters-2">
+  <link rel="stylesheet" href="/admin/charter-gantt.css?v=admin-charters-3">
+  <link rel="stylesheet" href="/admin/guest-preview.css?v=admin-charters-3">
 ```
 
 - [ ] **Step 2: `index.html`, the scripts.** OLD:
 
 ```html
-  <script src="/admin/itinerary-core.js?v=admin-charters-2" defer></script>
+  <script src="/admin/itinerary-core.js?v=admin-charters-3" defer></script>
 ```
 
 NEW:
 
 ```html
-  <script src="/admin/itinerary-core.js?v=admin-charters-2" defer></script>
-  <script src="/admin/guest-preview-core.js?v=admin-charters-2" defer></script>
-  <script src="/admin/guest-preview.js?v=admin-charters-2" defer></script>
+  <script src="/admin/itinerary-core.js?v=admin-charters-3" defer></script>
+  <script src="/admin/guest-preview-core.js?v=admin-charters-3" defer></script>
+  <script src="/admin/guest-preview.js?v=admin-charters-3" defer></script>
 ```
 
-- [ ] **Step 3: Bump every asset version.** Run `sed -i "s/?v=admin-charters-2/?v=admin-preview-1/g" index.html`, then `grep -c "admin-preview-1" index.html` → `21` and `grep -c "admin-charters-2" index.html` → `0`.
+- [ ] **Step 3: Bump every asset version.** Run `sed -i "s/?v=admin-charters-3/?v=admin-preview-1/g" index.html`, then `grep -c "admin-preview-1" index.html` → `21` and `grep -c "admin-charters-3" index.html` → `0`.
 
 - [ ] **Step 4: `CLAUDE.md`.** In "## Stack", after the `charter-gantt.js` / `charter-gantt.css` bullet (it ends "...so a background tab still draws."), add this bullet:
 
