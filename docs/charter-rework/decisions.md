@@ -230,3 +230,12 @@ workplace per charter.
   dialog go in the same admin release that adds the strip.
 - **A2-D19 (notes, 2026-10-08):** clicking a card edge jumps to that card; ← / → scroll the carousel; map stop →
   card and card → map pan are both-ways. **Spec A2 approved by David**; next = implementation plans.
+- **A2-D20 (planning, 2026-10-08).** Re-basing on import maps the record's **day 1** onto the from-day (delta =
+  from-day − 1), so nights spent at the origin survive. The over-the-end validation rule from spec A is removed
+  (server plan task 1; the admin core mirrors it in plan A2-02). Library stop ids accept any `[A-Za-z0-9_-]{1,40}`.
+- **Handoff (end of 2026-10-08 session):** server plan `plans/a2-01-server.md` written and dry-run (new code
+  assembled onto the committed module: 62/65 pass; the 3 failures are the pre-existing exact-object tests the plan
+  says to extend). **Admin plan `a2-02-admin.md` still to write** — it needs a fresh verbatim survey of `routes.js`,
+  `routes-lists.js`, `routes-places.js`, `routes-popup.js`, `routes-ui.js`, `itinerary.js` (Days-tab renderer to
+  reuse), `itinerary-core.js` exports and `admin.js`'s charter dispatcher (the previous survey lived in a session temp
+  file). Then execute both with Sonnet subagents + browser verification, server first.
