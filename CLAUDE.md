@@ -33,7 +33,22 @@ URL access also requires `?key=<settings.admin.urlKey>`.
 - `itinerary-core.js` — itinerary pure logic (also a Node module): normalisation, `deriveDays`, `charterDayCount`,
   validation, time estimates, `recomputeArrivals`, the departure cascade (`setDeparture`, `shiftFromStop`), `clashes`,
   `fit`, `legSummaries` and the line-geometry helpers. The Route page is the only itinerary editor (spec A2).
-- `node --test` runs the tests in `test/` (117 tests), which cover `routes-core` and `itinerary-core`
+- `charters-core.js` — charter list pure logic (also a Node module): the active rule (mirror of the server's
+  `lib/active-charter.js`, shared fixture `test/fixtures/active-charter-cases.json`), overlaps, statuses, `pillFor`, and
+  the band's layout maths (`packRows`, `zoomSpan`, `scrollRange`, `visibleMonths`, `visibleWeeks`).
+- `charter-gantt.js` / `charter-gantt.css` — the Gantt band above every Charter panel (spec-charters §6): the charter
+  selector. Read-only: drag pans, wheel zooms, ← → pan, click selects a charter or opens a reserved period's card.
+  Collapsed to a strip by default on the Route panel (localStorage `iolanthe-admin.gantt.collapsed`). Mounted by
+  `admin.js` (`mountCharterGantt`) into `#charter-gantt-host`, which `sectionShell` renders for the Charter section.
+  The first layout runs on a timeout, not requestAnimationFrame, so a background tab still draws.
+- Reserved periods (maintenance / unavailable / other) come from `/api/admin/reserved-periods` and save with a
+  `base_revision`; the admin and the server both refuse dates that overlap a charter or a period.
+- The active charter is computed by the server (in date = the day before start to the end date, else the crew's
+  choice, else the last ended, else the next upcoming); the Info page's ★ "Make active" is disabled while a charter is
+  in date. Charter Info uses the shared `admin.css` classes (`.stat-tiles`, `.form-section`, `.status-pill`,
+  `.segmented`, gold icon tone), the first slice of the admin style rollout. Galley and Hotel keep their "Select
+  Charter" dropdowns.
+- `node --test` runs the tests in `test/` (140 tests), which cover `routes-core`, `itinerary-core` and `charters-core`
 - `routes.js` / `routes.css` — the Route panel (Charter → Route): state, side panel, header, map, saving and wiring. A
   "Working on" selector gives it two subjects: the library routes (the route library, saved through
   `/api/admin/routes/*`) and this charter's route (the route stored in the charter's `itinerary.json`, saved through
