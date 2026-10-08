@@ -21,7 +21,9 @@
     const end = icore().parseDateOnly(subject.charter.end_date);
     return end !== null && Date.now() > end + 86400000;   // the day after the end date, UTC midnight
   };
-  const readOnly = () => isCharter() && charterEnded();
+  // Temporarily off (David, 2026-10-08): ended charters stay editable so their migrated data can be repaired.
+  // Restore with: const readOnly = () => isCharter() && charterEnded();
+  const readOnly = () => false;
   let history = { undo: [], redo: [] };
   let guard = null;      // page unsaved-changes guard
 
