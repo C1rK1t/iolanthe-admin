@@ -306,4 +306,10 @@ workplace per charter.
   page except the map and needed a refresh: the "Unsaved route" dialog (backdrop z-index 140) was drawn behind the
   Leaflet panes (z-index 400). The map container now has its own stacking context.
 - Plan for T1–T7: `plans/a2-03-tweaks.md` (written 2026-10-08, not yet executed).
+- **2026-10-08 tweak round DEPLOYED.** Plan a2-03 executed on `feat/itinerary-a2-tweaks` (T1–T7), PR iolanthe-admin#7
+  merged `9966099`, pulled onto the vessel (assets `admin-itin-a2c`, 111 tests). Fixes found while verifying: `fitMap`
+  must use the measured height above the planner (no 240-px cap); the planner gap doubled up around the splitter
+  tracks (now 4 px). Not exercised: dropping a stop onto a *different* anchorage (pre-existing snap path). Next: the
+  captain's first contact on the bridge tablet; restore the ended-charter read-only guard once the historical records
+  are repaired; plan 5 Task 8 shims; specs B and C.
 
