@@ -762,7 +762,10 @@
     const last = stops[stops.length - 1].point;
     const endsDay = last.arrive ? last.arrive.day : (last.depart ? last.depart.day : 1);
     const delta = endsDay - dayCount;
-    const title = `Ends ${dayDateLabel(charter, endsDay)}; the charter ends ${dayDateLabel(charter, dayCount)}.`;
+    const n = Math.abs(delta);
+    const title = !delta
+      ? `Route fits the charter: both end ${dayDateLabel(charter, dayCount)}.`
+      : `Route is ${n} day${n === 1 ? "" : "s"} ${delta > 0 ? "longer" : "shorter"} than the charter: it ends ${dayDateLabel(charter, endsDay)}, the charter ends ${dayDateLabel(charter, dayCount)}.`;
     if (!delta) return { state: "match", delta, endsDay, label: "✓", title };
     return { state: delta > 0 ? "over" : "short", delta, endsDay, label: `${delta > 0 ? "+" : "−"}${Math.abs(delta)} d`, title };
   }

@@ -514,11 +514,12 @@ test("A2 legSummaries: distance, hours and the computed arrival of the leg leavi
 
 test("A2 fit: match, short, over, none", () => {
   const it = sevenDays();
-  assert.deepEqual(core.fit(it, CHARTER_7), { state: "match", delta: 0, endsDay: 7, label: "✓", title: "Ends Sun 18 Oct; the charter ends Sun 18 Oct." });
+  assert.deepEqual(core.fit(it, CHARTER_7), { state: "match", delta: 0, endsDay: 7, label: "✓", title: "Route fits the charter: both end Sun 18 Oct." });
   const short = core.fit(core.recomputeArrivals(it), CHARTER_7);
-  assert.deepEqual([short.state, short.delta, short.label, short.title], ["short", -1, "−1 d", "Ends Sat 17 Oct; the charter ends Sun 18 Oct."]);
+  assert.deepEqual([short.state, short.delta, short.label, short.title], ["short", -1, "−1 d", "Route is 1 day shorter than the charter: it ends Sat 17 Oct, the charter ends Sun 18 Oct."]);
   const over = core.fit(it, { start_date: "2026-10-12", end_date: "2026-10-16" });
   assert.deepEqual([over.state, over.delta, over.label], ["over", 2, "+2 d"]);
+  assert.match(over.title, /^Route is 2 days longer than the charter: /);
   assert.equal(core.fit(it, {}).state, "none");
   assert.equal(core.fit(core.normalizeItinerary({}), CHARTER_7).state, "none");
   assert.equal(core.fit(core.normalizeItinerary({}), CHARTER_7).label, "—");

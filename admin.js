@@ -1695,7 +1695,6 @@
       },
       onOpenPeriod: periodId => openReservedPeriodModal(periodId),
       onCreateCharter: openCreateCharterModal,
-      onDeleteCharter: openDeleteCharterModal,
       onZoomChange: level => { state.ganttZoom = level; },
       onToggleCollapsed: rememberGanttCollapsed
     };
@@ -4644,6 +4643,8 @@
             <span class="header-sep"></span>
             ${iconSubmitButtonHtml("save", "Save Charter Information", ` form="charter-info-form" id="charter-info-save"`)}
             ${iconButtonHtml("cancel", "Cancel changes", ` id="cancel-charter-info"`)}
+            <span class="header-sep"></span>
+            ${iconButtonHtml("remove", "Delete charter", ` id="charter-delete"${!canManageCharterAdmin() || state.charters.length <= 1 ? " disabled" : ""}`)}
           </div>
         </div>
         <div class="stat-tiles">
@@ -6411,6 +6412,11 @@
         await renderCharter();
       }
     });
+
+    const deleteButton = document.getElementById("charter-delete");
+    if (deleteButton) {
+      deleteButton.addEventListener("click", openDeleteCharterModal);   // moved here from the band toolbar (captain 2026-10-08)
+    }
 
     const makeActive = document.getElementById("charter-make-active");
     if (makeActive) {
