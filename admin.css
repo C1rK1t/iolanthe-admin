@@ -309,6 +309,11 @@ button.admin-icon-button--gold:focus {
   align-items: start;
 }
 
+/* Breathing room between the stat tiles and the first form section (David, 2026-10-08) */
+.stat-tiles + .charter-info-columns {
+  margin-top: 1.25rem;
+}
+
 .charter-info-columns > div {
   display: grid;
   gap: 0.8rem;
