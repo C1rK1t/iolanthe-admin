@@ -6310,9 +6310,6 @@
     if (activePanel === "info") {
       return renderCharterInfoPanel(charterInfo);
     }
-    if (activePanel === "itinerary") {
-      return window.IolantheItinerary ? window.IolantheItinerary.render() : placeholderCard("Itinerary");
-    }
     if (activePanel === "crew") {
       return renderCrewPanel();
     }
@@ -6328,12 +6325,6 @@
   function bindCharterPanel(activePanel, charterInfo, itinerary, guestList, crewList, siteLibrary) {
     if (activePanel === "info") {
       bindCharterInfoPanel(charterInfo);
-      return;
-    }
-    if (activePanel === "itinerary") {
-      if (window.IolantheItinerary) {
-        window.IolantheItinerary.bind({ charterId: state.selectedCharter, charter: charterInfo, itinerary, siteLibrary });
-      }
       return;
     }
     if (activePanel === "crew") {
@@ -6359,7 +6350,6 @@
   async function renderCharter() {
     const panels = [
       { id: "info", label: "Charter Info" },
-      { id: "itinerary", label: "Itinerary" },
       { id: "crew", label: "Crew" },
       { id: "routes", label: "Route" },
       { id: "sites", label: "Site Editor" }

@@ -31,23 +31,28 @@ URL access also requires `?key=<settings.admin.urlKey>`.
 - `assets/icons/admin/` — favicons and department login icons
 - `routes-core.js` — Route Planner pure logic (also a Node module)
 - `itinerary-core.js` — itinerary pure logic (also a Node module): normalisation, `deriveDays`, `charterDayCount`,
-  validation and the line-geometry helpers
-- `itinerary.js` / `itinerary.css` — Charter → Itinerary panel: the route-derived day-by-day view (days follow the
-  charter's route, with per-stop activities and times). Styles use the `itinerary-` prefix
-- `node --test` runs the tests in `test/`, which cover `routes-core` and `itinerary-core`
+  validation, time estimates, `recomputeArrivals`, the departure cascade (`setDeparture`, `shiftFromStop`), `clashes`,
+  `fit`, `legSummaries` and the line-geometry helpers. The Route page is the only itinerary editor (spec A2).
+- `node --test` runs the tests in `test/` (110 tests), which cover `routes-core` and `itinerary-core`
 - `routes.js` / `routes.css` — the Route panel (Charter → Route): state, side panel, header, map, saving and wiring. A
   "Working on" selector gives it two subjects: the library routes (the route library, saved through
   `/api/admin/routes/*`) and this charter's route (the route stored in the charter's `itinerary.json`, saved through
-  `/api/admin/charter/<id>/itinerary/save`; read-only once the charter has ended). It uses the
+  `/api/admin/charter/<id>/itinerary/save`; read-only once the charter has ended). "Working on" lists this charter's
+  route and the **unassigned** routes (the route library). The header shows a fit pill and a to-check pill; the side
+  column holds stat tiles, Legs and a read-only Days tab; the stop strip under the map (`stop-cards.js`) edits stays,
+  items and stop settings; Start from… imports a record through `/api/admin/charter/<id>/itinerary/import`. It uses the
   `window.IolantheAdmin` helpers exposed at the end of `admin.js`, and its styles are scoped under `.routes-panel` /
   `.routes-modal`. Helper files, each created per bind with a `ctx` from routes.js:
   - `routes-ui.js` — `el()`, icons, `fmtPos` and the modal shell (`openModal`)
   - `routes-popup.js` — the point popup (Make stop at / Make stop here / Remove stop, sites served)
-  - `routes-lists.js` — the Stops / Legs tab lists and per-leg speeds
+  - `routes-lists.js` — the Legs tab list and per-leg speeds
   - `routes-join.js` — Add another route
   - `routes-places.js` — anchorages and sites on the map, the anchorage modal, and the bridge to the admin's Site
     Editor modal (`IolantheAdmin.openSiteEditorModal`)
   - `routes-io.js` — KML/GPX import (DOMParser, Simplify, Replace/Append), temporary imported pins, GPX/KML export
+  - `stop-cards.js` / `stop-cards.css` — the stop strip (stacked edges, red = dirty, green = fits) and the stop card
+    (Arrive / Depart / Next-leg tiles, Day tabs with items, ⚙ settings)
+  - `routes-days.js` — the read-only Days tab (tube line and day boxes)
 
 ## Path conventions
 
