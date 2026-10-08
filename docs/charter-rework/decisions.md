@@ -263,4 +263,14 @@ workplace per charter.
   `live_version` 5; `/api/charter` and `/api/planned-route` 200. Until admin plan a2-02 merges, the live admin's
   Itinerary panel "Apply library route" calls the removed `apply-route` endpoint (404); everything else on the live
   admin works. Next: execute a2-02 on admin `feat/itinerary-a2`.
+- **2026-10-08 plan A2-02 (admin) EXECUTED** on admin branch `feat/itinerary-a2` (18 commits; 110 tests). Sonnet/Haiku
+  implementers per task, every diff reviewed against the plan (all verbatim), browser passes by this session on the
+  scratch server. Fixes found in the browser: `renderPills` appended the text "null" when there was nothing to check
+  (`replaceChildren(null)`); the sticky map floated over the strip when scrolling (map now scrolls with the page and is
+  sized so map + strip fit: `--map-h: max(380px, min(100vh − 380px, 640px))`); admin's global input styles inflated
+  the Start from… radios; "Day N" was doubled on the tabs of a route without charter dates; phone width needed the
+  edges as thin rows above and below a full-width card. Observed on the migrated csaba data: the stored arrival days
+  disagree with the computed ones, so the first geometry edit re-dates most stops and marks them to check (by design;
+  the captain will see it on first contact). Not exercised (code paths unchanged): KML/GPX import/export, Add another
+  route. PR C1rK1t/iolanthe-admin#6 open; merging releases it to the vessel within 5 minutes (server A2 is live).
 
