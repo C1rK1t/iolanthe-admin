@@ -33,7 +33,7 @@ URL access also requires `?key=<settings.admin.urlKey>`.
 - `itinerary-core.js` — itinerary pure logic (also a Node module): normalisation, `deriveDays`, `charterDayCount`,
   validation, time estimates, `recomputeArrivals`, the departure cascade (`setDeparture`, `shiftFromStop`), `clashes`,
   `fit`, `legSummaries` and the line-geometry helpers. The Route page is the only itinerary editor (spec A2).
-- `node --test` runs the tests in `test/` (110 tests), which cover `routes-core` and `itinerary-core`
+- `node --test` runs the tests in `test/` (117 tests), which cover `routes-core` and `itinerary-core`
 - `routes.js` / `routes.css` — the Route panel (Charter → Route): state, side panel, header, map, saving and wiring. A
   "Working on" selector gives it two subjects: the library routes (the route library, saved through
   `/api/admin/routes/*`) and this charter's route (the route stored in the charter's `itinerary.json`, saved through
@@ -52,7 +52,7 @@ URL access also requires `?key=<settings.admin.urlKey>`.
   - `routes-io.js` — KML/GPX import (DOMParser, Simplify, Replace/Append), temporary imported pins, GPX/KML export
   - `stop-cards.js` / `stop-cards.css` — the stop strip (stacked edges, red = dirty, green = fits) and the stop card
     (Arrive / Depart / Next-leg tiles, Day tabs with items, ⚙ settings)
-  - `routes-days.js` — the read-only Days tab (tube line and day boxes)
+  - `routes-days.js` — the read-only Days tab (tube line; day boxes whose sub-boxes carry the stop name and times)
 
 ## Path conventions
 

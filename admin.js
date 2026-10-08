@@ -1028,7 +1028,6 @@
     #panel-menu .menu-meta-row,
     #panel-menu .menu-section,
     #panel-menu .menu-note,
-    #panel-itinerary .itinerary-preview-list,
     #panel-drinks .menu-subtitle,
     #panel-drinks .menu-meta-row,
     #panel-drinks .menu-section,
