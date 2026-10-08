@@ -127,7 +127,7 @@
 .routes-panel .mk-site { width: 20px; height: 20px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg) translate(2px, -2px); background: var(--site); border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.5); }
 .routes-panel .mk-pin { width: 16px; height: 16px; transform: rotate(45deg); background: var(--pin); border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.5); }
 .routes-panel .mk-mid { width: 11px; height: 11px; border-radius: 50%; background: rgba(255,255,255,.55); border: 1px solid rgba(29,53,64,.7); }
-.routes-panel .mk-label { position: absolute; top: 30px; left: 50%; transform: translateX(-50%); white-space: nowrap; font-size: 11px; font-weight: 700; color: #fff; text-shadow: 0 0 3px #000, 0 0 3px #000; pointer-events: none; }
+.routes-panel .mk-label { position: absolute; top: 30px; left: 50%; transform: translateX(-50%); white-space: nowrap; font-size: 11px; font-weight: 700; color: #fff; text-shadow: 0 0 3px #000, 0 0 3px #000; pointer-events: none; }   /* imported pins only; anchorages use tooltips (R3-2) */
 
 /* Popups */
 .routes-panel .leaflet-popup-content { margin: 12px 14px; min-width: 230px; font-size: 13px; }

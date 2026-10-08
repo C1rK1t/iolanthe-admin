@@ -539,7 +539,7 @@
         html = `<div class="mk-stop${p.anchorage_id ? "" : " plain"}${selected ? " selected" : ""}">${stopNo}</div>${p.anchorage_id ? '<div class="mk-anchor-badge"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2"/><path d="M12 7v14M5 13a7 7 0 0 0 14 0M8 10h8"/></svg></div>' : ""}${flagged ? '<div class="mk-badge">!</div>' : ""}`;
       }
       else html = `<div class="mk-wp ${p.name ? "named" : ""}"></div>`;
-      const m = L.marker(ll(p), { icon: divIcon(html), draggable: ui.mode !== "delete" && !readOnly(), title: p.name || "Waypoint", zIndexOffset: c.isStop(p) ? 1100 : 1000 });
+      const m = L.marker(ll(p), { icon: divIcon(html), draggable: ui.mode !== "delete" && !readOnly(), title: c.isStop(p) ? (p.name || "Stop") : (p.name || ""), zIndexOffset: c.isStop(p) ? 1100 : 1000 });   // R3-2: plain waypoints have no tooltip
       m.on("click", () => onPointClick(i));
       m.on("drag", (e) => {
         const q = e.target.getLatLng();
