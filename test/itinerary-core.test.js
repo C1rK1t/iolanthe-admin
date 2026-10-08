@@ -348,3 +348,101 @@ test("A2 reconcileRoutePoints no longer clamps days to the charter", () => {
   assert.deepEqual(stops[stops.length - 1].arrive, { day: 9 });
   assert.deepEqual(stops[stops.length - 2].depart, { day: 9 });
 });
+
+test("A2 recordDayCount: the terminus's arrival day; 0 without stops", () => {
+  assert.equal(core.recordDayCount(sevenDays().route.points), 7);
+  assert.equal(core.recordDayCount([P(1, 1), P(2, 2)]), 0);
+  assert.equal(core.recordDayCount([P(1, 1, { stop: true, id: "a" })]), 1);
+});
+
+test("A2 recomputeArrivals: Potipot 18:00 + 36.5 nm at 8 kn reaches Hundred Islands at ~22:34 the same day, so the fixture's day-6 arrival moves to day 5 and the stay follows", () => {
+  const it = sevenDays();
+  const out = core.recomputeArrivals(it);
+  assert.deepEqual(daysOf(out, "stp_hund"), [5, 6]);        // was 6–7: the arrival day is computed, the night is kept
+  assert.deepEqual(daysOf(out, "stp_subic2"), [6, null]);   // 08:00 day 6 + 85.5 nm → ~18:41 day 6
+  assert.deepEqual(daysOf(out, "stp_poti"), [3, 5]);        // untouched: 09:00 day 3 + 19 nm → 11:22 day 3
+  assert.deepEqual(out.dirty_stop_ids, ["stp_hund", "stp_subic2"]);
+  assert.deepEqual(itemDays(out), itemDays(it));            // no items at the moved stops
+  assert.deepEqual(daysOf(it, "stp_hund"), [6, 7]);         // input untouched
+  assert.deepEqual(core.recomputeArrivals(out), out);       // idempotent, same object back
+  assert.deepEqual(core.validateItinerary(out, 7), []);
+  const t = core.estimateTimes(out);
+  assert.deepEqual(t.get("stp_hund").arrive, { time: "22:34", estimated: true });
+  assert.deepEqual(t.get("stp_subic2").arrive, { time: "18:41", estimated: true });
+});
+
+test("A2 recomputeArrivals: a pinned arrival time is kept; items move with their stop", () => {
+  const it = sevenDays();
+  it.route.points[6].arrive = { day: 6, time: "23:00" };    // Hundred Islands pinned
+  it.activities.push({ id: "act_5", stop_id: "stp_hund", day: 7, order: 0, title: "Island hop", notes: "" });
+  const out = core.recomputeArrivals(core.normalizeItinerary(it));
+  assert.deepEqual(stopOf(out, "stp_hund").arrive, { day: 5, time: "23:00" });
+  assert.equal(out.activities.find((a) => a.id === "act_5").day, 6);
+  assert.deepEqual(core.validateItinerary(out, 7), []);
+});
+
+test("A2 shiftFromStop: the stop's departure and everything after it move by delta, items too; later stops are dirty", () => {
+  const it = sevenDays();
+  const out = core.shiftFromStop(it, "stp_herm", 1);
+  assert.deepEqual(daysOf(out, "stp_herm"), [2, 4]);        // arrival unchanged, departure +1
+  assert.deepEqual(daysOf(out, "stp_poti"), [4, 6]);
+  assert.deepEqual(daysOf(out, "stp_hund"), [7, 8]);
+  assert.deepEqual(daysOf(out, "stp_subic2"), [8, null]);
+  assert.deepEqual(daysOf(out, "stp_capo"), [1, 2]);        // earlier stops untouched
+  assert.deepEqual(itemDays(out), { act_1: 1, act_2: 1, act_3: 5, act_4: 4 });
+  assert.deepEqual(out.dirty_stop_ids, ["stp_poti", "stp_hund", "stp_subic2"]);
+  assert.deepEqual(daysOf(it, "stp_poti"), [3, 5]);         // input untouched
+  assert.equal(core.shiftFromStop(it, "stp_herm", 0), it);
+  assert.equal(core.shiftFromStop(it, "stp_nope", 1), it);
+});
+
+test("A2 setDeparture: a later day cascades then recomputes; an earlier day drops that stop's later items; a time change alone can roll a later arrival past midnight", () => {
+  const it = sevenDays();
+  const later = core.setDeparture(it, "stp_poti", { day: 6 });
+  assert.deepEqual(stopOf(later, "stp_poti").depart, { day: 6, time: "18:00" });
+  assert.deepEqual(daysOf(later, "stp_hund"), [6, 7]);      // shifted +1 to 7–8, then recomputed back to 6–7 (22:34 on day 6)
+  assert.deepEqual(daysOf(later, "stp_subic2"), [7, null]);
+  assert.deepEqual(later.dirty_stop_ids, ["stp_hund", "stp_subic2"]);
+  assert.deepEqual(core.validateItinerary(later, 7), []);
+
+  const earlier = core.setDeparture(it, "stp_poti", { day: 3 });   // Kayaks (day 4) goes, Beach (day 3) stays
+  assert.deepEqual(stopOf(earlier, "stp_poti").depart, { day: 3, time: "18:00" });
+  assert.deepEqual(itemDays(earlier), { act_1: 1, act_2: 1, act_4: 3 });
+  assert.deepEqual(daysOf(earlier, "stp_hund"), [3, 4]);
+  assert.deepEqual(daysOf(earlier, "stp_subic2"), [4, null]);
+  assert.deepEqual(core.validateItinerary(earlier, 7), []);
+
+  const clamped = core.setDeparture(it, "stp_poti", { day: 1 });  // never before its own arrival
+  assert.equal(stopOf(clamped, "stp_poti").depart.day, 3);
+
+  const base = core.recomputeArrivals(it);                         // Hundred Islands 5–6
+  const night = core.setDeparture(base, "stp_poti", { time: "20:00" });
+  assert.deepEqual(stopOf(night, "stp_poti").depart, { day: 5, time: "20:00" });
+  assert.deepEqual(daysOf(night, "stp_hund"), [6, 7]);      // 20:00 + 4.57 h = 00:34, so the arrival rolls to day 6
+  assert.deepEqual(core.estimateTimes(night).get("stp_hund").arrive, { time: "00:34", estimated: true });
+  const cleared = core.setDeparture(it, "stp_poti", { time: "" });
+  assert.deepEqual(stopOf(cleared, "stp_poti").depart, { day: 5 });
+  assert.equal(core.setDeparture(it, "stp_subic2", { day: 9 }), it);   // the terminus has no departure
+});
+
+test("A2 droppedDays names the stop's items beyond the new departure day, or all of them for a removal", () => {
+  const it = sevenDays();
+  assert.deepEqual(core.droppedDays(it, "stp_poti", 3), { days: [4], items: [it.activities[2]] });
+  assert.deepEqual(core.droppedDays(it, "stp_poti", 5).items, []);
+  const all = core.droppedDays(it, "stp_poti", null);
+  assert.deepEqual(all.days, [3, 4]);
+  assert.deepEqual(all.items.map((a) => a.title), ["Beach", "Kayaks"]);
+});
+
+test("A2 itemsDroppedByImport: items after the from-day, plus items on it at stops not yet reached", () => {
+  const it = sevenDays();
+  assert.deepEqual(core.itemsDroppedByImport(it, 4, 7).map((a) => a.id), []);                   // Kayaks on day 4 at Potipot (reached day 3) survives
+  assert.deepEqual(core.itemsDroppedByImport(it, 2, 7).map((a) => a.id), ["act_3", "act_4"]);
+  assert.deepEqual(core.itemsDroppedByImport(it, 1, 7).map((a) => a.id), ["act_1", "act_2", "act_3", "act_4"]);
+});
+
+test("A2 dayOrdinal: date ordinals from the charter start, 'day N' without one", () => {
+  assert.deepEqual([1, 10, 11, 12].map((d) => core.dayOrdinal(CHARTER_7, d)), ["12th", "21st", "22nd", "23rd"]);
+  assert.deepEqual([11, 12, 13].map((d) => core.dayOrdinal({ start_date: "2026-10-01" }, d)), ["11th", "12th", "13th"]);
+  assert.equal(core.dayOrdinal(null, 4), "day 4");
+});

@@ -546,6 +546,119 @@
     return { itinerary: next, removed, reseededFrom };
   }
 
+  // ---- spec A2: the Route page is the itinerary ---------------------------------------
+  // A "record" below is an itinerary-shaped object: { route: { points, speed_kn }, activities, dirty_stop_ids }.
+
+  const addDirty = (record, ids) => ({ ...record, dirty_stop_ids: [...new Set([...(record.dirty_stop_ids || []), ...ids])] });
+  const withPoints = (record, points) => ({ ...record, route: { ...record.route, points } });
+
+  // Day count of a record with no charter: the terminus's arrival day (an unassigned route). Same rule as the server.
+  function recordDayCount(points) {
+    const stops = stopEntries(points);
+    if (!stops.length) return 0;
+    const last = stops[stops.length - 1].point;
+    return Math.max(1, last.arrive ? last.arrive.day : (last.depart ? last.depart.day : 1));
+  }
+
+  // The time a stop leaves, for the next leg: its departure time, else (day stop) its arrival time, else 09:00.
+  function effectiveDepartMinutes(point, arriveTime) {
+    if (point.depart && point.depart.time) return timeToMinutes(point.depart.time);
+    const dayStop = !point.arrive || !point.depart || point.arrive.day === point.depart.day;
+    if (dayStop && arriveTime) return timeToMinutes(arriveTime);
+    return timeToMinutes(SEED_DEPART_TIME);
+  }
+
+  // Spec A2 §3 / §5.6: every arrival day is the previous departure plus the leg at its speed, rolling past midnight.
+  // A stop whose arrival day moves keeps its stay (depart moves with it), its items move with it, and it becomes dirty.
+  // A pinned arrival time is kept; the day is never typed. Idempotent.
+  function recomputeArrivals(record) {
+    const points = record.route.points;
+    const speed = record.route.speed_kn || DEFAULT_SPEED_KN;
+    const stops = stopEntries(points);
+    if (stops.length < 2) return record;
+    const next = points.slice();
+    const deltas = new Map();   // stopId → days moved
+    let prev = null;            // { index, minutes, day } of the previous stop's departure
+    stops.forEach((entry, k) => {
+      let p = next[entry.index];
+      let arriveTime = p.arrive && p.arrive.time ? p.arrive.time : null;
+      if (k > 0 && prev && p.arrive) {
+        const total = prev.minutes + legHours(next, prev.index, entry.index, speed) * 60;
+        const day = prev.day + Math.floor(total / 1440);
+        if (!arriveTime) arriveTime = minutesToTime(total);
+        const delta = day - p.arrive.day;
+        if (delta) {
+          p = { ...p, arrive: { ...p.arrive, day }, ...(p.depart ? { depart: { ...p.depart, day: p.depart.day + delta } } : {}) };
+          deltas.set(p.id, delta);
+        }
+      }
+      next[entry.index] = p;
+      prev = p.depart ? { index: entry.index, minutes: effectiveDepartMinutes(p, arriveTime), day: p.depart.day } : null;
+    });
+    if (!deltas.size) return record;
+    const activities = record.activities.map((a) => (deltas.has(a.stop_id) ? { ...a, day: a.day + deltas.get(a.stop_id) } : a));
+    return addDirty({ ...withPoints(record, next), activities }, [...deltas.keys()]);
+  }
+
+  // Spec A2 §5.6: the stop's departure and every later stop (with their items) move by `delta` days; later stops are dirty.
+  function shiftFromStop(record, stopId, delta) {
+    const stops = stopEntries(record.route.points);
+    const k = stops.findIndex((e) => e.point.id === stopId);
+    if (k < 0 || !delta) return record;
+    const later = new Set(stops.slice(k + 1).map((e) => e.point.id));
+    const shift = (dt) => ({ ...dt, day: dt.day + delta });
+    const points = record.route.points.map((p) => {
+      if (!isStop(p)) return p;
+      if (p.id === stopId) return p.depart ? { ...p, depart: shift(p.depart) } : p;
+      if (!later.has(p.id)) return p;
+      return { ...p, ...(p.arrive ? { arrive: shift(p.arrive) } : {}), ...(p.depart ? { depart: shift(p.depart) } : {}) };
+    });
+    const activities = record.activities.map((a) => (later.has(a.stop_id) ? { ...a, day: a.day + delta } : a));
+    return addDirty({ ...withPoints(record, points), activities }, [...later]);
+  }
+
+  // The card's Depart tile. change: { day?, time? } (time "" clears). The day is clamped to the arrival day; the stop's
+  // own items beyond the new departure day are removed (the caller has shown the popup); arrivals are recomputed.
+  function setDeparture(record, stopId, change) {
+    const entry = stopEntries(record.route.points).find((e) => e.point.id === stopId);
+    if (!entry || !entry.point.depart) return record;
+    const p = entry.point;
+    const c = toObj(change);
+    const arriveDay = p.arrive ? p.arrive.day : 1;
+    const day = Number.isInteger(c.day) ? Math.max(c.day, arriveDay) : p.depart.day;
+    const time = "time" in c ? (TIME_RE.test(toStr(c.time)) ? toStr(c.time) : undefined) : p.depart.time;
+    let next = shiftFromStop(record, stopId, day - p.depart.day);
+    next = { ...next, activities: renumberActivities(next.activities.filter((a) => !(a.stop_id === stopId && a.day > day))) };
+    next = withPoints(next, next.route.points.map((q) => (isStop(q) && q.id === stopId ? { ...q, depart: time ? { day, time } : { day } } : q)));
+    return recomputeArrivals(next);
+  }
+
+  // What the popup names before a departure moves earlier (newDepartDay) or a stop goes (newDepartDay null):
+  // { days: [day…], items: [activity…] } of that stop beyond the day.
+  function droppedDays(record, stopId, newDepartDay) {
+    const items = record.activities
+      .filter((a) => a.stop_id === stopId && (newDepartDay === null || newDepartDay === undefined || a.day > newDepartDay))
+      .sort((a, b) => a.day - b.day || a.order - b.order);
+    return { days: [...new Set(items.map((a) => a.day))], items };
+  }
+
+  // Items lost when a record is imported from `fromDay` (spec A2 §4 step 1 keeps stops reached before it and closes the
+  // current one on it): items after fromDay, plus items on fromDay at stops not yet reached.
+  function itemsDroppedByImport(record, fromDay, dayCount) {
+    const stops = stopEntries(record.route.points);
+    const reached = new Set(stops.filter((e, i) => stopSpan(e.point, positionOf(i, stops.length), dayCount).from < fromDay).map((e) => e.point.id));
+    return record.activities.filter((a) => a.day > fromDay || (a.day === fromDay && !reached.has(a.stop_id)));
+  }
+
+  // "14th" for a charter day, or "day 4" without charter dates.
+  function dayOrdinal(charter, day) {
+    const start = parseDateOnly(toObj(charter).start_date);
+    if (start === null) return `day ${day}`;
+    const n = new Date(start + (day - 1) * DAY_MS).getUTCDate();
+    const suffix = n % 100 >= 11 && n % 100 <= 13 ? "th" : (["th", "st", "nd", "rd"][n % 10] || "th");
+    return `${n}${suffix}`;
+  }
+
   return {
     ITINERARY_VERSION, DEFAULT_SPEED_KN, MAX_TITLE_LENGTH, MAX_NOTES_LENGTH, TIME_RE,
     MIN_DURATION_MIN, MAX_DURATION_MIN, DEFAULT_DURATION_MIN, SEED_DEPART_TIME,
@@ -557,6 +670,7 @@
     clampActivities,
     setStopTime, setStopSites, sitesByDistance,
     renumberActivities, canDropActivity, moveActivity, addActivity, updateActivity, removeActivity,
-    reconcileRoutePoints
+    reconcileRoutePoints,
+    recordDayCount, recomputeArrivals, shiftFromStop, setDeparture, droppedDays, itemsDroppedByImport, dayOrdinal
   };
 });
