@@ -527,3 +527,15 @@ Brainstormed with the visual companion (`.superpowers/brainstorm/31923-*/content
   exercised: LAST / ACTIVE CHARTER headings (need a past or running active charter). PR iolanthe-admin#15 open; merge
   on David's word.
 
+## Captain round 3b (2026-10-09, immediate feedback on round 3)
+
+- **R3b-1** The VIEWING tag was clipped on narrow bars: an eye icon before the bar's name instead (and in the legend).
+- **R3b-2** Every time display and picker is 24-hour: the Charter Info arrival time becomes the Route page's hour/minute
+  selects (a hidden input carries the value), the two report stamps and the guest's six formatters get `hour12: false`.
+  A native `<input type="time">` cannot be forced to 24-hour, hence the selects.
+- **R3b-3** The band's roll-up / roll-down was a jarring re-render: both folds stay in the DOM and a `grid-template-rows`
+  transition rolls them (260 ms; none under prefers-reduced-motion). Picking a charter from an overlay band rolls it up
+  first.
+- **R3b-4** Rolled up, a click (or Enter / Space) anywhere on the strip rolls it down, not just the Expand button.
+- Plan: `plans/r3b-captain-immediate.md` (admin branch `feat/captain-round3b`, guest branch `feat/times-24h`).
+
