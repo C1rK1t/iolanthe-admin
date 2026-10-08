@@ -387,3 +387,11 @@ Brainstormed with the visual companion (`.superpowers/brainstorm/31923-*/content
   A patch script for all six sits in the session scratchpad (`review_fixes.py`, needs its CRLF-aware `rw()` repaired);
   the working tree is clean. NEXT: apply the fixes + tests, re-run 92+, run `scripts/check-charter-endpoints.sh`
   (needs David to log in to the scratch admin), PR, `./update.sh` on the vessel, then execute plan ch-02 (admin).
+
+- **2026-10-08 server review fixes DONE** (`7a23db7`, 97 tests): the rule gained two fallbacks (earliest upcoming, then any
+  charter) so `/api/charter` and track logging never see an empty id with charters present; the public charter route
+  is wrapped in try/catch; `loadTrack("")` stays in memory; `charter.json` saves only run the overlap check when the
+  dates changed; admin error details pass through only for app-raised errors; reserved periods reject duplicate ids,
+  require an integer `base_revision`, and report charter overlaps per row. Spec §3 and plan ch-02 updated to match.
+  Captain's multi-visit anchorage request logged in BACKLOG.md. NEXT: endpoint checks (David logs in), PR, vessel
+  `./update.sh`, then plan ch-02.

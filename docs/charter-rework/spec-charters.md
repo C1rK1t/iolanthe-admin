@@ -48,11 +48,16 @@ activeCharterId(charters, storedId, today) →
      (if more than one — only possible on a turnaround day — the one with the later start_date);
   2. else storedId, if that charter still exists;
   3. else the charter with the most recent end_date before today;
-  4. else "".
+  4. else the charter with the earliest start_date after today;
+  5. else any charter (the first id alphabetically);
+  6. else "" (no charters at all).
 ```
 
-- Charters with no valid dates (missing, unparsable, end before start) never match step 1 or 3; they can only be
-  active through step 2.
+Steps 4–5 were added after the server review (2026-10-08): the guest payload and track logging must always point at a
+charter folder that exists, so the rule only yields "" when there are no charters.
+
+- Charters with no valid dates (missing, unparsable, end before start) never match steps 1, 3 or 4; they can be
+  active through step 2 or 5.
 - `today` is the server's local date (`localTodayDateValue`) on the server and the browser's local date in the admin.
   The charters list carries the server's `today` so the admin can show a warning if the two disagree.
 - Reserved periods are never considered.
