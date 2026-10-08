@@ -6344,8 +6344,9 @@
       if (window.IolantheRoutes) {
         const subject = state.routesSubject === "charter"
           ? { type: "charter", charterId: state.selectedCharter, charter: charterInfo, itinerary, focusStopId: state.routesFocusStopId || "" }
-          : { type: "library" };
+          : { type: "library", routeId: state.routesRouteId || "" };
         state.routesFocusStopId = "";
+        state.routesRouteId = "";
         window.IolantheRoutes.bind({ siteLibrary, subject });
       }
       return;
@@ -6408,11 +6409,12 @@
     }
   }
 
-  // Switch the Charter section to a panel from code (Itinerary <-> Route). options.subject: "library" | "charter".
+  // Switch the Charter section to a panel from code. options.subject: "library" | "charter"; options.routeId opens that unassigned route.
   async function showCharterPanel(panelId, options = {}) {
     if (!(await confirmDiscardPageChanges())) return false;
     if (options.subject) state.routesSubject = options.subject;
     if (options.focusStopId) state.routesFocusStopId = options.focusStopId;
+    if (options.routeId !== undefined) state.routesRouteId = options.routeId;
     state.sectionPanels.charter = panelId;
     await renderCharter();
     return true;

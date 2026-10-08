@@ -222,3 +222,25 @@
   .routes-panel .map-hint { max-width: calc(100% - 24px); bottom: 34px; }
   .routes-panel .seg button .lbl { display: none; }
 }
+
+/* Spec A2: header with the Working-on select and the pills; the strip docked under the map */
+.routes-panel .card-header .subject { display: flex; align-items: center; gap: 8px; margin: 0; }
+.routes-panel .card-header .subject .side-label { margin: 0; white-space: nowrap; }
+.routes-panel .card-header .subject select { min-width: 200px; max-width: 320px; border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; background: var(--panel); color: var(--ink); font: inherit; }
+.routes-panel .pills { display: flex; gap: 6px; align-items: center; flex: 1; }
+.routes-panel .pill { display: inline-grid; place-items: center; min-width: 36px; height: 28px; padding: 0 10px; border-radius: 999px; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; background: var(--soft); color: var(--muted); cursor: help; }
+.routes-panel .pill.fit-match { background: #cfe8cf; color: #1e5a3b; }
+.routes-panel .pill.fit-short, .routes-panel .pill.fit-over { background: var(--warn-bg); color: var(--warn); }
+.routes-panel .pill.check { background: #f5c6c2; color: #7a2a24; }
+.routes-panel .planner { grid-template-areas: "side map" "strip strip"; grid-template-rows: auto auto; }
+.routes-panel .planner .side { grid-area: side; }
+.routes-panel .planner .map-wrap { grid-area: map; }
+.routes-panel .strip-host { grid-area: strip; min-width: 0; }
+.routes-panel .mk-stop.selected { width: 34px; height: 34px; background: var(--accent); border-width: 3px; font-size: 14px; }
+.routes-panel .mk-stop.plain.selected { background: #fff; color: var(--accent); border-color: var(--accent); }
+@media (max-width: 900px) {
+  .routes-panel .planner { grid-template-areas: none; grid-template-rows: none; }
+  .routes-panel .planner .side, .routes-panel .planner .map-wrap, .routes-panel .strip-host { grid-area: auto; }
+  .routes-panel .strip-host { order: 3; }
+  .routes-panel .side > .field:first-child { order: 3; }
+}
