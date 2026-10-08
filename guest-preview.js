@@ -165,6 +165,7 @@
     // Slider: press anywhere on the track to pick the nearest day, drag to scrub (applied after a short pause), release
     // to apply. Selection happens on pointerdown, not click, so pointer capture cannot swallow it.
     track.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;   // left button / touch / pen only
       dragging = true;
       track.setPointerCapture(e.pointerId);
       go(nearestTick(e.clientX), false);
@@ -173,6 +174,7 @@
     const endDrag = () => { if (dragging) { dragging = false; apply(); } };
     track.addEventListener("pointerup", endDrag);
     track.addEventListener("pointercancel", endDrag);
+    track.addEventListener("lostpointercapture", endDrag);
     track.addEventListener("keydown", (e) => {
       const moves = { ArrowLeft: index - 1, ArrowRight: index + 1, Home: 0, End: steps.length - 1 };
       if (!(e.key in moves)) return;

@@ -83,10 +83,10 @@
     return (steps || []).findIndex((s) => s.date === date);
   }
 
-  // The iframe URL. The hash keeps the guest's tab, but only a plain tab id passes.
+  // The iframe URL. The hash keeps the guest's tab, but only a plain tab id (letters, digits, - and _) passes.
   function previewUrl({ date, charterId, hash }) {
     const tab = String(hash || "").replace(/^#/, "");
-    return `/?preview=${encodeURIComponent(date)}&charter=${encodeURIComponent(charterId)}${/^[a-z-]+$/.test(tab) ? `#${tab}` : ""}`;
+    return `/?preview=${encodeURIComponent(date)}&charter=${encodeURIComponent(charterId)}${/^[a-z0-9_-]+$/.test(tab) ? `#${tab}` : ""}`;
   }
 
   // Scale for a device frame drawn at its real size inside availW × availH; never above 1.
