@@ -66,6 +66,7 @@
     let track = null;
     let root = null;
     let suppressClickUntil = 0;
+    let lastView = null;   // {px, date}: the scale and left edge after the last draw, scroll or zoom
 
     function activeBar() {
       return (ctx.charters || []).find((c) => c.id === ctx.activeId) || null;
@@ -130,7 +131,8 @@
     // ---- drawing ----
     function syncTitle() {
       const t = root.querySelector(".gantt-span");
-      if (!pxPerDay) return;   // nothing drawn yet (applyZoom runs after the first layout)
+      if (!pxPerDay || !viewport.isConnected) return;   // nothing drawn yet (applyZoom runs after the first layout)
+      lastView = { px: pxPerDay, date: viewStart() };
       if (t && viewport.clientWidth) t.textContent = `${core.fmtShort(viewStart())} – ${core.fmtShort(viewEnd())}`;
     }
 
@@ -348,9 +350,10 @@
       });
     }
 
-    // The current scale and left edge, or null when nothing is drawn.
+    // The scale and left edge to restore, or null when nothing has been drawn. Read from the last draw / scroll /
+    // zoom rather than the live viewport: a node that has just been moved in the DOM reports scrollLeft 0.
     function currentView() {
-      return pxPerDay && viewport && viewport.isConnected && !ctx.collapsed ? { px: pxPerDay, date: viewStart() } : null;
+      return lastView;
     }
 
     render();
