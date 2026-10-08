@@ -28,6 +28,7 @@
   let guard = null;      // page unsaved-changes guard
 
   const MAP_CENTER = [12.1, 120.0];
+  const STICKY_PX = 40;   // an anchorage stop dropped this close to its anchorage snaps back (spec A2 T5)
   let map = null;        // Leaflet map for the current panel
   const groups = {};     // Leaflet layer groups
   let routeLines = [];
@@ -123,6 +124,7 @@
           </div>
           <div class="meta" id="routes-meta"></div>
         </aside>
+        <div class="splitter splitter-v" id="routes-split-v" title="Drag to resize"></div>
         <div class="map-wrap">
           <div id="routes-map"></div>
           <div class="layers" id="routes-layers"></div>
@@ -131,6 +133,7 @@
           </div>
           <div class="map-hint" id="routes-map-hint"></div>
         </div>
+        <div class="splitter splitter-h" id="routes-split-h" title="Drag to resize"></div>
         <div class="strip-host" id="routes-strip"></div>
       </div>
     </section>`;
@@ -300,6 +303,7 @@
     renderLayers();
     if (o.map !== false) renderMap(o);
     if (cards) cards.render();
+    scheduleFitMap();
     if (days && !$("panel-days").hidden) days.render();
   }
 
@@ -321,7 +325,7 @@
         b("undo", "Undo (Ctrl+Z)", undo, "", ro || !history.undo.length),
         b("redo", "Redo (Ctrl+Y)", redo, "", ro || !history.redo.length),
         el("span", { class: "icon-sep" }),
-        b("start", "Start from an unassigned route or another charter…", openStartFrom, "", ro || saving),
+        b("start", "Start from an unassigned route or another charter…", () => openStartFrom(), "", ro || saving),
         b("saveAs", "Save as an unassigned route (items kept)", () => saveAs(false), "", work.route.points.length < 2),
         b("import", "Import KML / GPX", () => io.openImport(), "", ro),
         b("export", "Export GPX / KML", () => io.openExport(), "", work.route.points.length < 2));
@@ -336,6 +340,7 @@
       el("span", { class: "icon-sep" }),
       b("plus", "New route", newRoute),
       b("saveAs", "Save As", () => saveAs(false), "", work.route.points.length < 2),
+      b("start", "Assign this route to the charter (Start from…)", () => assignToCharter(), "", !work.route.id || work.route.points.length < 2),
       b("join", "Add another route to this one", () => join.openJoin()),
       b("import", "Import KML / GPX", () => io.openImport()),
       b("export", "Export GPX / KML", () => io.openExport(), "", work.route.points.length < 2),
@@ -379,6 +384,64 @@
     Object.keys(groups).forEach((k) => delete groups[k]);
     routeLines = [];
     pointMarkers = [];
+  }
+
+  const MAP_MIN_PX = 380;
+  const MAP_GAP_PX = 32;        // panel padding + gaps between the map and the strip
+  const MAP_H_KEY = "routePlanner.mapH";   // a splitter drag (T4) stores the user's height here; blank = fit the viewport
+  let fitMapTimer = null;
+
+  // Spec A2 T1: the map is as tall as the viewport allows above the docked strip, unless the user dragged the splitter.
+  function fitMap() {
+    if (!panel || !panel.isConnected) return;
+    if (window.innerWidth <= 900) { panel.style.removeProperty("--map-h"); return; }
+    let h = 0;
+    try { h = parseInt(localStorage.getItem(MAP_H_KEY), 10) || 0; } catch (e) { h = 0; }
+    if (!h) {
+      const strip = $("strip");
+      const stripH = strip && strip.offsetHeight ? strip.offsetHeight : 260;
+      const top = panel.querySelector(".planner").getBoundingClientRect().top + window.scrollY;
+      const headerH = Math.max(0, top);   // everything above the planner (admin header, department bar, Route page header)
+      h = window.innerHeight - headerH - stripH - MAP_GAP_PX;
+    }
+    panel.style.setProperty("--map-h", `${Math.max(MAP_MIN_PX, Math.round(h))}px`);
+    if (map) map.invalidateSize();
+  }
+  function scheduleFitMap() {
+    clearTimeout(fitMapTimer);
+    fitMapTimer = setTimeout(fitMap, 60);
+  }
+  const SIDE_W_KEY = "routePlanner.sideW";
+  // Spec A2 T4: drag the vertical splitter to resize the side column, the horizontal one to resize the map. Both remembered per browser.
+  function bindSplitters() {
+    const store = (key, value) => { try { localStorage.setItem(key, String(value)); } catch (e) { /* per-browser only */ } };
+    let sideW = 0;
+    try { sideW = parseInt(localStorage.getItem(SIDE_W_KEY), 10) || 0; } catch (e) { sideW = 0; }
+    if (sideW) panel.style.setProperty("--side-w", `${sideW}px`);
+    const drag = (handle, onMove, onEnd) => {
+      handle.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        handle.setPointerCapture(e.pointerId);
+        handle.classList.add("dragging");
+        const move = (ev) => onMove(ev);
+        const up = () => { handle.removeEventListener("pointermove", move); handle.classList.remove("dragging"); onEnd(); };
+        handle.addEventListener("pointermove", move);
+        handle.addEventListener("pointerup", up, { once: true });
+        handle.addEventListener("pointercancel", up, { once: true });
+      });
+    };
+    const planner = panel.querySelector(".planner");
+    drag($("split-v"), (ev) => {
+      const w = Math.max(300, Math.min(ev.clientX - planner.getBoundingClientRect().left, planner.clientWidth * 0.6));
+      panel.style.setProperty("--side-w", `${Math.round(w)}px`);
+    }, () => store(SIDE_W_KEY, parseInt(panel.style.getPropertyValue("--side-w"), 10) || 0));
+    drag($("split-h"), (ev) => {
+      const mapTop = panel.querySelector(".map-wrap").getBoundingClientRect().top;
+      const h = Math.max(MAP_MIN_PX, Math.round(ev.clientY - mapTop));
+      panel.style.setProperty("--map-h", `${h}px`);
+      if (map) map.invalidateSize();
+    }, () => store(MAP_H_KEY, parseInt(panel.style.getPropertyValue("--map-h"), 10) || 0));
+    $("split-h").addEventListener("dblclick", () => { store(MAP_H_KEY, ""); fitMap(); });   // double-click: back to fit-the-viewport
   }
 
   async function initMap(mine) {
@@ -464,7 +527,7 @@
         const a = places && p.anchorage_id ? places.findAnchorage(p.anchorage_id) : null;
         const flagged = places && p.anchorage_id && ((!a && places.isLoaded()) || c.anchorageMovedM(p, a) > 0);
         const selected = cards && cards.selectedId() === p.id;
-        html = `<div class="mk-stop${p.anchorage_id ? "" : " plain"}${selected ? " selected" : ""}">${stopNo}</div>${flagged ? '<div class="mk-badge">!</div>' : ""}`;
+        html = `<div class="mk-stop${p.anchorage_id ? "" : " plain"}${selected ? " selected" : ""}">${stopNo}</div>${p.anchorage_id ? '<div class="mk-anchor-badge"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2"/><path d="M12 7v14M5 13a7 7 0 0 0 14 0M8 10h8"/></svg></div>' : ""}${flagged ? '<div class="mk-badge">!</div>' : ""}`;
       }
       else html = `<div class="mk-wp ${p.name ? "named" : ""}"></div>`;
       const m = L.marker(ll(p), { icon: divIcon(html), draggable: ui.mode !== "delete" && !readOnly(), title: p.name || "Waypoint", zIndexOffset: c.isStop(p) ? 1100 : 1000 });
@@ -476,10 +539,19 @@
       });
       m.on("dragend", (e) => {
         const q = e.target.getLatLng();
-        const anchorage = places ? places.anchorageUnder(map, q) : null;
         const cur = work.route.points[i];
-        // A stop nudged near its OWN anchorage is just moved, so its name and ticked sites are kept.
-        if (anchorage && !(c.isStop(cur) && cur.anchorage_id === anchorage.id)) { makeStopAtAnchorage(i, anchorage, { snapped: true }); return; }
+        const own = c.isStop(cur) && cur.anchorage_id && places ? places.findAnchorage(cur.anchorage_id) : null;
+        if (own && map.latLngToContainerPoint(q).distanceTo(map.latLngToContainerPoint([own.latitude, own.longitude])) <= STICKY_PX) {
+          renderMap();   // sticky: it stays on its anchorage
+          return;
+        }
+        const anchorage = places ? places.anchorageUnder(map, q) : null;
+        if (anchorage && !(own && anchorage.id === own.id)) { makeStopAtAnchorage(i, anchorage, { snapped: true }); return; }
+        if (own) {
+          editPoints((arr) => c.unlinkStop(arr, i, q));
+          status(`${cur.name || "Stop"} moved off ${own.name}; it is a plain stop now (make it an anchorage from its popup if you like).`, "");
+          return;
+        }
         editPoints((arr) => c.replaceAt(arr, i, { ...arr[i], latitude: q.lat, longitude: q.lng }));
       });
       m.addTo(groups.points);
@@ -777,7 +849,14 @@
 
   // Spec A2 §5.8: import an unassigned route or another charter's record from a day. The server re-bases its days
   // onto the from-day and brings its items unless stripped; nothing is refused for length (the fit pill reports).
-  async function openStartFrom() {
+  // Spec A2 T7: open this charter's route with the Start from… dialog preselecting the route being edited.
+  async function assignToCharter() {
+    if (!work || !work.route.id) return;
+    if (!(await guardDiscard())) return;
+    await A().showCharterPanel("routes", { subject: "charter", startFrom: work.route.id });
+  }
+
+  async function openStartFrom(preselectId) {
     if (!work || saving || !isCharter()) return;
     if (readOnly()) { status("This charter has ended; the route is read-only.", "error"); return; }
     if (!(await guardDiscard())) return;
@@ -828,6 +907,8 @@
     fromDay.addEventListener("change", refreshFit);
     refreshFit();
     if (sourceRows.length) { sourceRows[0].input.checked = true; strip.checked = sourceRows[0].kind === "charter"; }
+    const pre = sourceRows.find((s) => s.value === `library:${preselectId}`);
+    if (pre) { pre.input.checked = true; strip.checked = false; }
     openModal({
       title: "Start from…", saveTitle: "Import", wide: true,
       body: el("div", {},
@@ -1012,7 +1093,9 @@
     };
     A().setPageUnsavedGuard(guard);
     bindInputs();
+    bindSplitters();
     bindKeyboard();
+    if (!window.__routesFitMapBound) { window.addEventListener("resize", () => { if (panel && panel.isConnected) scheduleFitMap(); }); window.__routesFitMapBound = true; }
     const siteLibrary = (opts && opts.siteLibrary) || { sites: [] };
     subject = (opts && opts.subject) || { type: "library" };
     const myPlaces = window.IolantheRoutesPlaces.create({
@@ -1098,6 +1181,7 @@
         const idx = work.route.points.findIndex((p) => p.id === subject.focusStopId);
         if (idx >= 0) setTimeout(() => focusPoint(idx), 300);
       }
+      if (subject.startFrom) setTimeout(() => openStartFrom(subject.startFrom), 400);
     } else {
       $("name-field").hidden = false;
       $("desc-label").textContent = "Description";

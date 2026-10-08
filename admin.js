@@ -6334,9 +6334,10 @@
     if (activePanel === "routes") {
       if (window.IolantheRoutes) {
         const subject = state.routesSubject === "charter"
-          ? { type: "charter", charterId: state.selectedCharter, charter: charterInfo, itinerary, focusStopId: state.routesFocusStopId || "" }
+          ? { type: "charter", charterId: state.selectedCharter, charter: charterInfo, itinerary, focusStopId: state.routesFocusStopId || "", startFrom: state.routesStartFrom || "" }
           : { type: "library", routeId: state.routesRouteId || "" };
         state.routesFocusStopId = "";
+        state.routesStartFrom = "";
         state.routesRouteId = "";
         window.IolantheRoutes.bind({ siteLibrary, subject });
       }
@@ -6405,6 +6406,7 @@
     if (options.subject) state.routesSubject = options.subject;
     if (options.focusStopId) state.routesFocusStopId = options.focusStopId;
     if (options.routeId !== undefined) state.routesRouteId = options.routeId;
+    if (options.startFrom !== undefined) state.routesStartFrom = options.startFrom;
     state.sectionPanels.charter = panelId;
     await renderCharter();
     return true;

@@ -5,8 +5,8 @@
 (function () {
   "use strict";
 
-  const EDGE_WIDTHS = [26, 18, 12, 8, 6];   // px, by distance from the open card; further edges are EDGE_MIN
-  const EDGE_MIN = 4;
+  const EDGE_WIDTHS = [28, 20, 14, 10, 8];   // px at a 1100-px strip; scaled up to 1.8x on wider screens (spec A2 T6)
+  const EDGE_MIN = 6;
   const SWIPE_PX = 48;
   const SITES_NEAR_NM = 5;
   const KIND_LABEL = { anchorage: "anchorage", stop: "stop", plain: "plain stop" };
@@ -18,6 +18,7 @@
   function create(ctx) {
     const { core: c, el, svg } = ctx;
     let host = null;          // #routes-strip
+    const edgeScale = () => Math.min(1.8, Math.max(1, ((host && host.clientWidth) || 1100) / 1100));
     let selectedId = null;    // stop id of the open card
     let tab = "day";          // "day" | "settings"
     const activeDay = new Map();   // stopId → day shown
@@ -76,7 +77,7 @@
     // ---------- the strip ----------
 
     function edge(stop, distance, rec, fitState) {
-      const width = EDGE_WIDTHS[distance - 1] || EDGE_MIN;
+      const width = Math.round((EDGE_WIDTHS[distance - 1] || EDGE_MIN) * edgeScale());
       const dirty = rec.dirty_stop_ids.includes(stop.point.id);
       const good = fitState === "match" && stop.position === "terminus";
       const name = stop.point.name || "Stop";
@@ -153,7 +154,7 @@
       return el("div", { class: `tile ${cls || ""}`.trim() }, el("div", { class: "tile-k" }, label), el("div", { class: "tile-v" }, value), sub ? el("div", { class: "tile-s" }, sub) : null);
     }
 
-    // Arrive: estimated (italic) or pinned (upright) time with the inbound leg underneath; the origin shows boarding.
+    // Arrive: always derived from the previous departure and the leg (spec A2 T2); the origin shows boarding.
     function arriveTile(stop, rec) {
       const p = stop.point;
       if (stop.position === "origin" || stop.position === "only") {
@@ -163,12 +164,9 @@
       const times = c.estimateTimes(rec).get(p.id) || { arrive: null };
       const prev = stops(rec)[stop.n - 2];
       const leg = prev ? c.legSummaries(rec).get(prev.point.id) : null;
-      const estimated = !(p.arrive && p.arrive.time);
-      const timeInput = el("input", { type: "time", class: `tile-time${estimated ? " est" : ""}`, value: times.arrive ? times.arrive.time : "", title: estimated ? "Estimated from the previous departure. Set a time to pin it." : "Pinned arrival time. Clear it to estimate again." });
-      timeInput.addEventListener("change", () => ctx.editRecord((r) => c.recomputeArrivals(c.setStopTime(r, p.id, "arrive", timeInput.value))));
-      const value = el("div", { class: "tile-row" }, estimated ? el("span", { class: "est" }, "~") : null, timeInput, el("span", {}, dayLabel(p.arrive ? p.arrive.day : 1)));
+      const value = el("div", { class: "tile-row" }, el("span", { class: "est" }, times.arrive ? `~${times.arrive.time}` : "—"), el("span", {}, dayLabel(p.arrive ? p.arrive.day : 1)));
       const sub = leg ? `${leg.nm.toFixed(0)} nm · ${fmtHours(leg.hours)} from ${prev.point.name || "the previous stop"}` : "";
-      return tile("Arrive", value, sub, estimated ? "estimated" : "pinned");
+      return tile("Arrive", value, sub, "estimated");
     }
 
     // Depart: a date (or day number without a charter) no earlier than the arrival day, and a time. Spec A2 D1, §5.6, §5.7.
@@ -182,12 +180,13 @@
       const start = ch ? c.parseDateOnly(ch.start_date) : null;
       const arriveDay = p.arrive ? p.arrive.day : 1;
       const toIso = (day) => new Date(start + (day - 1) * 86400000).toISOString().slice(0, 10);
+      const nightsBefore = p.depart.day - arriveDay;
       const dayInput = start !== null
         ? el("input", { type: "date", class: "tile-date edit-only", value: toIso(p.depart.day), min: toIso(arriveDay) })
-        : el("input", { type: "number", class: "tile-date edit-only", value: String(p.depart.day), min: String(arriveDay), step: "1", "aria-label": "Departure day" });
+        : el("input", { type: "number", class: "tile-nights edit-only", value: String(nightsBefore), min: "0", step: "1", "aria-label": "Nights at this stop" });
       const timeInput = el("input", { type: "time", class: "tile-time edit-only", value: p.depart.time || "", title: "Departure time (blank: 09:00 is assumed)" });
       const dayOf = () => {
-        if (start === null) return parseInt(dayInput.value, 10);
+        if (start === null) { const n = parseInt(dayInput.value, 10); return Number.isInteger(n) && n >= 0 ? arriveDay + n : NaN; }
         const t = c.parseDateOnly(dayInput.value);
         return t === null ? NaN : Math.round((t - start) / 86400000) + 1;
       };
@@ -202,7 +201,7 @@
       });
       timeInput.addEventListener("change", () => ctx.editRecord((r) => c.setDeparture(r, p.id, { time: timeInput.value })));
       const nights = p.depart.day - arriveDay;
-      return tile("Depart", el("div", { class: "tile-row" }, dayInput, timeInput), stop.position === "origin" ? (nights ? `${nights} night${nights === 1 ? "" : "s"} aboard before sailing` : "sails on day 1") : (nights ? `${nights} night${nights === 1 ? "" : "s"}` : "day stop"));
+      return tile("Depart", el("div", { class: "tile-row" }, dayInput, start === null ? el("span", { class: "muted" }, "nights") : null, timeInput), stop.position === "origin" ? (nights ? `${nights} night${nights === 1 ? "" : "s"} aboard before sailing` : "sails on day 1") : (nights ? `${nights} night${nights === 1 ? "" : "s"}` : "day stop"));
     }
 
     function nextLegTile(stop, rec) {
