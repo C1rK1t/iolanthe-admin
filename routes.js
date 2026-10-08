@@ -300,6 +300,7 @@
     renderLayers();
     if (o.map !== false) renderMap(o);
     if (cards) cards.render();
+    scheduleFitMap();
     if (days && !$("panel-days").hidden) days.render();
   }
 
@@ -379,6 +380,32 @@
     Object.keys(groups).forEach((k) => delete groups[k]);
     routeLines = [];
     pointMarkers = [];
+  }
+
+  const MAP_MIN_PX = 380;
+  const MAP_GAP_PX = 32;        // panel padding + gaps between the map and the strip
+  const MAP_H_KEY = "routePlanner.mapH";   // a splitter drag (T4) stores the user's height here; blank = fit the viewport
+  let fitMapTimer = null;
+
+  // Spec A2 T1: the map is as tall as the viewport allows above the docked strip, unless the user dragged the splitter.
+  function fitMap() {
+    if (!panel || !panel.isConnected) return;
+    if (window.innerWidth <= 900) { panel.style.removeProperty("--map-h"); return; }
+    let h = 0;
+    try { h = parseInt(localStorage.getItem(MAP_H_KEY), 10) || 0; } catch (e) { h = 0; }
+    if (!h) {
+      const strip = $("strip");
+      const stripH = strip && strip.offsetHeight ? strip.offsetHeight : 260;
+      const top = panel.querySelector(".planner").getBoundingClientRect().top + window.scrollY;
+      const headerH = Math.max(0, Math.min(top, 240));   // the admin header and the Route page header above the map
+      h = window.innerHeight - headerH - stripH - MAP_GAP_PX;
+    }
+    panel.style.setProperty("--map-h", `${Math.max(MAP_MIN_PX, Math.round(h))}px`);
+    if (map) map.invalidateSize();
+  }
+  function scheduleFitMap() {
+    clearTimeout(fitMapTimer);
+    fitMapTimer = setTimeout(fitMap, 60);
   }
 
   async function initMap(mine) {
@@ -1013,6 +1040,7 @@
     A().setPageUnsavedGuard(guard);
     bindInputs();
     bindKeyboard();
+    if (!window.__routesFitMapBound) { window.addEventListener("resize", () => { if (panel && panel.isConnected) scheduleFitMap(); }); window.__routesFitMapBound = true; }
     const siteLibrary = (opts && opts.siteLibrary) || { sites: [] };
     subject = (opts && opts.subject) || { type: "library" };
     const myPlaces = window.IolantheRoutesPlaces.create({

@@ -225,7 +225,7 @@
 
 /* Spec A2: header with the Working-on select and the pills; the strip docked under the map */
 /* The strip is the workplace, so the map no longer sticks (it would float over the strip) and is sized so map + strip fit the viewport. */
-.routes-panel { --map-h: max(380px, min(calc(100vh - 380px), 640px)); }
+.routes-panel { --map-h: 560px; }
 .routes-panel .map-wrap { position: relative; top: 0; z-index: 0; }   /* own stacking context: Leaflet panes (z 400) must stay under the admin dialogs (z 140) */
 .routes-panel .card-header .subject { display: flex; align-items: center; gap: 8px; margin: 0; }
 .routes-panel .card-header .subject .side-label { margin: 0; white-space: nowrap; }
