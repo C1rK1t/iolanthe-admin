@@ -99,7 +99,16 @@
 .routes-panel .strip.ro .items-add, .routes-panel .strip.ro .item-grip, .routes-panel .strip.ro .item .icon-btn { display: none; }
 
 @media (max-width: 900px) {
-  .routes-panel .tiles { grid-template-columns: 1fr; }
+  /* Phone: the edges become thin rows above (earlier stops) and below (later stops) the full-width card; the card header's ◀ ▶ navigate */
+  .routes-panel .strip { flex-direction: column; gap: 6px; }
+  .routes-panel .strip > .icon-btn { display: none; }
+  .routes-panel .strip-edges { flex-direction: row; height: 22px; min-height: 22px; }
+  .routes-panel .strip-edges.left { order: 0; }
+  .routes-panel .stop-card { order: 1; }
+  .routes-panel .strip-edges.right { order: 2; }
+  .routes-panel .strip-edge { height: 22px; }
+  .routes-panel .tiles { grid-template-columns: minmax(0, 1fr); }
+  .routes-panel .tile input.tile-date { width: 140px; }
   .routes-panel .item { grid-template-columns: 4px 48px minmax(0, 1fr) auto auto; }
   .routes-panel .item-site { display: none; }
   .routes-panel .strip-edge-label { display: none; }
