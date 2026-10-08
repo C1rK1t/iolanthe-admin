@@ -6125,6 +6125,10 @@
     });
   }
 
+  function cloneCharterInfo(charterInfo) {
+    return JSON.parse(JSON.stringify(charterInfo || {}));
+  }
+
   function readCharterInfoForm(charterInfo) {
     const value = id => document.getElementById(id).value;
     const checked = id => document.getElementById(id).checked;
