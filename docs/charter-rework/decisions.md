@@ -325,10 +325,10 @@ workplace per charter.
   (`setView(latlng, max(currentZoom, ~13))`), not just `panTo`.
 - **A2-T11 Wording on unassigned routes:** the Depart tile is titled "Stop duration"; a "Departure time" label sits
   above the time picker (both modes).
-- **A2-T12 Default departure time** instead of a blank picker: 07:00 when nights > 0; for a day stop (nights = 0) David
-  wrote "last departure time + 2 hours" — to confirm: read as *arrival estimate + 2 h* (a day stop cannot leave before
-  it arrives). The stored default is written when the card sets or changes the stay; the blank-time fallback in
-  `estimateTimes` / the server's `SEED_DEPART_TIME` moves from 09:00 to 07:00 on both sides.
+- **A2-T12 Default departure time** instead of a blank picker: 07:00 when nights > 0; for a day stop (nights = 0)
+  the arrival estimate + 2 h (confirmed by David, 2026-10-08). The stored default is written when the card sets or
+  changes the stay; the blank-time fallback in `estimateTimes` / the server's `SEED_DEPART_TIME` moves from 09:00 to
+  07:00 on both sides.
 - **A2-T13 (question) time picker usability:** the native `<input type="time">` is fiddly on the tablet; consider a
   pair of selects (hour, 5-minute steps) or ±15-min buttons beside it.
 
