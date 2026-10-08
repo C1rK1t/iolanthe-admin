@@ -395,3 +395,14 @@ Brainstormed with the visual companion (`.superpowers/brainstorm/31923-*/content
   require an integer `base_revision`, and report charter overlaps per row. Spec §3 and plan ch-02 updated to match.
   Captain's multi-visit anchorage request logged in BACKLOG.md. NEXT: endpoint checks (David logs in), PR, vessel
   `./update.sh`, then plan ch-02.
+- **2026-10-08 plan A2-04 (round 2) EXECUTED** on admin `feat/itinerary-a2-round2` (7 code commits, 117 tests) and server
+  `feat/seed-depart-0700` (1 commit, 65 tests); Sonnet implementers for the code tasks, Haiku for housekeeping and the
+  server constant, every diff reviewed against the plan by this session (all verbatim). Browser pass on the shared scratch
+  server (csaba + two seeded charters Hoffmann 2025 / Reyes 2026): dialog year groups and result-line states, items switch
+  per source kind, import with items (csaba now revision 5), time selects (blank item option, off-grid 09:20 kept), Days
+  tab headers and gaps, line → card → map zoom 7 → 13, arrows after a map click and guarded in a select, date change stores
+  07:00, phone width, no console errors. Not re-exercised: a drop onto a different anchorage. PRs iolanthe-admin#8 and
+  iolanthe-server#4 open; merge on David's word. Lesson: both sessions share one working tree per repo, so the other
+  session's docs commits landed on this branch (docs only) and a Haiku implementer briefly switched the server checkout
+  off the other session's branch (restored at once) — give implementers in a shared checkout an explicit "do not checkout".
+
