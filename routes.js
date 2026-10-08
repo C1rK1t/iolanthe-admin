@@ -969,6 +969,16 @@
       renderAll,
       isCurrent: () => panel === mine && mine.isConnected && places === myPlaces
     });
+    days = window.IolantheRoutesDays.create({
+      core: icore(),
+      el,
+      getRecord: () => (work ? toRecord(work.route) : null),
+      getCharter: charterOrNull,
+      getDayCount: dayCount,
+      siteTitle: (id) => { const s = (siteLibrary.sites || []).find((x) => x && x.id === id); return s && s.title ? s.title : id; },
+      onStopClick: (stopId) => { if (cards) cards.select(stopId); }
+    });
+    days.render($("days"));
     initMap(mine);
     if (isCharter()) {
       $("name-field").hidden = true;
