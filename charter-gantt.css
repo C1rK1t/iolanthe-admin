@@ -43,6 +43,12 @@
   position: absolute; top: 0; height: 22px; line-height: 22px; padding: 0 6px; box-sizing: border-box; overflow: hidden; white-space: nowrap;
   border-right: 1px solid var(--line); font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted);
 }
+/* R3-4: banded month headers, a bolder year boundary, faint month lines through the lanes */
+.charter-gantt .gantt-months span.alt { background: #dde4e8; }
+.charter-gantt .gantt-months span.is-year { border-left: 2px solid rgba(29, 53, 64, 0.45); }
+.charter-gantt .gantt-grid { position: absolute; top: 22px; left: 0; right: 0; bottom: 0; pointer-events: none; }
+.charter-gantt .gantt-grid span { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1px solid rgba(29, 53, 64, 0.14); }
+.charter-gantt .gantt-grid span.is-year { border-left: 2px solid rgba(29, 53, 64, 0.45); }
 .charter-gantt .gantt-weeks { position: absolute; top: 22px; left: 0; right: 0; height: 16px; border-bottom: 1px solid #e3e8eb; }
 .charter-gantt .gantt-weeks span { position: absolute; top: 0; height: 16px; line-height: 16px; padding-left: 3px; font-size: 0.62rem; color: #8a959b; border-left: 1px dashed #dde3e6; }
 
@@ -60,7 +66,14 @@
 .charter-gantt .gantt-bar:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
 .charter-gantt .gantt-bar.is-ended { background: #9aa7ad; }
 .charter-gantt .gantt-bar.is-active { background: var(--gold); color: var(--ink); }
-.charter-gantt .gantt-bar.is-selected { box-shadow: 0 0 0 3px var(--ink); }
+/* R3-6: the bar being viewed is unmistakable: dark fill, thick outline and a VIEWING tag; an active one stays gold */
+.charter-gantt .gantt-bar.is-selected { box-shadow: 0 0 0 3px var(--ink); background: var(--accent-dark); }
+.charter-gantt .gantt-bar.is-selected.is-active { background: var(--gold); }
+.charter-gantt .gantt-viewing { font-weight: 700; opacity: 1; margin-left: 6px; padding: 0 5px; border-radius: 4px; background: var(--ink); color: #fff; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.05em; vertical-align: 1px; }
+.charter-gantt .gantt-legend { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.7rem; color: var(--muted); white-space: nowrap; }
+.charter-gantt .gantt-legend i { display: inline-block; width: 14px; height: 10px; border-radius: 3px; }
+.charter-gantt .gantt-legend i.is-active { background: var(--gold); }
+.charter-gantt .gantt-legend i.is-selected { background: var(--accent-dark); box-shadow: 0 0 0 2px var(--ink); margin-left: 6px; }
 .charter-gantt .gantt-bar--period { height: 22px; line-height: 22px; color: var(--ink); box-shadow: none; }
 .charter-gantt .gantt-bar--maintenance { background: repeating-linear-gradient(45deg, #b9c2c7, #b9c2c7 5px, #dfe5e8 5px, #dfe5e8 10px); }
 .charter-gantt .gantt-bar--unavailable { background: repeating-linear-gradient(45deg, #d9b7b4, #d9b7b4 5px, #f0dcda 5px, #f0dcda 10px); }
@@ -72,6 +85,10 @@
 .charter-gantt .gantt-empty { margin: 0.5rem 0 0; color: var(--muted); font-size: 0.9rem; }
 
 .charter-gantt.is-collapsed { padding: 0.45rem 0.8rem; }
+/* R3-5: on every page but Charter Admin an expanded band floats over the page; the host holds the strip's height */
+.charter-gantt-host { position: relative; z-index: 20; }
+.charter-gantt-host.is-overlay { min-height: 54px; }
+.charter-gantt.is-overlay { position: absolute; top: 0; left: 0; right: 0; box-shadow: 0 18px 40px rgba(16, 32, 40, 0.38); }
 .charter-gantt .gantt-strip { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; }
 .charter-gantt .gantt-strip strong { font-size: 1rem; }
 .charter-gantt .gantt-strip-dates { font-size: 0.85rem; color: var(--muted); }

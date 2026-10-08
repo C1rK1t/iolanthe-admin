@@ -1,7 +1,7 @@
-// The charter Gantt band (spec-charters §6). Read-only: drag pans, wheel zooms, click selects / opens.
-// mount(host, ctx) → {update(ctx), destroy()}. ctx: {charters, periods, selectedId, activeId, forcedId, today,
-// zoom, collapsed, canManage, onSelectCharter(id), onOpenPeriod(id|null), onCreateCharter(),
-// onZoomChange(level), onToggleCollapsed(bool)}.
+// The charter Gantt band (spec-charters §6; captain round 3 R3-4..6). Read-only: drag pans, wheel zooms, click selects / opens.
+// mount(host, ctx) → {update(ctx), attach(host), destroy()}. ctx: {charters, periods, selectedId, activeId, forcedId, today,
+// zoom, collapsed, locked (no Collapse button), overlay (an expanded band floats over the page instead of reflowing it),
+// canManage, onSelectCharter(id), onOpenPeriod(id|null), onCreateCharter(), onZoomChange(level), onToggleCollapsed(bool)}.
 (function () {
   "use strict";
 
@@ -142,12 +142,18 @@
       track.style.width = `${Math.round(totalDays * pxPerDay)}px`;
       track.replaceChildren();
 
+      // R3-4: alternate months banded, a bolder line where a year starts, and faint month lines down through the lanes.
       const months = el("div", { class: "gantt-months" });
-      core.visibleMonths(range.start, range.end).forEach((m) => {
+      const grid = el("div", { class: "gantt-grid" });
+      core.visibleMonths(range.start, range.end).forEach((m, i) => {
         const w = (core.dayIndex(m.end) - core.dayIndex(m.start) + 1) * pxPerDay;
-        months.appendChild(el("span", { style: `left:${xOf(m.start)}px;width:${w}px`, text: w > 40 ? m.label : "" }));
+        const isYear = m.start.slice(5) === "01-01";
+        const isMonthStart = m.start.slice(8) === "01";
+        months.appendChild(el("span", { class: `${i % 2 ? "alt" : ""}${isYear ? " is-year" : ""}`.trim(), style: `left:${xOf(m.start)}px;width:${w}px`, text: w > 40 ? m.label : "" }));
+        if (isMonthStart) grid.appendChild(el("span", { class: isYear ? "is-year" : "", style: `left:${xOf(m.start)}px` }));
       });
       track.appendChild(months);
+      track.appendChild(grid);
 
       const weeks = el("div", { class: "gantt-weeks" });
       if (pxPerDay >= 4) {
@@ -197,7 +203,11 @@
         },
         onpointerenter: (e) => showTip(bar, e), onpointermove: (e) => moveTip(e), onpointerleave: hideTip,
         onfocus: (e) => showTip(bar, e), onblur: hideTip
-      }, [el("span", { class: "gantt-bar-name", text: w > 40 ? bar.name : "" }), meta ? el("small", { text: meta }) : null]);
+      }, [
+        el("span", { class: "gantt-bar-name", text: w > 40 ? bar.name : "" }),
+        meta ? el("small", { text: meta }) : null,
+        bar.kind === "charter" && bar.id === ctx.selectedId && w > 90 ? el("small", { class: "gantt-viewing", text: "viewing" }) : null   // R3-6
+      ]);
       return node;
     }
 
@@ -205,7 +215,7 @@
     function showTip(bar, event) {
       hideTip();
       const lines = bar.kind === "charter"
-        ? [bar.name, core.fmtRange(bar.start_date, bar.end_date), `${bar.nights} nights · ${bar.guests} guests · ${bar.stops} stops`, bar.id === ctx.activeId ? "Active" : bar.status.replace("-", " ")]
+        ? [bar.name, core.fmtRange(bar.start_date, bar.end_date), `${bar.nights} nights · ${bar.guests} guests · ${bar.stops} stops`, `${bar.id === ctx.activeId ? "Active" : bar.status.replace("-", " ")}${bar.id === ctx.selectedId ? " · viewing" : ""}`]
         : [bar.name, core.fmtRange(bar.start_date, bar.end_date), bar.description.split("\n")[0]];
       tooltip = el("div", { class: "gantt-tip", role: "tooltip" }, lines.filter(Boolean).map((t, i) => el("div", { class: i === 0 ? "gantt-tip-title" : "", text: t })));
       document.body.appendChild(tooltip);
@@ -289,6 +299,11 @@
         el("select", { "aria-label": "Charters without dates", onchange: (e) => { if (e.target.value) ctx.onSelectCharter(e.target.value); e.target.value = ""; } },
           [el("option", { value: "", text: `${noDates.length} without dates…` })].concat(noDates.map((c) => el("option", { value: c.id, text: c.name || c.id }))))
       ]) : null;
+      // R3-6: a two-swatch legend (gold = active, outlined = viewing). R3-5: no Collapse button while the band is locked open.
+      const legend = el("span", { class: "gantt-legend", "aria-hidden": "true" }, [
+        el("i", { class: "is-active" }), el("span", { text: "active" }),
+        el("i", { class: "is-selected" }), el("span", { text: "viewing" })
+      ]);
       return el("div", { class: "gantt-toolbar" }, [
         el("div", { class: "gantt-title" }, [el("strong", { text: "Charters" }), el("span", { class: "gantt-span" })]),
         iconBtn("left", "Scroll left", { onclick: () => { viewport.scrollLeft -= viewport.clientWidth / 4; syncTitle(); } }),
@@ -298,10 +313,12 @@
         zoom,
         noDatesPill,
         el("span", { class: "gantt-sep" }),
+        legend,
+        el("span", { class: "gantt-sep" }),
         iconBtn("add", "New charter", { disabled: !ctx.canManage, onclick: () => ctx.onCreateCharter() }),
         iconBtn("reserve", "Reserved period", { disabled: !ctx.canManage, onclick: () => ctx.onOpenPeriod(null) }),
-        el("span", { class: "gantt-sep" }),
-        iconBtn("collapse", "Collapse", { onclick: () => { ctx.collapsed = true; ctx.onToggleCollapsed(true); render(); } })
+        ctx.locked ? null : el("span", { class: "gantt-sep" }),
+        ctx.locked ? null : iconBtn("collapse", "Collapse", { onclick: () => { ctx.collapsed = true; ctx.onToggleCollapsed(true); render(); } })
       ]);
     }
 
@@ -323,11 +340,17 @@
       ]);
     }
 
+    // R3-5: when ctx.overlay is set an expanded band floats over the page content; the host keeps the strip's height.
+    function syncOverlay() {
+      host.classList.toggle("is-overlay", Boolean(ctx.overlay && !ctx.collapsed));
+    }
+
     function render(view) {
       hideTip();
       host.replaceChildren();
-      root = el("section", { class: `charter-gantt${ctx.collapsed ? " is-collapsed" : ""}`, tabindex: "0", "aria-label": "Charter timeline" });
+      root = el("section", { class: `charter-gantt${ctx.collapsed ? " is-collapsed" : ""}${ctx.overlay && !ctx.collapsed ? " is-overlay" : ""}`, tabindex: "0", "aria-label": "Charter timeline" });
       host.appendChild(root);
+      syncOverlay();
       if (ctx.collapsed) {
         root.appendChild(strip());
         return;
@@ -368,13 +391,16 @@
       attach(nextHost) {
         hideTip();
         const view = currentView();
+        host.classList.remove("is-overlay");
         host = nextHost;
         host.replaceChildren(root);
+        syncOverlay();
         if (view) afterLayout(() => { if (viewport.isConnected) restoreView(view); });
       },
       destroy() {
         hideTip();
         window.removeEventListener("resize", onResize);
+        host.classList.remove("is-overlay");
         host.replaceChildren();
       }
     };
