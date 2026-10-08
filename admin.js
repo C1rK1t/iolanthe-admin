@@ -4842,55 +4842,53 @@
       setStatus("Only Charter Admin on Bridge can create charters.", "error");
       return;
     }
-    const modal = openDialogModal("Create New Charter", `
-      <form id="create-charter-form" class="form-grid">
-        <label>Charter Name
-          <input id="new-charter-name" required placeholder="Display Name" data-autofocus>
-        </label>
-        <label>Generated Charter ID
-          <input id="new-charter-id" readonly aria-readonly="true">
-        </label>
-        <label>Start Date
-          <input id="new-charter-start-date" type="date">
-        </label>
-        <label>End Date
-          <input id="new-charter-end-date" type="date">
-        </label>
-        <label class="full">Charter Notes
-          <textarea id="new-charter-notes"></textarea>
-        </label>
-        <label>Guest Count
-          <input id="new-charter-guest-count" type="number" min="1" step="1" value="1">
-        </label>
-        <label>Clone From Existing Charter
-          <select id="clone-from">
-            <option value="">Blank charter</option>
-            ${state.charters.map(charter => `<option value="${charter.id}">${escapeHtml(charter.name || charter.id)}</option>`).join("")}
-          </select>
-        </label>
-        <div class="full clone-panel">
-          <p class="muted">Copy selected files from the clone source.</p>
-          <div class="check-grid">
-            ${[
-              ["itinerary", "itinerary"],
-              ["crew", "crew"],
-              ["menus", "menus"],
-              ["drinks", "guest drinks"],
-              ["route", "route"]
-            ].map(([value, label]) => `<label><input type="checkbox" name="copy" value="${value}"> ${label}</label>`).join("")}
+    const core = window.IolantheChartersCore;
+    const sources = state.charters.slice().sort((a, b) => String((b.charter || {}).start_date || "").localeCompare(String((a.charter || {}).start_date || "")));
+    const modal = openDialogModal("New charter", `
+      <form id="create-charter-form" class="form-section">
+        <div class="form-grid">
+          <label class="full">Charter name
+            <input id="new-charter-name" required placeholder="Display name" data-autofocus>
+            <span class="field-hint">Folder id: <code id="new-charter-id">—</code></span>
+          </label>
+          <label>Start date
+            <input id="new-charter-start-date" type="date">
+          </label>
+          <label>End date
+            <input id="new-charter-end-date" type="date">
+            <span class="field-hint" id="new-charter-nights"></span>
+          </label>
+          <p class="modal-overlap-warning full" id="new-charter-overlap" role="alert"></p>
+          <label>Guests
+            <input id="new-charter-guest-count" type="number" min="1" step="1" value="1">
+          </label>
+          <label>Copy from
+            <select id="clone-from">
+              <option value="">— nothing —</option>
+              ${sources.map(charter => `<option value="${escapeAttribute(charter.id)}">${escapeHtml(charter.name || charter.id)}${(charter.charter || {}).start_date ? ` · ${escapeHtml(core.fmtShort(charter.charter.start_date))}` : ""}</option>`).join("")}
+            </select>
+          </label>
+          <div class="full">
+            <span class="field-hint">Copy</span>
+            <div class="check-grid">
+              ${[["itinerary", "Route & itinerary"], ["crew", "Crew"], ["menus", "Menus"], ["drinks", "Drinks"]].map(([value, label]) => `
+                <label class="inline-check"><input type="checkbox" name="copy" value="${value}" disabled> ${label}</label>
+              `).join("")}
+            </div>
           </div>
+          <p id="create-charter-error" class="modal-error full" role="alert"></p>
+          ${modalActionButtonsHtml({ submitKind: "save", submitLabel: "Create charter", submitAttributes: ` id="create-charter-submit"` })}
         </div>
-        <label class="inline-check full"><input type="checkbox" id="set-active-new" checked> Set as active</label>
-        <p id="create-charter-error" class="modal-error full" role="alert"></p>
-        ${modalActionButtonsHtml({ submitKind: "add", submitLabel: "Create charter" })}
       </form>
     `, { cardClass: "modal-wide", hideClose: true });
     const nameInput = modal.querySelector("#new-charter-name");
-    const idInput = modal.querySelector("#new-charter-id");
+    const idLabel = modal.querySelector("#new-charter-id");
+    const startInput = modal.querySelector("#new-charter-start-date");
+    const endInput = modal.querySelector("#new-charter-end-date");
     const cloneSelect = modal.querySelector("#clone-from");
     const copyInputs = Array.from(modal.querySelectorAll("input[name='copy']"));
     const syncGeneratedId = () => {
-      idInput.value = slugify(nameInput.value);
+      idLabel.textContent = slugify(nameInput.value) || "—";
     };
     const syncCopyAvailability = () => {
       const enabled = Boolean(cloneSelect.value);
@@ -4901,10 +4899,20 @@
         }
       });
     };
+    const syncDates = () => {
+      const nights = core.nights({ start_date: startInput.value, end_date: endInput.value });
+      modal.querySelector("#new-charter-nights").textContent = nights === null ? "" : `${nights} ${nights === 1 ? "night" : "nights"}`;
+      const clashes = core.findOverlaps({ id: "", start_date: startInput.value, end_date: endInput.value }, core.overlapEntries(state.charters, state.reservedPeriods.periods), "charter");
+      modal.querySelector("#new-charter-overlap").textContent = clashes.length ? `${core.overlapMessage(clashes)}. Choose other dates.` : "";
+      modal.querySelector("#create-charter-submit").disabled = clashes.length > 0;
+    };
     nameInput.addEventListener("input", syncGeneratedId);
     cloneSelect.addEventListener("change", syncCopyAvailability);
+    startInput.addEventListener("input", syncDates);
+    endInput.addEventListener("input", syncDates);
     syncGeneratedId();
     syncCopyAvailability();
+    syncDates();
     modal.querySelector("#create-charter-form").addEventListener("submit", createCharter);
   }
 
@@ -4919,6 +4927,10 @@
       errorField.textContent = "Charter name is required.";
       return;
     }
+    if (state.charters.some(charter => charter.id === charterId)) {
+      errorField.textContent = `A charter with the id ${charterId} already exists.`;
+      return;
+    }
     const copy = {};
     form.querySelectorAll("input[name='copy']").forEach(input => {
       copy[input.value] = input.checked;
@@ -4928,19 +4940,19 @@
       name,
       start_date: form.querySelector("#new-charter-start-date").value,
       end_date: form.querySelector("#new-charter-end-date").value,
-      notes: form.querySelector("#new-charter-notes").value,
+      notes: "",
       guest_count: normalizeGuestCount(form.querySelector("#new-charter-guest-count").value),
       clone_from: form.querySelector("#clone-from").value,
-      copy,
-      set_active: form.querySelector("#set-active-new").checked
+      copy
     };
     try {
-      state.selectedCharter = charterId;
       await api("/api/admin/charters/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body)
       });
+      state.selectedCharter = charterId;
+      state.sectionPanels.charter = "info";
       markModalSaved(document.getElementById("dialog-modal"));
       closeDialogModal();
       setStatus("Charter created.", "ok");
@@ -4949,8 +4961,6 @@
       errorField.textContent = error.message;
     }
   }
-
-  function openReservedPeriodModal() { setStatus("Reserved periods are not available yet.", "error"); }
 
   function openDeleteCharterModal() {
     if (!canManageCharterAdmin()) {
@@ -5009,6 +5019,129 @@
       await loadBootstrap();
     } catch (error) {
       errorField.textContent = error.message;
+    }
+  }
+
+  const RESERVED_PERIOD_TYPES = Object.freeze([["maintenance", "Maintenance"], ["unavailable", "Unavailable"], ["other", "Other"]]);
+
+  // Spec-charters §8. periodId null = new.
+  function openReservedPeriodModal(periodId) {
+    if (!canManageCharterAdmin()) {
+      setStatus("Only Charter Admin on Bridge can edit reserved periods.", "error");
+      return;
+    }
+    const core = window.IolantheChartersCore;
+    const existing = periodId ? state.reservedPeriods.periods.find(period => period.id === periodId) : null;
+    const period = existing || { id: "", type: "maintenance", title: "", start_date: "", end_date: "", description: "" };
+    const modal = openDialogModal(existing ? "Reserved period" : "New reserved period", `
+      <form id="reserved-period-form" class="form-section">
+        <div class="form-grid">
+          <div class="full">
+            <span class="field-hint">Type</span>
+            <div class="segmented" role="radiogroup" aria-label="Type">
+              ${RESERVED_PERIOD_TYPES.map(([value, label]) => `<label><input type="radio" name="period-type" value="${value}" ${period.type === value ? "checked" : ""}>${label}</label>`).join("")}
+            </div>
+          </div>
+          <label class="full">Title
+            <input id="period-title" required maxlength="80" value="${escapeAttribute(period.title)}" data-autofocus>
+          </label>
+          <label>Start date
+            <input id="period-start" type="date" required value="${escapeAttribute(period.start_date)}">
+          </label>
+          <label>End date
+            <input id="period-end" type="date" required value="${escapeAttribute(period.end_date)}">
+            <span class="field-hint" id="period-days"></span>
+          </label>
+          <p class="modal-overlap-warning full" id="period-overlap" role="alert"></p>
+          <label class="full">Description
+            <textarea id="period-description" rows="4">${escapeHtml(period.description || "")}</textarea>
+          </label>
+          <p id="period-error" class="modal-error full" role="alert"></p>
+          ${modalActionButtonsHtml({ submitKind: "save", submitLabel: existing ? "Save period" : "Add period", submitAttributes: ` id="period-submit"` })}
+        </div>
+      </form>
+    `, {
+      headerActionsHtml: existing ? `<div class="button-row modal-title-actions">${iconButtonHtml("remove", "Delete period", ` id="period-delete"`)}</div>` : "",
+      hideClose: true
+    });
+    const startInput = modal.querySelector("#period-start");
+    const endInput = modal.querySelector("#period-end");
+    const syncDates = () => {
+      const nights = core.nights({ start_date: startInput.value, end_date: endInput.value });
+      modal.querySelector("#period-days").textContent = nights === null ? "" : `${nights + 1} ${nights === 0 ? "day" : "days"}`;
+      const others = core.overlapEntries(state.charters, state.reservedPeriods.periods.filter(other => other.id !== period.id));
+      const clashes = core.findOverlaps({ id: period.id, start_date: startInput.value, end_date: endInput.value }, others, "period");
+      modal.querySelector("#period-overlap").textContent = clashes.length ? `${core.overlapMessage(clashes)}. Choose other dates.` : "";
+      modal.querySelector("#period-submit").disabled = clashes.length > 0;
+    };
+    startInput.addEventListener("input", syncDates);
+    endInput.addEventListener("input", syncDates);
+    syncDates();
+
+    modal.querySelector("#reserved-period-form").addEventListener("submit", async event => {
+      event.preventDefault();
+      const errorField = modal.querySelector("#period-error");
+      errorField.textContent = "";
+      const draft = {
+        id: period.id,
+        type: (modal.querySelector("input[name='period-type']:checked") || {}).value || "maintenance",
+        title: modal.querySelector("#period-title").value.trim(),
+        start_date: startInput.value,
+        end_date: endInput.value,
+        description: modal.querySelector("#period-description").value
+      };
+      const periods = existing
+        ? state.reservedPeriods.periods.map(other => (other.id === period.id ? draft : other))
+        : state.reservedPeriods.periods.concat([draft]);
+      if (await saveReservedPeriods(periods, errorField)) {
+        markModalSaved(document.getElementById("dialog-modal"));
+        closeDialogModal();
+        setStatus(existing ? "Reserved period saved." : "Reserved period added.", "ok");
+      }
+    });
+
+    const deleteButton = modal.querySelector("#period-delete");
+    if (deleteButton) {
+      deleteButton.addEventListener("click", async () => {
+        if (!await showAdminConfirm({ title: "Delete reserved period", message: `Delete "${period.title}"?`, confirmLabel: "Delete", cancelLabel: "Cancel", tone: "danger" })) {
+          return;
+        }
+        if (await saveReservedPeriods(state.reservedPeriods.periods.filter(other => other.id !== period.id), modal.querySelector("#period-error"))) {
+          markModalSaved(document.getElementById("dialog-modal"));
+          closeDialogModal();
+          setStatus("Reserved period deleted.", "ok");
+        }
+      });
+    }
+  }
+
+  // Posts the whole list with base_revision; on 409 offers a reload. Returns true when saved.
+  async function saveReservedPeriods(periods, errorField) {
+    try {
+      const saved = await api("/api/admin/reserved-periods/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ periods, base_revision: state.reservedPeriods.revision })
+      });
+      state.reservedPeriods = { revision: saved.revision, periods: Array.isArray(saved.periods) ? saved.periods : [] };
+      refreshCharterGantt();
+      return true;
+    } catch (error) {
+      if (error && error.status === 409) {
+        const reload = await showAdminConfirm({ title: "Reserved periods changed", message: `${error.message} Reload them now? Your edit will be lost.`, confirmLabel: "Reload", cancelLabel: "Cancel", tone: "warning" });
+        if (reload) {
+          await loadReservedPeriods();
+          refreshCharterGantt();
+          closeDialogModal();
+        }
+        return false;
+      }
+      if (errorField) {
+        errorField.textContent = error.message;
+      } else {
+        setStatus(error.message, "error");
+      }
+      return false;
     }
   }
 
