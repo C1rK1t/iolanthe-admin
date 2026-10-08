@@ -28,6 +28,7 @@
   let guard = null;      // page unsaved-changes guard
 
   const MAP_CENTER = [12.1, 120.0];
+  const STOP_ZOOM = 13;   // selecting a card zooms in at least this far (spec A2 round 2 T10)
   const STICKY_PX = 40;   // an anchorage stop dropped this close to its anchorage snaps back (spec A2 T5)
   let map = null;        // Leaflet map for the current panel
   const groups = {};     // Leaflet layer groups
@@ -457,7 +458,7 @@
     }
     if (panel !== mine || !mine.isConnected) return;
     destroyMap();
-    map = L.map(container, { zoomControl: false }).setView(MAP_CENTER, 10);
+    map = L.map(container, { zoomControl: false, keyboard: false }).setView(MAP_CENTER, 10);   // ← / → step the strip (T15)
     L.control.zoom({ position: "bottomright" }).addTo(map);
     L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
       maxZoom: 18, attribution: "Tiles &copy; Esri"
@@ -583,7 +584,7 @@
   }
   function panToStop(stopId) {
     const i = work.route.points.findIndex((p) => p.id === stopId);
-    if (map && i >= 0 && pointMarkers[i]) { map.closePopup(); map.panTo(pointMarkers[i].getLatLng()); }
+    if (map && i >= 0 && pointMarkers[i]) { map.closePopup(); map.setView(pointMarkers[i].getLatLng(), Math.max(map.getZoom(), STOP_ZOOM)); }
     highlightStop(stopId);
   }
 
@@ -1061,6 +1062,7 @@
     }
   }
 
+  // Undo/redo and, since round 2 T15, ← / → to step the strip from anywhere on the page (not inside a field or a dialog).
   function bindKeyboard() {
     if (keyHandler) document.removeEventListener("keydown", keyHandler);
     keyHandler = (e) => {
@@ -1068,8 +1070,11 @@
       if (/^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || "")) return;
       if (document.querySelector(".routes-modal, .admin-decision-backdrop, #dialog-modal:not(.hidden)")) return;
       const key = (e.key || "").toLowerCase();
+      const plain = !e.ctrlKey && !e.metaKey && !e.altKey;
       if ((e.ctrlKey || e.metaKey) && key === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
       else if ((e.ctrlKey || e.metaKey) && (key === "y" || (key === "z" && e.shiftKey))) { e.preventDefault(); redo(); }
+      else if (plain && e.key === "ArrowLeft" && cards) { e.preventDefault(); cards.step(-1); }
+      else if (plain && e.key === "ArrowRight" && cards) { e.preventDefault(); cards.step(1); }
     };
     document.addEventListener("keydown", keyHandler);
   }
@@ -1156,11 +1161,11 @@
       getCharter: charterOrNull,
       getDayCount: dayCount,
       siteTitle: (id) => { const s = (siteLibrary.sites || []).find((x) => x && x.id === id); return s && s.title ? s.title : id; },
-      onStopClick: (stopId) => { if (cards) cards.select(stopId); }
+      onStopClick: (stopId) => { if (cards) cards.select(stopId, { reveal: true }); }   // T10: scroll the strip into view and zoom the map
     });
     days.render($("days"));
     cards = window.IolantheStopCards.create({
-      A: A(), core: icore(), rcore: core(), el, svg, openModal, places: myPlaces,
+      A: A(), core: icore(), rcore: core(), el, svg, openModal, timeSelects: window.IolantheRoutesUi.timeSelects, places: myPlaces,
       getWork: () => work, getCharter: charterOrNull, getDayCount: dayCount, getSiteLibrary: () => siteLibrary,
       readOnly, editRecord, askDrop,
       removeStop: (stopId) => { const i = work.route.points.findIndex((p) => p.id === stopId); if (i >= 0) removeStopAt(i); },
