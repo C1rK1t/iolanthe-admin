@@ -123,6 +123,7 @@
           </div>
           <div class="meta" id="routes-meta"></div>
         </aside>
+        <div class="splitter splitter-v" id="routes-split-v" title="Drag to resize"></div>
         <div class="map-wrap">
           <div id="routes-map"></div>
           <div class="layers" id="routes-layers"></div>
@@ -131,6 +132,7 @@
           </div>
           <div class="map-hint" id="routes-map-hint"></div>
         </div>
+        <div class="splitter splitter-h" id="routes-split-h" title="Drag to resize"></div>
         <div class="strip-host" id="routes-strip"></div>
       </div>
     </section>`;
@@ -406,6 +408,38 @@
   function scheduleFitMap() {
     clearTimeout(fitMapTimer);
     fitMapTimer = setTimeout(fitMap, 60);
+  }
+  const SIDE_W_KEY = "routePlanner.sideW";
+  // Spec A2 T4: drag the vertical splitter to resize the side column, the horizontal one to resize the map. Both remembered per browser.
+  function bindSplitters() {
+    const store = (key, value) => { try { localStorage.setItem(key, String(value)); } catch (e) { /* per-browser only */ } };
+    let sideW = 0;
+    try { sideW = parseInt(localStorage.getItem(SIDE_W_KEY), 10) || 0; } catch (e) { sideW = 0; }
+    if (sideW) panel.style.setProperty("--side-w", `${sideW}px`);
+    const drag = (handle, onMove, onEnd) => {
+      handle.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        handle.setPointerCapture(e.pointerId);
+        handle.classList.add("dragging");
+        const move = (ev) => onMove(ev);
+        const up = () => { handle.removeEventListener("pointermove", move); handle.classList.remove("dragging"); onEnd(); };
+        handle.addEventListener("pointermove", move);
+        handle.addEventListener("pointerup", up, { once: true });
+        handle.addEventListener("pointercancel", up, { once: true });
+      });
+    };
+    const planner = panel.querySelector(".planner");
+    drag($("split-v"), (ev) => {
+      const w = Math.max(300, Math.min(ev.clientX - planner.getBoundingClientRect().left, planner.clientWidth * 0.6));
+      panel.style.setProperty("--side-w", `${Math.round(w)}px`);
+    }, () => store(SIDE_W_KEY, parseInt(panel.style.getPropertyValue("--side-w"), 10) || 0));
+    drag($("split-h"), (ev) => {
+      const mapTop = panel.querySelector(".map-wrap").getBoundingClientRect().top;
+      const h = Math.max(MAP_MIN_PX, Math.round(ev.clientY - mapTop));
+      panel.style.setProperty("--map-h", `${h}px`);
+      if (map) map.invalidateSize();
+    }, () => store(MAP_H_KEY, parseInt(panel.style.getPropertyValue("--map-h"), 10) || 0));
+    $("split-h").addEventListener("dblclick", () => { store(MAP_H_KEY, ""); fitMap(); });   // double-click: back to fit-the-viewport
   }
 
   async function initMap(mine) {
@@ -1039,6 +1073,7 @@
     };
     A().setPageUnsavedGuard(guard);
     bindInputs();
+    bindSplitters();
     bindKeyboard();
     if (!window.__routesFitMapBound) { window.addEventListener("resize", () => { if (panel && panel.isConnected) scheduleFitMap(); }); window.__routesFitMapBound = true; }
     const siteLibrary = (opts && opts.siteLibrary) || { sites: [] };

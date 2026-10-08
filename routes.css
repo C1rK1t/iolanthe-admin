@@ -46,7 +46,7 @@
 .routes-panel .link-btn { border: 0; background: none; color: var(--accent); padding: 0; cursor: pointer; font-size: 13px; text-decoration: underline; }
 
 /* Planner layout: side panel left (~30%), map right (~70%) */
-.routes-panel .planner { display: grid; grid-template-columns: minmax(300px, 30%) minmax(0, 1fr); gap: 16px; }
+.routes-panel .planner { display: grid; grid-template-columns: minmax(300px, var(--side-w, 30%)) 10px minmax(0, 1fr); gap: 16px; }
 .routes-panel .side { display: flex; flex-direction: column; gap: 14px; min-width: 0; height: var(--map-h); }
 /* Stops / Legs share one box that fills the side panel down to the map's bottom edge and scrolls inside */
 .routes-panel .tabbox { flex: 1; min-height: 160px; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
@@ -235,14 +235,19 @@
 .routes-panel .pill.fit-match { background: #cfe8cf; color: #1e5a3b; }
 .routes-panel .pill.fit-short, .routes-panel .pill.fit-over { background: var(--warn-bg); color: var(--warn); }
 .routes-panel .pill.check { background: #f5c6c2; color: #7a2a24; }
-.routes-panel .planner { grid-template-areas: "side map" "strip strip"; grid-template-rows: auto auto; }
+.routes-panel .planner { grid-template-areas: "side splitv map" "splith splith splith" "strip strip strip"; grid-template-rows: auto 10px auto; }
+.routes-panel .splitter { background: transparent; border-radius: 4px; }
+.routes-panel .splitter:hover, .routes-panel .splitter.dragging { background: var(--line); }
+.routes-panel .splitter-v { grid-area: splitv; cursor: col-resize; touch-action: none; }
+.routes-panel .splitter-h { grid-area: splith; cursor: row-resize; touch-action: none; }
 .routes-panel .planner .side { grid-area: side; }
 .routes-panel .planner .map-wrap { grid-area: map; }
 .routes-panel .strip-host { grid-area: strip; min-width: 0; }
 .routes-panel .mk-stop.selected { width: 34px; height: 34px; background: var(--accent); border-width: 3px; font-size: 14px; }
 .routes-panel .mk-stop.plain.selected { background: #fff; color: var(--accent); border-color: var(--accent); }
 @media (max-width: 900px) {
-  .routes-panel .planner { grid-template-areas: none; grid-template-rows: none; }
+  .routes-panel .splitter { display: none; }
+  .routes-panel .planner { grid-template-columns: minmax(0, 1fr); grid-template-areas: none; grid-template-rows: none; }
   .routes-panel .planner .side, .routes-panel .planner .map-wrap, .routes-panel .strip-host { grid-area: auto; }
   .routes-panel .strip-host { order: 3; }
   .routes-panel .side > .field:first-child { order: 3; }
