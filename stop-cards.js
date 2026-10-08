@@ -221,9 +221,10 @@
       let day = activeDay.get(stop.point.id);
       if (!days.includes(day)) { day = days[0]; activeDay.set(stop.point.id, day); }
       const counts = new Map(days.map((d) => [d, rec.activities.filter((a) => a.stop_id === stop.point.id && a.day === d).length]));
+      const hasDates = Boolean(ctx.getCharter() && ctx.getCharter().start_date);   // without dates the tab title already says "Day N"
       const tabs = el("div", { class: "card-tabs", role: "tablist" }, ...days.map((d) => {
         const b = el("button", { type: "button", role: "tab", class: "card-tab", "aria-selected": String(d === day), "data-day": String(d), onclick: () => { activeDay.set(stop.point.id, d); render(); } },
-          el("span", { class: "card-tab-t" }, shortDate(d)), el("span", { class: "card-tab-d" }, `Day ${d} · ${counts.get(d)} item${counts.get(d) === 1 ? "" : "s"}`));
+          el("span", { class: "card-tab-t" }, shortDate(d)), el("span", { class: "card-tab-d" }, `${hasDates ? `Day ${d} · ` : ""}${counts.get(d)} item${counts.get(d) === 1 ? "" : "s"}`));
         return b;
       }));
       return el("div", { class: "card-body" }, tabs, itemList(stop, rec, day));

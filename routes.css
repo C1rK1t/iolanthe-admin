@@ -274,5 +274,7 @@
 .routes-panel .days-item.site { border-style: solid; }
 .routes-panel .days-item-time { font-variant-numeric: tabular-nums; color: var(--muted); }
 .routes-modal .radio-list .side-label { margin: 6px 0 2px; }
+.routes-modal .radio-list input[type=radio] { width: 18px; height: 18px; min-height: 0; padding: 0; margin: 0; flex: none; accent-color: var(--accent); }
+.routes-modal .radio-list label > span { flex: 1; }
 .routes-modal .switch-row { display: flex; gap: 8px; align-items: center; font-size: 13px; text-transform: none; letter-spacing: 0; color: var(--ink); font-weight: 400; cursor: pointer; }
 .routes-modal .switch-row input[type=checkbox] { width: 16px; height: 16px; min-height: 0; padding: 0; margin: 0; flex: none; }
