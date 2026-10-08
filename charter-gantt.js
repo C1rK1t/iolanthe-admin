@@ -36,6 +36,10 @@
     return node;
   }
 
+  function afterLayout(fn) {
+    window.setTimeout(fn, 0);
+  }
+
   function iconBtn(kind, label, extra) {
     return el("button", { type: "button", class: `gantt-ib${extra && extra.tone ? ` ${extra.tone}` : ""}`, title: label, "aria-label": label, html: ICONS[kind], disabled: extra && extra.disabled, onclick: extra && extra.onclick });
   }
@@ -305,8 +309,8 @@
         root.appendChild(el("p", { class: "gantt-empty", text: "Use + to create your first charter." }));
       }
       bindPan();
-      // Width is only known once laid out.
-      requestAnimationFrame(() => { if (viewport.isConnected) applyZoom(ctx.zoom); });
+      // Width is only known once laid out. A timeout, not requestAnimationFrame: rAF never fires in a hidden tab.
+      afterLayout(() => { if (viewport.isConnected) applyZoom(ctx.zoom); });
     }
 
     render();
@@ -318,7 +322,7 @@
         const keepScroll = viewport && viewport.isConnected && !ctx.collapsed && !next.collapsed ? viewport.scrollLeft : null;
         ctx = next;
         render();
-        if (keepScroll !== null) requestAnimationFrame(() => { if (viewport.isConnected) { setScale(pxPerDay); viewport.scrollLeft = keepScroll; syncTitle(); } });
+        if (keepScroll !== null) afterLayout(() => { if (viewport.isConnected) { setScale(pxPerDay); viewport.scrollLeft = keepScroll; syncTitle(); } });
       },
       destroy() {
         hideTip();
