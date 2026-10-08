@@ -179,12 +179,13 @@
       const start = ch ? c.parseDateOnly(ch.start_date) : null;
       const arriveDay = p.arrive ? p.arrive.day : 1;
       const toIso = (day) => new Date(start + (day - 1) * 86400000).toISOString().slice(0, 10);
+      const nightsBefore = p.depart.day - arriveDay;
       const dayInput = start !== null
         ? el("input", { type: "date", class: "tile-date edit-only", value: toIso(p.depart.day), min: toIso(arriveDay) })
-        : el("input", { type: "number", class: "tile-date edit-only", value: String(p.depart.day), min: String(arriveDay), step: "1", "aria-label": "Departure day" });
+        : el("input", { type: "number", class: "tile-nights edit-only", value: String(nightsBefore), min: "0", step: "1", "aria-label": "Nights at this stop" });
       const timeInput = el("input", { type: "time", class: "tile-time edit-only", value: p.depart.time || "", title: "Departure time (blank: 09:00 is assumed)" });
       const dayOf = () => {
-        if (start === null) return parseInt(dayInput.value, 10);
+        if (start === null) { const n = parseInt(dayInput.value, 10); return Number.isInteger(n) && n >= 0 ? arriveDay + n : NaN; }
         const t = c.parseDateOnly(dayInput.value);
         return t === null ? NaN : Math.round((t - start) / 86400000) + 1;
       };
@@ -199,7 +200,7 @@
       });
       timeInput.addEventListener("change", () => ctx.editRecord((r) => c.setDeparture(r, p.id, { time: timeInput.value })));
       const nights = p.depart.day - arriveDay;
-      return tile("Depart", el("div", { class: "tile-row" }, dayInput, timeInput), stop.position === "origin" ? (nights ? `${nights} night${nights === 1 ? "" : "s"} aboard before sailing` : "sails on day 1") : (nights ? `${nights} night${nights === 1 ? "" : "s"}` : "day stop"));
+      return tile("Depart", el("div", { class: "tile-row" }, dayInput, start === null ? el("span", { class: "muted" }, "nights") : null, timeInput), stop.position === "origin" ? (nights ? `${nights} night${nights === 1 ? "" : "s"} aboard before sailing` : "sails on day 1") : (nights ? `${nights} night${nights === 1 ? "" : "s"}` : "day stop"));
     }
 
     function nextLegTile(stop, rec) {

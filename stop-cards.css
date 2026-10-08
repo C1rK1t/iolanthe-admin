@@ -39,6 +39,7 @@
 .routes-panel .tile input.tile-time, .routes-panel .tile input.tile-date { min-height: 0; height: 28px; font: inherit; font-size: 13px; font-weight: 700; padding: 0 6px; border: 1px solid var(--line); border-radius: 5px; background: #fff; color: var(--ink); }
 .routes-panel .tile input.tile-time { width: 92px; }
 .routes-panel .tile input.tile-date { width: 150px; }
+.routes-panel .tile input.tile-nights { width: 64px; min-height: 0; height: 28px; font: inherit; font-size: 13px; font-weight: 700; padding: 0 6px; border: 1px solid var(--line); border-radius: 5px; background: #fff; color: var(--ink); }
 .routes-panel .tile input:disabled { opacity: .7; }
 
 /* Day tabs and the ⚙ tab */
