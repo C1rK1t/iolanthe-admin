@@ -482,3 +482,7 @@ Brainstormed with the visual companion (`.superpowers/brainstorm/31923-*/content
   `admin-preview-1`). Worktrees, the data copy, the test-server launch entry and the feature branches removed. Plan 5
   Task 8 is done with it. Next: David / the captain try Charter -> Guest view on the boat; the vessel TZ question
   (deferred by David); spec C (revisions for crew / guests / menus / drinks).
+- **2026-10-08 Guest view follow-up LIVE** (admin #12, `81bdd89`, `admin-preview-3`): David asked for a **PC view** (1280 x 800,
+  monitor bezel, beside phone / tablet) and a **steady slider**: the title is one line above, the row below is only
+  ‹ track › ◎, so the track never moves (verified identical position and width on all 11 steps). Also fixed: a frame wider
+  than the panel used to widen the card instead of scaling.
