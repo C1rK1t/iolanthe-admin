@@ -123,6 +123,7 @@
 .routes-panel .mk-anch { width: 26px; height: 26px; border-radius: 50%; background: #fff; color: var(--stop); display: grid; place-items: center; box-shadow: 0 1px 5px rgba(0,0,0,.5); }
 .routes-panel .mk-anch svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
 .routes-panel .mk-anch.dim { opacity: .6; }
+.routes-panel .mk-anch.kind-stop svg { fill: currentColor; stroke: none; }
 .routes-panel .mk-site { width: 20px; height: 20px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg) translate(2px, -2px); background: var(--site); border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.5); }
 .routes-panel .mk-pin { width: 16px; height: 16px; transform: rotate(45deg); background: var(--pin); border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.5); }
 .routes-panel .mk-mid { width: 11px; height: 11px; border-radius: 50%; background: rgba(255,255,255,.55); border: 1px solid rgba(29,53,64,.7); }

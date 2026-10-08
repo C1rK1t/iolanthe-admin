@@ -7,12 +7,14 @@
   const ANCHOR_PATH = '<circle cx="12" cy="5" r="2"/><path d="M12 7v14M5 13a7 7 0 0 0 14 0M8 10h8"/>';
   const DEFAULT_ANCHORAGE_NAME = "Anchorage";
   const ANCHOR_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true">${ANCHOR_PATH}</svg>`;
+  const STOP_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6"/></svg>';
+  const DEFAULT_STOP_NAME = "Stop";
 
   function create(ctx) {
     const { A, core, el } = ctx;
     let anchorageList = [];
     let loaded = false; // true once load() has stored the list; until then "no such anchorage" means "not known yet"
-    let shownLayers = { sites: true, anchorages: true };
+    let shownLayers = { sites: true, anchorages: true, stops: true };
 
     const ll = (p) => [p.latitude, p.longitude];
     const sites = () => ((ctx.getSiteLibrary() || {}).sites || []).filter((s) => Number.isFinite(s.latitude) && Number.isFinite(s.longitude));
@@ -32,7 +34,7 @@
     // opts: { mode, layers, usedAnchorageIds, divIcon, onAnchorageClick(a), onSiteClick(s), onAnchorageDragEnd(a, latlng) }
     function draw(L, groups, opts) {
       const o = opts || {};
-      shownLayers = { sites: true, anchorages: true, ...(o.layers || {}) };
+      shownLayers = { sites: true, anchorages: true, stops: true, ...(o.layers || {}) };
       const used = o.usedAnchorageIds || new Set();
       const icon = o.divIcon;
       const noop = () => {};
@@ -43,23 +45,24 @@
             .addTo(groups.sites);
         });
       }
-      if (shownLayers.anchorages) {
-        anchorageList.forEach((a) => {
-          const html = `<div class="mk-anch ${used.has(a.id) ? "" : "dim"}">${ANCHOR_SVG}</div><div class="mk-label">${A.escapeHtml(a.name)}</div>`;
-          const title = `${a.name}${a.depth_m ? ` · ${a.depth_m} m` : ""}`;
-          L.marker(ll(a), { icon: icon(html), title, draggable: o.mode === "anchorage", zIndexOffset: 200 })
-            .on("click", () => (o.onAnchorageClick || noop)(a))
-            .on("dragend", (e) => (o.onAnchorageDragEnd || noop)(a, e.target.getLatLng()))
-            .addTo(groups.anchorages);
-        });
-      }
+      anchorageList.forEach((a) => {
+        const isStopKind = a.kind === "stop";
+        if (isStopKind ? !shownLayers.stops : !shownLayers.anchorages) return;
+        const html = `<div class="mk-anch${isStopKind ? " kind-stop" : ""} ${used.has(a.id) ? "" : "dim"}">${isStopKind ? STOP_SVG : ANCHOR_SVG}</div><div class="mk-label">${A.escapeHtml(a.name)}</div>`;
+        const title = `${a.name}${a.depth_m ? ` · ${a.depth_m} m` : ""}`;
+        L.marker(ll(a), { icon: icon(html), title, draggable: o.mode === "anchorage", zIndexOffset: 200 })
+          .on("click", () => (o.onAnchorageClick || noop)(a))
+          .on("dragend", (e) => (o.onAnchorageDragEnd || noop)(a, e.target.getLatLng()))
+          .addTo(groups.anchorages);
+      });
     }
 
     // The nearest visible anchorage marker within SNAP_PX of latlng (screen distance, so it works at any zoom), or null.
     function anchorageUnder(map, latlng) {
-      if (!map || !shownLayers.anchorages) return null;
+      if (!map || (!shownLayers.anchorages && !shownLayers.stops)) return null;
       const pt = map.latLngToContainerPoint(latlng);
       const hits = anchorageList
+        .filter((a) => (a.kind === "stop" ? shownLayers.stops : shownLayers.anchorages))
         .map((a) => ({ a, px: pt.distanceTo(map.latLngToContainerPoint(ll(a))) }))
         .filter((x) => x.px <= SNAP_PX)
         .sort((x, y) => x.px - y.px);
@@ -99,15 +102,18 @@
           lat: el("input", { type: "number", step: "0.0001", value: src.latitude.toFixed(5) }),
           lon: el("input", { type: "number", step: "0.0001", value: src.longitude.toFixed(5) }),
           depth: el("input", { type: "number", step: "0.5", min: "0", value: src.depth_m === undefined || src.depth_m === null ? "" : src.depth_m }),
+          kind: el("select", {}, el("option", { value: "anchorage" }, "Anchorage"), el("option", { value: "stop" }, "Stop (hold or drift, no anchorage)")),
           notes: el("textarea", { maxlength: "500" })
         };
         f.notes.value = src.notes || "";
+        f.kind.value = src.kind === "stop" ? "stop" : "anchorage";
         const users = anchorage ? core.routesUsingAnchorage(ctx.getRoutes(), anchorage.id) : [];
         let settled = false;
         const finish = (value) => { if (!settled) { settled = true; resolve(value); } };
         let modal = null;
         const body = el("div", {},
           el("div", { class: "field" }, el("label", {}, "Name"), f.name),
+          el("div", { class: "field" }, el("label", {}, "Kind"), f.kind),
           el("div", { class: "grid2" },
             el("div", { class: "field" }, el("label", {}, "Latitude"), f.lat),
             el("div", { class: "field" }, el("label", {}, "Longitude"), f.lon)),
@@ -116,7 +122,7 @@
           users.length ? el("p", { class: "meta" }, `Used as a stop on: ${routeNames(users)}.`) : null,
           anchorage ? el("div", {}, el("button", { type: "button", class: "text-btn danger-text", onclick: () => { modal.close(); deleteAnchorage(anchorage); } }, "Delete anchorage")) : null);
         modal = ctx.openModal({
-          title: isNew ? "New anchorage" : "Edit anchorage",
+          title: isNew ? "New anchorage or stop" : (src.kind === "stop" ? "Edit stop" : "Edit anchorage"),
           saveTitle: "Save anchorage",
           body,
           onClose: () => finish(null),
@@ -126,7 +132,7 @@
             const longitude = parseFloat(f.lon.value);
             if (!name) { A.setStatus("Name is required.", "error"); return false; }
             if (!(Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180)) { A.setStatus("Enter a valid latitude and longitude.", "error"); return false; }
-            const entry = { ...(anchorage || {}), name, latitude, longitude, notes: f.notes.value.slice(0, 500) };
+            const entry = { ...(anchorage || {}), name, latitude, longitude, kind: f.kind.value, notes: f.notes.value.slice(0, 500) };
             if (f.depth.value === "") delete entry.depth_m; else entry.depth_m = parseFloat(f.depth.value);
             const renamed = isNew || name !== anchorage.name;
             let beforeIds = new Set();
@@ -191,6 +197,28 @@
       return true;
     }
 
+    // Spec A2 D9/D13: saves a plain stop to the library with kind "stop" so every route map shows it. Resolves to the
+    // saved entry, or null on failure. The name is made unique against the library (core.uniqueName).
+    async function createStop(point) {
+      const base = point.name && !/^Stop( #\d+)?$/.test(point.name) ? point.name : DEFAULT_STOP_NAME;
+      let beforeIds = new Set();
+      let finalName = base;
+      try {
+        const saved = await saveLibrary((list) => {
+          beforeIds = new Set(list.map((a) => a.id));
+          finalName = core.uniqueName(base, list.map((a) => a.name));
+          return [...list, { name: finalName, latitude: point.latitude, longitude: point.longitude, notes: "", kind: "stop" }];
+        });
+        const result = saved.find((a) => !beforeIds.has(a.id)) || saved.find((a) => a.name === finalName) || null;
+        A.setStatus(result ? `"${finalName}" saved as a global stop.` : "The stop was not saved.", result ? "ok" : "error");
+        ctx.onChanged();
+        return result;
+      } catch (error) {
+        A.setStatus(error.message, "error");
+        return null;
+      }
+    }
+
     // Opens the admin's own Site Editor dialog (#dialog-modal). Resolves to the saved site, or null when the dialog
     // closes without saving. opts: { name, description } pre-fill a new site; pos gives its position.
     function openSiteModal(site, pos, opts) {
@@ -224,7 +252,7 @@
       });
     }
 
-    return { ctx, core, load, isLoaded: () => loaded, anchorages, sites, findAnchorage, findSite, draw, anchorageUnder, openAnchorageModal, deleteAnchorage, moveAnchorage, openSiteModal };
+    return { ctx, core, load, isLoaded: () => loaded, anchorages, sites, findAnchorage, findSite, draw, anchorageUnder, openAnchorageModal, deleteAnchorage, moveAnchorage, createStop, openSiteModal };
   }
 
   window.IolantheRoutesPlaces = Object.freeze({ create });
