@@ -1239,9 +1239,10 @@ Replace `renderPicker`, `renderStats`, `showTab`, `renderAll` with:
   function renderPills() {
     const f = icore().fit(toRecord(work.route), charterOrNull());
     const dirty = (work.route.dirty_stop_ids || []).length;
-    $("pills").replaceChildren(
+    $("pills").replaceChildren(...[
       el("span", { class: `pill fit-${f.state}`, title: f.title, "aria-label": `Fit: ${f.title}` }, f.label),
-      dirty ? el("span", { class: "pill check", title: "Stops whose dates moved under them. Open each card to clear it." }, `${dirty} to check`) : null);
+      dirty ? el("span", { class: "pill check", title: "Stops whose dates moved under them. Open each card to clear it." }, `${dirty} to check`) : null
+    ].filter(Boolean));   // replaceChildren(null) would insert the text "null"
   }
 
   function renderStats() {
