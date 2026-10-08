@@ -154,3 +154,77 @@ Started 2026-10-07. Each line is a decision David made during the brainstorm. Th
   and served (admin assets at `admin-itin-v2`; guest `itinerary-days.js` + `guest.js` v2, SW cache v4). The charter
   itinerary rework spec A is live. Follow-ups: plan 5 Task 8 one release later (drop the v1 converter and the legacy
   planned-route wrapper, add `?v=` to the guest script tags); captain's tweak round on the editor; specs B and C.
+
+## Spec A2 brainstorm (2026-10-08): "the Route page is the itinerary"
+
+Captain's reaction to the first version: "Why don't we just set up the Itinerary on the route page?" He found the two
+panels and the apply-a-route step hard to follow. Model, server and guest stay as they are; the admin gets one
+workplace per charter.
+
+- **A2-D1. Stay length is set by picking the departure day as a date.** Each stop card shows "Arrive <date> · Depart
+  <date> · <time>"; Depart is a date picker whose earliest choice is the arrival day. "N nights" is shown as a derived
+  label. Library templates keep storing `nights` underneath.
+- **A2-D2. The tube-line day view survives as a read-only tab inside the Route page** (beside Stops and Legs). Drag
+  handles, popover and add menus go. The separate Itinerary panel goes.
+- **A2-D3. Route planner stays as it is; clicking a stop opens a stop card.** No layout change to the Route panel.
+  The card carries Arrive, Depart (date picker + time), sites served, and one Day tab per day the stop spans, where
+  the itinerary items for that day are added, edited and removed. Day tabs are created dynamically from the dates;
+  moving a departure earlier must not silently lose a filled day (warn / move the items).
+- **A2-D4. Arrive is derived** (previous departure + leg at its speed, rolling past midnight); the day is never typed,
+  the time may be pinned. The origin's arrival is the itinerary start date and boarding time.
+- **A2-D5. Stop cards are a carousel.** Only the current card is fully visible; the edges of the previous and next
+  cards show. Previous / Next scroll it, Done closes it. A change that affects other stops tints those cards (they
+  must be visited to confirm); the last card stays tinted until the route's days match the charter's.
+- **A2-D6. Shortening a stay removes that day's items after a popup**: "Changing the date will remove the itinerary
+  entries for the 14th and 15th" with OK / Revert. (Not silent moving.)
+- **A2-D7. Style:** more graphical, less text; reuse the Route screen's icon buttons (no button text unless needed).
+  A style guide for the whole Admin is wanted; this spec adopts the Route panel's look and the guide is a separate
+  task (see memory "Iolanthe Admin style rollout").
+- **A2-D8. Served sites move off the card face into a stop utility tab** (stop settings) alongside the Day tabs.
+- **A2-D9. Global stops.** Like anchorages, a stop can be saved globally and shown on every route map; the legend gets
+  Anchorages and Stops toggles.
+- **A2-D10. Itinerary items colour-code timing conflicts** with each other and with the stop's arrival/departure.
+- **A2-D11. Carousel visual (David's sketch):** every stop is visible as a stacked card edge either side of the
+  current card, so the whole route's state is readable at a glance. Red edge = dirty (a change upstream altered its
+  dates; needs checking); green last edge = the route's days match the charter's; plain = fine. Any change that
+  alters the number of days dirties all downstream stops. Visiting a dirty card clears it automatically (no confirm).
+- **A2-D12. Clash rule:** items have a time and an optional duration (default 1 h); a clash is overlapping items on
+  the same day, or an item before the arrival or after the departure on the day the boat arrives or leaves.
+- **A2-D13. Global stops live in the anchorages library with `kind: "stop"`**; one editor, one map layer, two legend
+  toggles (Anchorages, Stops) filtering by kind.
+- **A2-D14. One record shape.** "Route" and "itinerary" are synonyms: a record is the path, the stops with their
+  stays (arrive/depart days and times), and the itinerary items. A library route is the same record with no items.
+  Starting a charter from any record imports everything, with an option to strip the items. The charter-vs-library
+  distinction is blurred; the library's `nights`/`depart_time` template fields are replaced by the same arrive/depart
+  days as a charter (relative to day 1).
+- **A2-D15. The library stays** as a store of records with no charter and no items. The Route page keeps "Working
+  on" (this charter's route / a library route); library cards show stays but no Day item tabs. "Start from…" on an
+  empty charter lists library routes and previous charters; importing offers to strip items. "Save to library" strips
+  items.
+- **A2-D16. Saving with red (dirty) cards is allowed.** The header shows the count ("3 stops to check") and the dirty
+  stop ids are stored with the record, so the red edges survive a reload.
+- **A2-D17. One page: carousel docked below the map.** Clicking a stop on the map spins the strip to its card; opening
+  a card centres the map. The side column loses its Stops list (the strip is the stops) and keeps stats, Legs, a
+  read-only Days tab, layer toggles, Start from… / Save to library. Header gains the start date, boarding time and the
+  fit indicator. Approved as the shape to build.
+- **Logged for later (David, 2026-10-08):** stacked card edges get progressively narrower away from the open card;
+  the fit indicator should be as short as possible, ideally graphical with a tooltip; the right-hand stack in the
+  page mockup was mis-drawn (mockup artefact only).
+- **A2-S1 Record (approved):** v2 shape plus optional `duration_min` on items, `dirty_stop_ids` on the record,
+  anchorage `kind`; library records drop `nights`/`depart_time` for arrive/depart days and never carry items; arrival
+  days are computed by the admin; fit and clashes computed, never stored; `too-long` refusal removed; migration v5.
+  **Start date/time is the charter's `start_date` (and a boarding time on the charter), locked, not an itinerary
+  field** — no override, to avoid inconsistency. Library records have no start.
+- **A2-S2 Server (approved):** `itinerary/import {source, from_day, strip_items, base_revision}` replaces apply-route
+  (re-bases days, items travel, no length refusal); save accepts `duration_min` and `dirty_stop_ids`; library saves
+  take arrive/depart days and drop items; anchorages `kind`; charter summaries gain a stop count; migration v5.
+- **A2-D18. "Library route" = "unassigned route".** In the Route page's record picker, library routes appear under
+  an "Unassigned" heading rather than "Library"; the words library/unassigned mean the same record.
+- **A2-S3 Route page (approved)** as presented: pill fit indicator, side column without a Stops list (Legs + read-only
+  Days), strip docked below the map, card with Arrive/Depart/Next-leg tiles, Day tabs + ⚙ tab, items with coloured
+  bars, popup guard for dropped days, dirty cascade, Start from…, `stop-cards.js`, Itinerary panel deleted.
+  **Correction to S1/S2 and D14/D15: unassigned routes MAY carry items** (standard items for that route). Save As
+  keeps them; the server does not strip on library save. The strip-items option lives on import, for both sources.
+- **A2-S4 Guest, data, rollout (approved).** Guest app untouched; its stylised paper-list itinerary look is to be
+  preserved as it is for now. Migration v5; rollout server (rehearsed) → admin; the Itinerary panel and the Apply
+  dialog go in the same admin release that adds the strip.
