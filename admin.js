@@ -4640,6 +4640,7 @@
           <div class="header-actions">
             <span class="status-pill status-pill--${pill.tone}" id="charter-info-pill">${escapeHtml(pill.text)}</span>
             ${iconButtonHtml("star", makeActiveTitle, ` id="charter-make-active"${makeActiveDisabled ? " disabled" : ""}`)}
+            ${iconButtonHtml("preview", "Guest view", ` id="charter-guest-view"`)}
             <span class="header-sep"></span>
             ${iconSubmitButtonHtml("save", "Save Charter Information", ` form="charter-info-form" id="charter-info-save"`)}
             ${iconButtonHtml("cancel", "Cancel changes", ` id="cancel-charter-info"`)}
@@ -6413,6 +6414,11 @@
       }
     });
 
+    const guestViewButton = document.getElementById("charter-guest-view");
+    if (guestViewButton) {
+      guestViewButton.addEventListener("click", () => showCharterPanel("preview"));   // spec B §3.1; the form's unsaved guard asks first
+    }
+
     const deleteButton = document.getElementById("charter-delete");
     if (deleteButton) {
       deleteButton.addEventListener("click", openDeleteCharterModal);   // moved here from the band toolbar (captain 2026-10-08)
@@ -6504,6 +6510,9 @@
     if (activePanel === "routes") {
       return window.IolantheRoutes ? window.IolantheRoutes.render() : placeholderCard("Routes");
     }
+    if (activePanel === "preview") {
+      return window.IolantheGuestPreviewPanel ? window.IolantheGuestPreviewPanel.render() : placeholderCard("Guest view");
+    }
     if (activePanel === "sites") {
       return renderSitesPanel();
     }
@@ -6531,6 +6540,22 @@
       }
       return;
     }
+    if (activePanel === "preview") {
+      if (window.IolantheGuestPreviewPanel) {
+        const route = itinerary && typeof itinerary === "object" && itinerary.route && typeof itinerary.route === "object" ? itinerary.route : {};
+        window.IolantheGuestPreviewPanel.bind({
+          charterId: state.selectedCharter,
+          charter: charterInfo,
+          points: Array.isArray(route.points) ? route.points : [],
+          pill: charterInfoHeaderState(charterInfo).pill,
+          today: adminToday(),
+          focusDay: state.previewFocusDay || 0,
+          onOpenInfo: () => showCharterPanel("info")
+        });
+      }
+      state.previewFocusDay = 0;
+      return;
+    }
     if (activePanel === "sites") {
       bindSitesPanel(siteLibrary);
     }
@@ -6541,6 +6566,7 @@
       { id: "info", label: "Charter Info" },
       { id: "crew", label: "Crew" },
       { id: "routes", label: "Route" },
+      { id: "preview", label: "Guest view" },
       { id: "sites", label: "Site Editor" }
     ];
     const activePanel = panels.some(panel => panel.id === state.sectionPanels.charter) ? state.sectionPanels.charter : "info";
@@ -6602,6 +6628,7 @@
     if (options.focusStopId) state.routesFocusStopId = options.focusStopId;
     if (options.routeId !== undefined) state.routesRouteId = options.routeId;
     if (options.startFrom !== undefined) state.routesStartFrom = options.startFrom;
+    if (options.previewDay !== undefined) state.previewFocusDay = options.previewDay;
     state.sectionPanels.charter = panelId;
     await renderCharter();
     return true;
