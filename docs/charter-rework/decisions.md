@@ -388,6 +388,7 @@ Brainstormed with the visual companion (`.superpowers/brainstorm/31923-*/content
   the working tree is clean. NEXT: apply the fixes + tests, re-run 92+, run `scripts/check-charter-endpoints.sh`
   (needs David to log in to the scratch admin), PR, `./update.sh` on the vessel, then execute plan ch-02 (admin).
 
+<<<<<<< HEAD
 - **2026-10-08 server review fixes DONE** (`7a23db7`, 97 tests): the rule gained two fallbacks (earliest upcoming, then any
   charter) so `/api/charter` and track logging never see an empty id with charters present; the public charter route
   is wrapped in try/catch; `loadTrack("")` stays in memory; `charter.json` saves only run the overlap check when the
@@ -413,3 +414,17 @@ Brainstormed with the visual companion (`.superpowers/brainstorm/31923-*/content
   forced active + guest payload flips, make-active Csaba -> 409 "Larry is in date…", restore -> Csaba). No conflict with
   server PR #4 (itinerary.js only). Admin main is at 117 tests (round-2 work), so plan ch-02 totals read +6. ch-02 starts
   with the new files; index.html / CLAUDE.md wiring waits for admin PR #8. NEXT: David merges #3 + `./update.sh`.
+=======
+- **2026-10-08 plan ch-02 (admin) EXECUTED; PR C1rK1t/iolanthe-admin#9 OPEN** (branch `feat/charter-gantt`, 140 tests). Sonnet
+  implementers for the admin.js tasks, pure modules and CSS installed from the dry run, browser passes by this session on
+  the scratch server. Final Sonnet review found a blocker (pointer capture on pointerdown swallowed real bar clicks; the
+  scripted `.click()` checks had hidden it) plus eight follow-ups, all fixed: wheel ignores horizontal scroll and scales by
+  delta, arrows stop propagation (Route stop cards), the band is re-attached across repaints keeping zoom + scroll (view
+  restored from the last drawn state), active/forced recomputed after a dates save, Make active keeps the form guard,
+  409 Reload force-closes the card, end-before-start refused, one period label map ("Other"), today corrected to the
+  server date. Also fixed while verifying: grid `min-width:auto` let the track widen the page; first layout via setTimeout
+  (rAF never fires in a hidden tab); `cloneCharterInfo` restored after an over-eager delete. Real-mouse checks passed.
+  Scratch data keeps a test charter "hoffmann-two". Deferred minors from the review: `charter-gantt.js` has no automated
+  test (a Playwright bar-click smoke test would have caught the blocker); tooltip edge flip; localStorage fallback.
+  Merge order: server #3 -> vessel `./update.sh` -> admin #9 (resolve `index.html` ?v= and CLAUDE.md against #8).
+>>>>>>> c033b3c (docs: admin plan ch-02 executed; PR #9 open; review-fix log)
