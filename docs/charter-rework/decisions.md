@@ -538,4 +538,10 @@ Brainstormed with the visual companion (`.superpowers/brainstorm/31923-*/content
   first.
 - **R3b-4** Rolled up, a click (or Enter / Space) anywhere on the strip rolls it down, not just the Expand button.
 - Plan: `plans/r3b-captain-immediate.md` (admin branch `feat/captain-round3b`, guest branch `feat/times-24h`).
+- **2026-10-09 round 3b EXECUTED:** admin `feat/captain-round3b` (3 commits, 146 tests, assets `admin-captain-r3b`), guest
+  `feat/times-24h` (1 commit, 15 tests, cache v7 / `guest-b-3`); one Sonnet implementer, all replacements verbatim.
+  Browser pass: eye before the viewed bar and in the legend; the band rolls 52 → 153 → 205 px over ~0.5 s and back;
+  strip name click and Enter expand; a charter pick from an overlay rolls it up at once; arrival time selects write
+  "HH:MM" to the hidden input and dirty the form; guest clock "Friday 9 Oct, 07:52". PRs iolanthe-admin#17 and
+  iolanthe-guest#4 open; merge on David's word.
 
