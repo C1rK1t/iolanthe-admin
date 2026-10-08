@@ -279,5 +279,14 @@
 .routes-modal .radio-list label > span { flex: 1; }
 .routes-modal .switch-row { display: flex; gap: 8px; align-items: center; font-size: 13px; text-transform: none; letter-spacing: 0; color: var(--ink); font-weight: 400; cursor: pointer; }
 .routes-modal .switch-row input[type=checkbox] { width: 16px; height: 16px; min-height: 0; padding: 0; margin: 0; flex: none; }
+/* Round 2 T14: the Start from… result line */
+.routes-modal .result { display: flex; align-items: center; gap: 10px; background: var(--soft); border-radius: 8px; padding: 10px 12px; }
+.routes-modal .result-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--line); flex: none; }
+.routes-modal .result-dot.ok { background: var(--ok); }
+.routes-modal .result-dot.warn { background: #d9a400; }
+.routes-modal .result-text { min-width: 0; }
+.routes-modal .result-l1 { font-weight: 600; font-size: 14px; line-height: 1.35; }
+.routes-modal .result-l2 { font-size: 12px; line-height: 1.35; }
+.routes-modal .field .switch-row { padding-top: 8px; }
 .routes-panel .mk-anchor-badge { position: absolute; bottom: -3px; right: -3px; width: 15px; height: 15px; border-radius: 50%; background: #fff; color: var(--stop); border: 1px solid var(--stop); display: grid; place-items: center; }
 .routes-panel .mk-anchor-badge svg { width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
