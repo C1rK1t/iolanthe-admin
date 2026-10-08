@@ -493,3 +493,29 @@ Brainstormed with the visual companion (`.superpowers/brainstorm/31923-*/content
   a tab in the Charter, Galley and Hotel sections, opening the guest on Itinerary / Today's Menu / Wine & Drinks.
   Verified with real Galley and Hotel logins on a local server. Seen once, not reproduced: a stale Charter Info unsaved
   guard threw on the first section click after a login in a tab that had held a Charter Admin page.
+
+## Captain round 3 (2026-10-09, relayed by David after the round-2 release)
+
+- **R3-1 Clear this route.** On a charter's route a trash icon "Clear this route" (charter mode only, next to Start
+  from…) empties the points and the items after the popup names the items it drops; the blank canvas is unsaved until
+  Save, and Cancel brings everything back. Unassigned routes keep their Delete.
+- **R3-2 Map labels.** Anchorage and global-stop markers lose the always-on text label and keep the hover tooltip
+  sites have (the name is in the tap popup on the tablet); unnamed waypoints get no tooltip; named waypoints and the
+  numbered route stops keep theirs. The map was too cluttered zoomed out.
+- **R3-3 Gantt default zoom: Quarter** (3 months) instead of Active.
+- **R3-4 Gantt gridlines.** Faint vertical lines through the lanes at month boundaries, a bolder one at year
+  boundaries, and alternate month headers banded.
+- **R3-5 Band per page.** "Charter Admin" (the Charter Info page) keeps the band open with no Collapse button; on
+  Route & Itinerary, Crew, Guest view and Site Editor it starts as the collapsed strip, Expand rolls it down OVER the
+  page (no reflow), and it collapses again when a charter is picked, the page changes, or Collapse is pressed. Nothing
+  is remembered per browser any more.
+- **R3-6 Selected vs active.** The selected ("viewing") bar gets a dark fill with the thick outline and a small
+  VIEWING tag; active stays gold; the toolbar carries a two-swatch legend (gold = active, outlined = viewing); the
+  bar tooltip says "Viewing". David: partly a training issue, but make it obvious.
+- **R3-7 Topbar label.** "NEXT ACTIVE CHARTER" when the active charter starts in the future, "ACTIVE CHARTER" while it
+  runs, "LAST CHARTER" when it has ended.
+- **R3-8 Route page default.** Opening Route & Itinerary from the nav lands on this charter's route; an explicit
+  "open this unassigned route" still goes to the library.
+- Plan: `plans/r3-captain-round3.md`. No other session is running; David will warn the next one to look for recent
+  changes.
+
