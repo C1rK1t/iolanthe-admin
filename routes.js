@@ -339,7 +339,6 @@
       b("export", "Export GPX / KML", () => io.openExport(), "", work.route.points.length < 2),
       b("trash", "Delete route", deleteRoute, "", !hasId));
   }
-  async function openStartFrom() { status("Start from… arrives in Task 11.", ""); }
 
   // ---------- map ----------
   function renderModes() {
@@ -764,6 +763,101 @@
           status(`Saved "${saved.name}" to the library`, "ok");
           return true;
         } catch (error) {
+          reportError(error);
+          return false;
+        } finally {
+          saving = false;
+          if (panel === mine && mine.isConnected && work) renderActions();
+        }
+      }
+    });
+  }
+
+  // Spec A2 §5.8: import an unassigned route or another charter's record from a day. The server re-bases its days
+  // onto the from-day and brings its items unless stripped; nothing is refused for length (the fit pill reports).
+  async function openStartFrom() {
+    if (!work || saving || !isCharter()) return;
+    if (readOnly()) { status("This charter has ended; the route is read-only.", "error"); return; }
+    if (!(await guardDiscard())) return;
+    const n = dayCount();
+    if (!n) { status("Set the charter's start and end dates first.", "error"); return; }
+    const mine = panel;
+    let charters = [];
+    try {
+      const [routeData, charterData] = await Promise.all([A().api("/api/admin/routes"), A().api("/api/admin/charters")]);
+      if (panel !== mine || !mine.isConnected) return;
+      routes = Array.isArray(routeData.routes) ? routeData.routes : [];
+      charters = (Array.isArray(charterData.charters) ? charterData.charters : []).filter((c) => c.id !== subject.charterId && c.stops > 0);
+    } catch (error) { reportError(error); return; }
+    const record = toRecord(work.route);
+    const today = (() => {
+      const start = icore().parseDateOnly(subject.charter.start_date);
+      if (start === null) return 1;
+      return Math.min(Math.max(Math.floor((Date.now() - start) / 86400000) + 1, 1), n);
+    })();
+    const hasStops = icore().stopEntries(record.route.points).length > 0;
+    const fromDay = el("select", { id: "routes-from-day" }, ...Array.from({ length: n }, (_, i) => el("option", { value: String(i + 1), selected: i + 1 === (hasStops ? today : 1) || undefined }, `Day ${i + 1} · ${icore().dayDateLabel(subject.charter, i + 1)}`)));
+    const strip = el("input", { type: "checkbox", id: "routes-strip-items" });
+    let stripTouched = false;
+    strip.addEventListener("change", () => { stripTouched = true; });
+    const fitLabel = (route) => {
+      const f = icore().fit(icore().rebaseRecord(toRecord({ ...route, revision: 0 }), Number(fromDay.value)), subject.charter);
+      return f.state === "none" ? "" : ` · ${f.label}`;
+    };
+    const sourceRows = [];
+    const row = (value, label, kind) => {
+      const input = el("input", { type: "radio", name: "routes-source", value, "data-kind": kind });
+      const text = el("span", {}, label);
+      input.addEventListener("change", () => { if (!stripTouched) strip.checked = kind === "charter"; });
+      sourceRows.push({ input, text, value, kind });
+      return el("label", {}, input, text);
+    };
+    const withStops = routes.filter((r) => r.points.some(core().isStop));
+    const list = el("div", { class: "radio-list" },
+      withStops.length ? el("div", { class: "side-label" }, "Unassigned routes") : null,
+      ...withStops.map((r) => row(`library:${r.id}`, `${r.name} · ${r.points.filter(core().isStop).length} stops`, "library")),
+      charters.length ? el("div", { class: "side-label" }, "Other charters") : null,
+      ...charters.map((c) => row(`charter:${c.id}`, `${c.name} · ${c.stops} stops`, "charter")));
+    const refreshFit = () => sourceRows.forEach((s) => {
+      if (s.kind !== "library") return;
+      const r = routes.find((x) => `library:${x.id}` === s.value);
+      s.text.textContent = `${r.name} · ${r.points.filter(core().isStop).length} stops${fitLabel(r)}`;
+    });
+    fromDay.addEventListener("change", refreshFit);
+    refreshFit();
+    if (sourceRows.length) { sourceRows[0].input.checked = true; strip.checked = sourceRows[0].kind === "charter"; }
+    openModal({
+      title: "Start from…", saveTitle: "Import", wide: true,
+      body: el("div", {},
+        sourceRows.length ? list : el("p", { class: "empty" }, "No unassigned routes or other charters with stops yet."),
+        el("div", { class: "grid2" },
+          el("div", { class: "field" }, el("label", { for: "routes-from-day" }, "From day"), fromDay),
+          el("div", { class: "field" }, el("label", { for: "routes-strip-items" }, "Items"), el("label", { class: "switch-row" }, strip, " Strip the record's items"))),
+        el("p", { class: "meta" }, "Stops reached before the from-day stay; the record's day 1 lands on it. The fit pill reports if the route runs short or over.")),
+      onSave: async () => {
+        const chosen = sourceRows.find((s) => s.input.checked);
+        if (!chosen) { status("Pick a record to start from.", "error"); return false; }
+        const day = Number(fromDay.value);
+        const dropped = icore().itemsDroppedByImport(record, day, n);
+        if (dropped.length && !(await askDrop({ days: [...new Set(dropped.map((a) => a.day))].sort((a, b) => a - b), items: dropped }, `Starting from day ${day}`))) return false;
+        const [type, id] = chosen.value.split(":");
+        saving = true;
+        renderActions();
+        try {
+          const { itinerary } = await post(`/api/admin/charter/${encodeURIComponent(subject.charterId)}/itinerary/import`, { source: { type, id }, from_day: day, strip_items: strip.checked, base_revision: work.baseRevision });
+          if (panel !== mine || !mine.isConnected) return true;
+          subject = { ...subject, itinerary };
+          setWork(charterRouteFromItinerary(itinerary));
+          afterPersist();
+          const f = icore().fit(toRecord(work.route), subject.charter);
+          status(`Started from "${chosen.text.textContent.split(" · ")[0]}" on day ${day} · revision ${itinerary.revision}${f.state === "match" ? " · fits the charter" : f.state === "none" ? "" : ` · ${f.label}`}`, "ok");
+          return true;
+        } catch (error) {
+          if (error.status === 409) {
+            const reload = await A().showAdminConfirm({ title: "Itinerary changed elsewhere", message: `${error.message} Reload to see the latest?`, confirmLabel: "Reload", cancelLabel: "Cancel", tone: "warning" });
+            if (reload) await A().showCharterPanel("routes", { subject: "charter" });
+            return true;
+          }
           reportError(error);
           return false;
         } finally {
