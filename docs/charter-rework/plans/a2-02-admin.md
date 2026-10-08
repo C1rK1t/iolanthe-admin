@@ -115,11 +115,13 @@ test("A2 normalize: duration_min kept when an integer; dirty_stop_ids kept only 
     activities: [
       { id: "act_1", stop_id: "stp_a", day: 1, title: "x", duration_min: 90 },
       { id: "act_2", stop_id: "stp_a", day: 1, title: "y", duration_min: "45" },
-      { id: "act_3", stop_id: "stp_a", day: 1, title: "z", duration_min: 7.5 }
+      { id: "act_3", stop_id: "stp_a", day: 1, title: "z", duration_min: 7.5 },
+      { id: "act_4", stop_id: "stp_a", day: 1, title: "n", duration_min: null },
+      { id: "act_5", stop_id: "stp_a", day: 1, title: "e", duration_min: "" }
     ],
     dirty_stop_ids: ["stp_b", "stp_nope", "stp_b", 7]
   });
-  assert.deepEqual(it.activities.map((a) => a.duration_min), [90, 45, undefined]);
+  assert.deepEqual(it.activities.map((a) => a.duration_min), [90, 45, undefined, undefined, undefined]);
   assert.deepEqual(it.dirty_stop_ids, ["stp_b"]);
 });
 
@@ -183,7 +185,8 @@ In `itinerary-core.js`:
 
 <!-- dryrun:core-activity-duration -->
 ```js
-    const duration = Number(a.duration_min);
+    // null, "" and booleans mean "no duration" (Number() would turn them into 0, which the bounds check rejects). Same as the server.
+    const duration = a.duration_min === null || a.duration_min === "" || typeof a.duration_min === "boolean" ? NaN : Number(a.duration_min);
     if (Number.isInteger(duration)) out.duration_min = duration;
 ```
 
