@@ -239,3 +239,15 @@ workplace per charter.
   `routes-lists.js`, `routes-places.js`, `routes-popup.js`, `routes-ui.js`, `itinerary.js` (Days-tab renderer to
   reuse), `itinerary-core.js` exports and `admin.js`'s charter dispatcher (the previous survey lived in a session temp
   file). Then execute both with Sonnet subagents + browser verification, server first.
+- **A2-D21 (planning, 2026-10-08, admin plan `a2-02-admin.md` written and dry-run).** Decisions taken while writing the
+  admin plan, for David to confirm on review: (1) `setStopDays` and `promoteRoute` are deleted along with
+  `edgeStates`/`moveEdge` (the former carries the removed over-the-end rule, the latter writes the legacy template
+  fields; `toUnassignedRoute` replaces it); (2) `estimateTimes` assumes 09:00 for an overnight stop with no departure
+  time instead of breaking the chain, so every card shows an estimated arrival; (3) the welcome message, previously
+  edited only on the Itinerary panel, is edited in the Route page's Description slot (relabelled "Welcome message" in
+  charter mode); (4) edge shrink curve 26, 18, 12, 8, 6 then 4 px; `routes-lists.js` keeps its own file (Legs);
+  (5) undo/redo history holds the whole working route (points, items, dirty ids). Dry-run: the core and routes-core code
+  assembled from the plan text passes 110 tests; the two new browser modules parse. Next: execute A2-01 (server, with
+  the docker-vm migration rehearsal), deploy, then A2-02 on `feat/itinerary-a2` with Sonnet subagents and browser
+  verification, then merge.
+
