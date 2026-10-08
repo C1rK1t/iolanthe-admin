@@ -281,3 +281,19 @@ workplace per charter.
   B (guest preview with a date slider) and C (revisions for the other charter files); restore the read-only guard once
   the historical records are tidy.
 
+## Spec A2 tweak round (David's first look at the live Route page, 2026-10-08)
+
+- **A2-T1 Empty band under the strip.** The map is capped at 640 px (`--map-h`), so on a 2000-px screen the page ends
+  with a large empty band. To do: size the map to the viewport minus the header and the strip (min 380 px, no cap) so
+  the map grows into the space and the strip stays docked.
+- **A2-T2 Arrival must be derived, not editable.** The Arrive tile's pinned-time input (spec D4 "the time may be
+  pinned") goes; arrival time and day are always computed from the previous departure and the leg. Display only,
+  estimate in italics.
+- **A2-T3 Depart picker on unassigned routes.** With no charter dates the plan used a day-number input (min = arrival
+  day), which reads as a "number of days" picker and refuses values below the arrival day. To do: date picker when
+  the record has charter dates (as now); on an unassigned route a **nights here** count (0 = day stop) instead of a
+  day number. Multi-day passages (0 stops on a day) already work: a long leg lands the arrival one or more days later
+  and the Days tab shows "Underway".
+- **A2-T4 Size sliders.** A vertical splitter between the side column and the map and a horizontal one between the
+  map and the strip, remembered per browser (localStorage); the map redraws on resize already.
+
