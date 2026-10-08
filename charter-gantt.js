@@ -105,6 +105,7 @@
     // ---- drawing ----
     function syncTitle() {
       const t = root.querySelector(".gantt-span");
+      if (!pxPerDay) return;   // nothing drawn yet (applyZoom runs after the first layout)
       if (t && viewport.clientWidth) t.textContent = `${core.fmtShort(viewStart())} – ${core.fmtShort(viewEnd())}`;
     }
 
@@ -309,7 +310,7 @@
     }
 
     render();
-    const onResize = () => { if (!ctx.collapsed && viewport && viewport.isConnected) { drawTrack(); syncTitle(); } };
+    const onResize = () => { if (!ctx.collapsed && pxPerDay && viewport && viewport.isConnected) { drawTrack(); syncTitle(); } };
     window.addEventListener("resize", onResize);
 
     return {

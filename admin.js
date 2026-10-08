@@ -6377,7 +6377,10 @@
     const activePanel = panels.some(panel => panel.id === state.sectionPanels.charter) ? state.sectionPanels.charter : "info";
     state.sectionPanels.charter = activePanel;
     const paint = contentHtml => {
-      state.gantt = null;
+      if (state.gantt) {
+        state.gantt.handle.destroy();
+        state.gantt = null;
+      }
       els.workspace.innerHTML = sectionShell("charter", panels, activePanel, contentHtml, "");
       bindSectionNav("charter", renderCharter);
       mountCharterGantt();
