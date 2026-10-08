@@ -558,3 +558,38 @@ Brainstormed with the visual companion (`.superpowers/brainstorm/31923-*/content
 - **2026-10-09 DROPPED: red outline on the last stop card when the route does not fit.** David: the whole Route page
   background already tints light red while the route does not fit, so the outline adds nothing (red card edges keep
   meaning "check this stop"). Do not offer it again unless the captain asks for it specifically.
+
+
+## Spec P brainstorm (2026-10-09): the charter pack
+
+The captain wants to package a charter's details for the client or the agent. David thought of a PDF; the captain
+suggested zenvue.app. Spec: [spec-pack.md](spec-pack.md). Mockups in `.superpowers/brainstorm/180653-*/content/`.
+
+- **P-D1 Both, in phases.** Phase 1 = a print-styled pack saved as PDF from the admin (the quick win). Phase 2 = a
+  separate mini-site on a zenvue.app subdomain (for example `charters.zenvue.app`), own spec later. Shoehorning it
+  into the ZenVue app (my.zenvue.app) is ruled out.
+- **P-D2 Purpose.** Pre-booking proposal and confirmed charter brief (not live tracking, not a souvenir).
+- **P-D3 Home.** A Charter Pack page under Charter Admin: settings left, live A4 preview with a pager right (mockup A,
+  over a header-button dialog).
+- **P-D4 Contents.** Charter summary, Route & itinerary, Crew & yacht, Menus & drinks, each a tick-box chosen by the
+  captain per pack.
+- **P-D5 Customising.** Pack type (Proposal / Charter Brief), Prepared for, cover note, and saved presets. No per-day
+  picking.
+- **P-D6 Themes.** The captain picks A Editorial (navy & gold), B Modern (admin teal) or C Paper (guest look). A's navy
+  cover is ink-heavy on paper; accepted.
+- **P-D7 Engine.** A print-styled HTML page and the browser's Save as PDF; no server-side PDF, no PDF library.
+- **P-D8 Branding.** IOLANTHE in Times New Roman, bottom to top, the full page height, behind the content at 5 %; the
+  vessel line art lower right at 20 %. Tinted per theme.
+- **P-D9 Stamp.** The boat stamp (OFF# 739708 / IMO# 1009144 / 498 GRT, supplied by David) appears once, full contrast,
+  on the cover. Random faint stamps on every page were tried and dropped.
+- **P-D10 Cover photo.** One default hero shot, overridable per pack by an upload (a Zenith Superyachts photo set makes
+  no sense in an Iolanthe pack).
+- **P-D11 Map.** Live Leaflet map, low detail: only the charter's route and stops, no track waypoints, anchorages or
+  unrelated sites; day numbers on markers, names in a key, overlapping markers merged.
+- **P-D12 Crew.** Text only (name, position, department); crew photos are a later feature.
+- **P-D13 Presets.** Stored on the server per charter (`charters/<id>/pack.json`), so they follow the captain to any
+  device. Server released first.
+- **P-D14 Review.** No Fable review of the spec (David's choices, not technical risk); a Fable review of the plan after
+  the weekly reset (Sunday 2026-10-11 03:00).
+- Open: stamp says 498 GRT, `vessel.json` says 495 GT. The site-image upload is broken on the boat (Media References
+  show broken images); fix it before planning spec P.
