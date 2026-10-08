@@ -5,8 +5,8 @@
 (function () {
   "use strict";
 
-  const EDGE_WIDTHS = [26, 18, 12, 8, 6];   // px, by distance from the open card; further edges are EDGE_MIN
-  const EDGE_MIN = 4;
+  const EDGE_WIDTHS = [28, 20, 14, 10, 8];   // px at a 1100-px strip; scaled up to 1.8x on wider screens (spec A2 T6)
+  const EDGE_MIN = 6;
   const SWIPE_PX = 48;
   const SITES_NEAR_NM = 5;
   const KIND_LABEL = { anchorage: "anchorage", stop: "stop", plain: "plain stop" };
@@ -18,6 +18,7 @@
   function create(ctx) {
     const { core: c, el, svg } = ctx;
     let host = null;          // #routes-strip
+    const edgeScale = () => Math.min(1.8, Math.max(1, ((host && host.clientWidth) || 1100) / 1100));
     let selectedId = null;    // stop id of the open card
     let tab = "day";          // "day" | "settings"
     const activeDay = new Map();   // stopId → day shown
@@ -76,7 +77,7 @@
     // ---------- the strip ----------
 
     function edge(stop, distance, rec, fitState) {
-      const width = EDGE_WIDTHS[distance - 1] || EDGE_MIN;
+      const width = Math.round((EDGE_WIDTHS[distance - 1] || EDGE_MIN) * edgeScale());
       const dirty = rec.dirty_stop_ids.includes(stop.point.id);
       const good = fitState === "match" && stop.position === "terminus";
       const name = stop.point.name || "Stop";

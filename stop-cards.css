@@ -9,9 +9,11 @@
 .routes-panel .strip-edge { position: relative; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--muted); padding: 0; min-height: 0; cursor: pointer; overflow: hidden; font-weight: 400; }
 .routes-panel .strip-edge:hover { border-color: var(--accent); background: #fff; }
 .routes-panel .strip-edge:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.routes-panel .strip-edge-label { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); writing-mode: vertical-rl; font-size: 11px; white-space: nowrap; color: inherit; }
+.routes-panel .strip-edge-label { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); writing-mode: vertical-rl; font-size: 12px; font-weight: 600; white-space: nowrap; color: var(--ink); }
 .routes-panel .strip-edge.dirty { background: #f5c6c2; border-color: var(--danger); color: #7a2a24; }
 .routes-panel .strip-edge.good { background: #cfe8cf; border-color: var(--ok); color: #1e5a3b; }
+.routes-panel .strip-edge.dirty .strip-edge-label { color: #7a2a24; }
+.routes-panel .strip-edge.good .strip-edge-label { color: #1e5a3b; }
 .routes-panel .strip-empty { display: flex; align-items: center; gap: 10px; min-height: 64px; padding: 12px 14px; border: 1px dashed var(--line); border-radius: 8px; }
 
 /* Card */
