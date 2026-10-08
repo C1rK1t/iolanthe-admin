@@ -1,0 +1,65 @@
+/* The Guest view panel (charter rework spec B §3.2). Scoped under .guest-preview. */
+.guest-preview .card-header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.guest-preview .card-header h2 { margin: 0; }
+.guest-preview .gp-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.guest-preview .gp-sep { width: 1px; height: 26px; background: var(--line); }
+.guest-preview .gp-seg { display: inline-flex; gap: 4px; }
+
+.guest-preview .gp-btn {
+  width: 36px; height: 36px; min-height: 0; padding: 0; border: 0; border-radius: 6px;
+  display: inline-grid; place-items: center; background: #e8eef0; color: var(--ink); cursor: pointer;
+}
+.guest-preview .gp-btn:hover, .guest-preview .gp-btn:focus-visible { background: #d8e2e5; }
+.guest-preview .gp-btn[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.guest-preview .gp-btn:disabled { opacity: .35; cursor: not-allowed; }
+.guest-preview .gp-btn svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Slider strip */
+.guest-preview .gp-strip {
+  display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 8px 10px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+}
+.guest-preview .gp-readout { min-width: 150px; display: flex; flex-direction: column; }
+.guest-preview .gp-readout b { font-size: 17px; font-variant-numeric: tabular-nums; }
+.guest-preview .gp-readout span { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+.guest-preview .gp-track {
+  flex: 1; min-width: 0; position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr);
+  align-items: end; padding: 14px 0 2px; cursor: pointer; touch-action: none; user-select: none; outline: none; border-radius: 6px;
+}
+.guest-preview .gp-track:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
+.guest-preview .gp-track::before {
+  content: ""; position: absolute; left: 2%; right: 2%; top: 21px; height: 3px; border-radius: 2px; background: #b9c6cb;
+}
+.guest-preview .gp-tick {
+  position: relative; display: flex; flex-direction: column; align-items: center; padding-top: 22px;
+  font-size: 10px; line-height: 1.25; color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.guest-preview .gp-tick::before {
+  content: ""; position: absolute; top: 2px; left: 50%; width: 5px; height: 14px; margin-left: -2.5px; border-radius: 3px; background: #7e9198;
+}
+.guest-preview .gp-tick--past::before { background: #a9b9be; }
+.guest-preview .gp-tick--before, .guest-preview .gp-tick--after { color: #a8b5ba; }
+.guest-preview .gp-tick--before::before, .guest-preview .gp-tick--after::before { background: #d6dde0; }
+.guest-preview .gp-tick-w { text-transform: capitalize; }
+.guest-preview .gp-tick.on { color: var(--ink); font-weight: 700; }
+.guest-preview .gp-tick.on::before {
+  top: -2px; width: 14px; height: 22px; margin-left: -7px; border-radius: 7px; background: var(--accent); box-shadow: 0 0 0 3px #cfe6ea;
+}
+.guest-preview .gp-tick--today::after {
+  content: "today"; position: absolute; top: -14px; left: 0; right: 0; text-align: center;
+  font-size: 9px; font-weight: 700; color: var(--danger);
+}
+
+/* Stage: the guest at its real device size, scaled to fit */
+.guest-preview .gp-stage { display: flex; justify-content: center; padding: 14px 0 4px; min-width: 0; }
+.guest-preview .gp-device { position: relative; overflow: hidden; border: 8px solid #1b1b1b; border-radius: 26px; background: #0f2d4a; box-sizing: content-box; }
+.guest-preview .gp-frame { position: absolute; top: 0; left: 0; border: 0; transform-origin: 0 0; background: #0f2d4a; }
+
+.guest-preview .gp-empty { padding: 18px 4px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; color: var(--muted); }
+.guest-preview .gp-text-btn { min-height: 36px; border: 0; border-radius: 6px; padding: 0 12px; background: var(--accent); color: #fff; font-weight: 700; cursor: pointer; }
+
+@media (max-width: 760px) {
+  .guest-preview .gp-strip { flex-wrap: wrap; }
+  .guest-preview .gp-readout { order: -1; flex: 1 0 100%; }
+  .guest-preview .gp-tick-w { display: none; }
+}

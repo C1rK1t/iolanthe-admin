@@ -41,6 +41,12 @@ URL access also requires `?key=<settings.admin.urlKey>`.
   Collapsed to a strip by default on the Route panel (localStorage `iolanthe-admin.gantt.collapsed`). Mounted by
   `admin.js` (`mountCharterGantt`) into `#charter-gantt-host`, which `sectionShell` renders for the Charter section.
   The first layout runs on a timeout, not requestAnimationFrame, so a background tab still draws.
+- `guest-preview-core.js` / `guest-preview.js` / `guest-preview.css` — Charter → **Guest view** (charter rework spec B):
+  the live guest site in a same-origin iframe at `/?preview=<date>&charter=<id>#<tab>`, under a day slider (day before
+  boarding … day after the charter), phone 390 × 844 / tablet 820 × 1180 scaled to fit, reload, open full screen. Eye
+  buttons on the Charter Info and Route headers open it (`showCharterPanel("preview", { previewDay })`). The server
+  serves `?charter=` only to an admin session; the guest's preview mode lives in `iolanthe-guest/preview-mode.js`.
+  Device choice in localStorage `iolanthe-admin.preview.device`.
 - Reserved periods (maintenance / unavailable / other) come from `/api/admin/reserved-periods` and save with a
   `base_revision`; the admin and the server both refuse dates that overlap a charter or a period.
 - The active charter is computed by the server (in date = the day before start to the end date, else the crew's
@@ -48,7 +54,7 @@ URL access also requires `?key=<settings.admin.urlKey>`.
   in date. Charter Info uses the shared `admin.css` classes (`.stat-tiles`, `.form-section`, `.status-pill`,
   `.segmented`, gold icon tone), the first slice of the admin style rollout. Galley and Hotel keep their "Select
   Charter" dropdowns.
-- `node --test` runs the tests in `test/` (140 tests), which cover `routes-core`, `itinerary-core` and `charters-core`
+- `node --test` runs the tests in `test/` (146 tests), which cover `routes-core`, `itinerary-core`, `charters-core` and `guest-preview-core`
 - `routes.js` / `routes.css` — the Route panel (Charter → Route): state, side panel, header, map, saving and wiring. A
   "Working on" selector gives it two subjects: the library routes (the route library, saved through
   `/api/admin/routes/*`) and this charter's route (the route stored in the charter's `itinerary.json`, saved through
