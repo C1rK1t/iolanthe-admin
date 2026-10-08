@@ -257,4 +257,10 @@ workplace per charter.
   copy of the live volume (4 routes, 16 anchorages, 6 charters; live untouched, `live_version` 4). PR
   C1rK1t/iolanthe-server#2 open. Next: David's go to merge + `./update.sh` on the vessel, then execute plan a2-02 on
   admin `feat/itinerary-a2`.
+- **2026-10-08 server DEPLOYED (spec A2).** PR iolanthe-server#2 merged as `cbde12e`; safe server-only update on the
+  vessel (`git pull --ff-only` + `docker compose up -d --build iolanthe-server`). Live migration v5 ran at startup:
+  backup `data-before-migration-2026-10-08-035503`, 4 library routes, 16 anchorages, 6 charter records; `/api/schema`
+  `live_version` 5; `/api/charter` and `/api/planned-route` 200. Until admin plan a2-02 merges, the live admin's
+  Itinerary panel "Apply library route" calls the removed `apply-route` endpoint (404); everything else on the live
+  admin works. Next: execute a2-02 on admin `feat/itinerary-a2`.
 
