@@ -51,8 +51,10 @@
 }
 
 /* Stage: the guest at its real device size, scaled to fit */
-.guest-preview .gp-stage { display: flex; justify-content: center; padding: 14px 0 4px; min-width: 0; }
+.guest-preview { min-width: 0; max-width: 100%; }   /* never widened by a big device frame: the frame scales instead */
+.guest-preview .gp-stage { display: flex; justify-content: center; padding: 14px 0 4px; min-width: 0; overflow: hidden; }
 .guest-preview .gp-device { position: relative; overflow: hidden; border: 8px solid #1b1b1b; border-radius: 26px; background: #0f2d4a; box-sizing: content-box; }
+.guest-preview .gp-device--pc { border-width: 6px 6px 14px; border-radius: 8px; }   /* a monitor bezel, not a phone */
 .guest-preview .gp-frame { position: absolute; top: 0; left: 0; border: 0; transform-origin: 0 0; background: #0f2d4a; }
 
 .guest-preview .gp-empty { padding: 18px 4px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; color: var(--muted); }

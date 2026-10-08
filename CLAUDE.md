@@ -43,7 +43,7 @@ URL access also requires `?key=<settings.admin.urlKey>`.
   The first layout runs on a timeout, not requestAnimationFrame, so a background tab still draws.
 - `guest-preview-core.js` / `guest-preview.js` / `guest-preview.css` — Charter → **Guest view** (charter rework spec B):
   the live guest site in a same-origin iframe at `/?preview=<date>&charter=<id>#<tab>`, under a day slider (day before
-  boarding … day after the charter), phone 390 × 844 / tablet 820 × 1180 scaled to fit, reload, open full screen. Eye
+  boarding … day after the charter), phone 390 × 844 / tablet 820 × 1180 / PC 1280 × 800 scaled to fit, reload, open full screen. Eye
   buttons on the Charter Info and Route headers open it (`showCharterPanel("preview", { previewDay })`). The server
   serves `?charter=` only to an admin session; the guest's preview mode lives in `iolanthe-guest/preview-mode.js`.
   Device choice in localStorage `iolanthe-admin.preview.device`.

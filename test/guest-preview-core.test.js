@@ -75,4 +75,6 @@ test("fitScale: fits width and height, never above 1, phone by default", () => {
   assert.equal(core.fitScale("nope", 195, 2000), 0.5);
   assert.equal(core.fitScale("phone", 0, 0), 1);
   assert.deepEqual(core.DEVICES.tablet, { w: 820, h: 1180 });
+  assert.deepEqual(core.DEVICES.pc, { w: 1280, h: 800 });
+  assert.equal(core.fitScale("pc", 640, 2000), 0.5);
 });
