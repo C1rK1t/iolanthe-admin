@@ -4673,7 +4673,7 @@
               <h3>Arrival</h3>
               <div class="form-grid">
                 ${charterInfoField("charter-info-arrival-date", "Date", `<input id="charter-info-arrival-date" type="date" value="${escapeAttribute(charterInfo.arrival?.date || "")}">`)}
-                ${charterInfoField("charter-info-arrival-time", "Time", `<input id="charter-info-arrival-time" type="time" value="${escapeAttribute(charterInfo.arrival?.time || "")}">`)}
+                ${charterInfoField("charter-info-arrival-time", "Time", `<input id="charter-info-arrival-time" type="hidden" value="${escapeAttribute(charterInfo.arrival?.time || "")}"><span id="charter-info-arrival-time-ui" class="time-selects-host"></span>`)}
                 ${charterInfoField("charter-info-arrival-flight", "Flight", `<input id="charter-info-arrival-flight" value="${escapeAttribute(charterInfo.arrival?.flight || "")}">`, { full: true })}
               </div>
             </section>
@@ -6374,6 +6374,18 @@
     });
     form.addEventListener("input", syncTiles);
     syncCharterInfoOverlap();
+
+    // Captain R3b-2: a 24-hour arrival time (the Route page's hour/minute selects). The hidden input carries the value
+    // for readCharterInfoForm, and the dispatched input event keeps the form's dirty tracking honest.
+    const arrivalTime = document.getElementById("charter-info-arrival-time");
+    const arrivalHost = document.getElementById("charter-info-arrival-time-ui");
+    if (arrivalTime && arrivalHost && window.IolantheRoutesUi) {
+      const picker = window.IolantheRoutesUi.timeSelects({
+        value: arrivalTime.value, allowBlank: true, title: "Arrival time (24-hour)",
+        onChange: value => { arrivalTime.value = value; arrivalTime.dispatchEvent(new Event("input", { bubbles: true })); }
+      });
+      arrivalHost.replaceChildren(picker.root);
+    }
 
     bindSettingsFormController({
       formId: "charter-info-form",
@@ -9638,8 +9650,9 @@
       day: "numeric",
       month: "long",
       year: "numeric",
-      hour: "numeric",
-      minute: "2-digit"
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false
     });
     const currentCharterName = String(charterInfo?.name || currentCharterSummary()?.name || currentCharterSummary()?.id || "").trim();
     const charterDateRange = purchasedAlcoholInvoiceDateRangeText(charterInfo);
@@ -12595,8 +12608,9 @@
       day: "numeric",
       month: "long",
       year: "numeric",
-      hour: "numeric",
-      minute: "2-digit"
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false
     });
     const charterDetails = [
       { label: "Charter", value: charterName },

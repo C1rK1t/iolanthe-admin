@@ -319,6 +319,12 @@ button.admin-icon-button--gold:focus {
   gap: 0.8rem;
 }
 
+/* R3b-2: the arrival time's hour/minute selects sit side by side like one field */
+.time-selects-host { display: block; }
+.time-selects-host .time-selects { display: inline-flex; align-items: center; gap: 4px; }
+.time-selects-host .time-selects select { width: auto; min-width: 4.5rem; }
+.time-selects-host .time-colon { font-weight: 700; }
+
 .charter-gantt-host {
   min-width: 0;
   max-width: 100%;
