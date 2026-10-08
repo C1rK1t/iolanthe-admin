@@ -1,0 +1,126 @@
+{
+  "charters": [
+    {
+      "id": "smith",
+      "start_date": "2026-09-01",
+      "end_date": "2026-09-08"
+    },
+    {
+      "id": "csaba",
+      "start_date": "2026-11-01",
+      "end_date": "2026-11-09"
+    },
+    {
+      "id": "larry",
+      "start_date": "2026-11-10",
+      "end_date": "2026-11-13"
+    },
+    {
+      "id": "hoffmann",
+      "start_date": "2027-01-14",
+      "end_date": "2027-01-24"
+    },
+    {
+      "id": "nodates",
+      "start_date": null,
+      "end_date": null
+    },
+    {
+      "id": "backwards",
+      "start_date": "2026-12-10",
+      "end_date": "2026-12-01"
+    }
+  ],
+  "cases": [
+    {
+      "name": "underway",
+      "today": "2026-11-03",
+      "stored": "",
+      "expect": "csaba"
+    },
+    {
+      "name": "day before start is in date",
+      "today": "2026-10-31",
+      "stored": "smith",
+      "expect": "csaba"
+    },
+    {
+      "name": "two days before start is not",
+      "today": "2026-10-30",
+      "stored": "smith",
+      "expect": "smith"
+    },
+    {
+      "name": "end date is still in date",
+      "today": "2026-11-13",
+      "stored": "smith",
+      "expect": "larry"
+    },
+    {
+      "name": "day after the end is not",
+      "today": "2026-11-14",
+      "stored": "smith",
+      "expect": "smith"
+    },
+    {
+      "name": "turnaround day: the next charter wins",
+      "today": "2026-11-09",
+      "stored": "",
+      "expect": "larry"
+    },
+    {
+      "name": "stored choice outside any window",
+      "today": "2026-12-20",
+      "stored": "hoffmann",
+      "expect": "hoffmann"
+    },
+    {
+      "name": "stored choice of an ended charter is honoured",
+      "today": "2026-12-20",
+      "stored": "smith",
+      "expect": "smith"
+    },
+    {
+      "name": "stored choice without dates is honoured",
+      "today": "2026-12-20",
+      "stored": "nodates",
+      "expect": "nodates"
+    },
+    {
+      "name": "stored choice that no longer exists falls back to the last ended",
+      "today": "2026-12-20",
+      "stored": "gone",
+      "expect": "larry"
+    },
+    {
+      "name": "no stored choice falls back to the last ended",
+      "today": "2026-12-20",
+      "stored": "",
+      "expect": "larry"
+    },
+    {
+      "name": "nothing ended yet and no stored choice: the earliest upcoming",
+      "today": "2026-08-01",
+      "stored": "",
+      "expect": "smith"
+    },
+    {
+      "name": "backwards dates never match a window",
+      "today": "2026-12-05",
+      "stored": "",
+      "expect": "larry"
+    },
+    {
+      "name": "nothing ended, stored choice gone: the earliest upcoming",
+      "today": "2026-08-01",
+      "stored": "gone",
+      "expect": "smith"
+    },
+    {
+      "name": "nothing ended, stored choice gone: the earliest upcoming",
+      "today": "2026-08-01",
+      "stored": "gone",
+      "expect": "smith"
+    }
+  ]
+}
