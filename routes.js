@@ -334,7 +334,9 @@
         b("start", "Start from an unassigned route or another charter…", () => openStartFrom(), "", ro || saving),
         b("saveAs", "Save as an unassigned route (items kept)", () => saveAs(false), "", work.route.points.length < 2),
         b("import", "Import KML / GPX", () => io.openImport(), "", ro),
-        b("export", "Export GPX / KML", () => io.openExport(), "", work.route.points.length < 2));
+        b("export", "Export GPX / KML", () => io.openExport(), "", work.route.points.length < 2),
+        el("span", { class: "icon-sep" }),
+        b("eye", "Guest view (the saved version)", () => A().showCharterPanel("preview", { previewDay: cards ? cards.selectedDay() : 0 })));
       return;
     }
     $("actions").replaceChildren(
