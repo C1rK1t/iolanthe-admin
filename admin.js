@@ -4563,21 +4563,6 @@
     return normalizedSaved;
   }
 
-  function charterDayCountTitle(charterInfo) {
-    const startMatch = String(charterInfo?.start_date || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    const endMatch = String(charterInfo?.end_date || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (!startMatch || !endMatch) {
-      return "Charter Information";
-    }
-    const start = Date.UTC(Number(startMatch[1]), Number(startMatch[2]) - 1, Number(startMatch[3]));
-    const end = Date.UTC(Number(endMatch[1]), Number(endMatch[2]) - 1, Number(endMatch[3]));
-    const days = Math.round((end - start) / 86400000) + 1;
-    if (!Number.isFinite(days) || days < 1) {
-      return "Charter Information";
-    }
-    return `Charter Information - ${days} ${days === 1 ? "Day" : "Days"}`;
-  }
-
   function parseLocalDateOnly(value) {
     const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (!match) {
@@ -4598,78 +4583,91 @@
     return new Date(now.getFullYear(), now.getMonth(), now.getDate());
   }
 
+  function charterInfoField(id, label, inputHtml, extra) {
+    return `<label${extra && extra.full ? ` class="full"` : ""}>${escapeHtml(label)}${inputHtml}${extra && extra.hint ? `<span class="field-hint" id="${id}-hint">${escapeHtml(extra.hint)}</span>` : ""}</label>`;
+  }
+
   function renderCharterInfoPanel(charterInfo) {
+    const core = window.IolantheChartersCore;
+    const summary = currentCharterSummary() || { id: state.selectedCharter, charter: charterInfo };
+    const pill = core.pillFor({ id: summary.id, charter: charterInfo }, { activeId: state.activeCharter, today: core.todayLocal() });
+    const nights = core.nights(charterInfo);
+    const forced = state.forcedCharter && state.forcedCharter !== summary.id
+      ? state.charters.find(charter => charter.id === state.forcedCharter)
+      : null;
+    const makeActiveDisabled = !canChangeActiveCharter() || summary.id === state.activeCharter || Boolean(state.forcedCharter);
+    const makeActiveTitle = summary.id === state.activeCharter
+      ? "This is the active charter"
+      : (state.forcedCharter
+        ? `${forced ? (forced.name || forced.id) : "A charter"} is in date and stays active until ${forced && forced.charter ? core.fmtShort(forced.charter.end_date) : "it ends"}`
+        : "Make active");
     return `
-      <section class="card full">
+      <section class="card full charter-info-panel">
         <div class="card-header">
-          <h2>${escapeHtml(charterDayCountTitle(charterInfo))}</h2>
-          <div class="button-row align-right">
-            ${iconSubmitButtonHtml("save", "Save Charter Information", ` form="charter-info-form"`)}
+          <h2 id="charter-info-title">${escapeHtml(charterInfo.name || summary.name || summary.id)}</h2>
+          <div class="header-actions">
+            <span class="status-pill status-pill--${pill.tone}" id="charter-info-pill">${escapeHtml(pill.text)}</span>
+            ${iconButtonHtml("star", makeActiveTitle, ` id="charter-make-active"${makeActiveDisabled ? " disabled" : ""}`)}
+            <span class="header-sep"></span>
+            ${iconSubmitButtonHtml("save", "Save Charter Information", ` form="charter-info-form" id="charter-info-save"`)}
             ${iconButtonHtml("cancel", "Cancel changes", ` id="cancel-charter-info"`)}
           </div>
         </div>
-        <form id="charter-info-form" class="form-grid">
-          <label>Charter Name
-            <input id="charter-info-name" value="${escapeAttribute(charterInfo.name || "")}" required>
-          </label>
-          <label>Guest Count
-            <input id="charter-info-guest-count" type="number" min="1" step="1" value="${escapeAttribute(normalizeGuestCount(charterInfo.guest_count))}">
-          </label>
-          <label>Start Date
-            <input id="charter-info-start-date" type="date" value="${escapeAttribute(charterInfo.start_date || "")}">
-          </label>
-          <label>End Date
-            <input id="charter-info-end-date" type="date" value="${escapeAttribute(charterInfo.end_date || "")}">
-          </label>
-          <p class="muted full"><strong>Arrival</strong></p>
-          <label>Arrival Date
-            <input id="charter-info-arrival-date" type="date" value="${escapeAttribute(charterInfo.arrival?.date || "")}">
-          </label>
-          <label>Arrival Time
-            <input id="charter-info-arrival-time" type="time" value="${escapeAttribute(charterInfo.arrival?.time || "")}">
-          </label>
-          <label>Arrival Flight
-            <input id="charter-info-arrival-flight" value="${escapeAttribute(charterInfo.arrival?.flight || "")}">
-          </label>
-          <label>Charter Style
-            <input id="charter-info-charter-style" value="${escapeAttribute(charterInfo.charter_style || "flexible")}">
-          </label>
-          <p class="muted full"><strong>Primary Contact</strong></p>
-          <label>Primary Contact Name
-            <input id="charter-info-primary-contact-name" value="${escapeAttribute(charterInfo.primary_contact?.name || "")}">
-          </label>
-          <label>Diving Guest Count
-            <input id="charter-info-diving-guest-count" type="number" min="0" step="1" value="${escapeAttribute(normalizeNonNegativeInteger(charterInfo.diving_guest_count))}">
-          </label>
-          <label class="full">Primary Contact Phones
-            <textarea id="charter-info-primary-contact-phones" placeholder="One phone number per line">${escapeHtml(charterPhoneListText(charterInfo.primary_contact?.phones || []))}</textarea>
-          </label>
-          <p class="muted full"><strong>Preferences & Logistics</strong></p>
-          <label class="inline-check">
-            <input id="charter-info-non-swimmers-present" type="checkbox" ${charterInfo.non_swimmers_present ? "checked" : ""}>
-            Non-swimmers present
-          </label>
-          <label class="inline-check">
-            <input id="charter-info-diving-planned" type="checkbox" ${charterInfo.diving_planned ? "checked" : ""}>
-            Diving planned
-          </label>
-          <label class="inline-check">
-            <input id="charter-info-medical-notes-present" type="checkbox" ${charterInfo.medical_notes_present ? "checked" : ""}>
-            Medical notes present
-          </label>
-          <label class="inline-check">
-            <input id="charter-info-dietary-restrictions-present" type="checkbox" ${charterInfo.dietary_restrictions_present ? "checked" : ""}>
-            Dietary restrictions present
-          </label>
-          <label class="full">Charter Preference Notes
-            <textarea id="charter-info-charter-preference-notes">${escapeHtml(charterInfo.charter_preference_notes || "")}</textarea>
-          </label>
-          <label class="full">Drink Preferences Notes
-            <textarea id="charter-info-drink-preferences-notes">${escapeHtml(charterInfo.drink_preferences_notes || "")}</textarea>
-          </label>
-          <label class="full">Charter Notes
-            <textarea id="charter-info-notes">${escapeHtml(charterInfo.notes || "")}</textarea>
-          </label>
+        <div class="stat-tiles">
+          <div class="stat-tile"><b id="charter-tile-nights">${nights === null ? "–" : nights}</b><span>Nights</span></div>
+          <div class="stat-tile"><b id="charter-tile-guests">${escapeHtml(String(normalizeGuestCount(charterInfo.guest_count)))}</b><span>Guests</span></div>
+          <div class="stat-tile"><b>${escapeHtml(String(Number(summary.stops) || 0))}</b><span>Stops</span></div>
+          <div class="stat-tile"><b id="charter-tile-divers">${escapeHtml(String(normalizeNonNegativeInteger(charterInfo.diving_guest_count)))}</b><span>Divers</span></div>
+        </div>
+        <form id="charter-info-form" class="charter-info-columns">
+          <div>
+            <section class="form-section">
+              <h3>Charter</h3>
+              <div class="form-grid">
+                ${charterInfoField("charter-info-name", "Name", `<input id="charter-info-name" value="${escapeAttribute(charterInfo.name || "")}" required>`)}
+                ${charterInfoField("charter-info-charter-style", "Style", `<input id="charter-info-charter-style" value="${escapeAttribute(charterInfo.charter_style || "flexible")}">`)}
+                ${charterInfoField("charter-info-start-date", "Start date", `<input id="charter-info-start-date" type="date" value="${escapeAttribute(charterInfo.start_date || "")}">`)}
+                ${charterInfoField("charter-info-end-date", "End date", `<input id="charter-info-end-date" type="date" value="${escapeAttribute(charterInfo.end_date || "")}">`)}
+                <p class="field-error full" id="charter-info-overlap" role="alert"></p>
+                ${charterInfoField("charter-info-guest-count", "Guests", `<input id="charter-info-guest-count" type="number" min="1" step="1" value="${escapeAttribute(normalizeGuestCount(charterInfo.guest_count))}">`)}
+                ${charterInfoField("charter-info-diving-guest-count", "Diving guests", `<input id="charter-info-diving-guest-count" type="number" min="0" step="1" value="${escapeAttribute(normalizeNonNegativeInteger(charterInfo.diving_guest_count))}">`)}
+              </div>
+            </section>
+            <section class="form-section">
+              <h3>Arrival</h3>
+              <div class="form-grid">
+                ${charterInfoField("charter-info-arrival-date", "Date", `<input id="charter-info-arrival-date" type="date" value="${escapeAttribute(charterInfo.arrival?.date || "")}">`)}
+                ${charterInfoField("charter-info-arrival-time", "Time", `<input id="charter-info-arrival-time" type="time" value="${escapeAttribute(charterInfo.arrival?.time || "")}">`)}
+                ${charterInfoField("charter-info-arrival-flight", "Flight", `<input id="charter-info-arrival-flight" value="${escapeAttribute(charterInfo.arrival?.flight || "")}">`, { full: true })}
+              </div>
+            </section>
+            <section class="form-section">
+              <h3>Primary contact</h3>
+              <div class="form-grid">
+                ${charterInfoField("charter-info-primary-contact-name", "Name", `<input id="charter-info-primary-contact-name" value="${escapeAttribute(charterInfo.primary_contact?.name || "")}">`)}
+                ${charterInfoField("charter-info-primary-contact-phones", "Phones", `<textarea id="charter-info-primary-contact-phones" placeholder="One phone number per line">${escapeHtml(charterPhoneListText(charterInfo.primary_contact?.phones || []))}</textarea>`)}
+              </div>
+            </section>
+          </div>
+          <div>
+            <section class="form-section">
+              <h3>Preferences &amp; flags</h3>
+              <div class="form-grid">
+                <label class="inline-check"><input id="charter-info-non-swimmers-present" type="checkbox" ${charterInfo.non_swimmers_present ? "checked" : ""}> Non-swimmers present</label>
+                <label class="inline-check"><input id="charter-info-diving-planned" type="checkbox" ${charterInfo.diving_planned ? "checked" : ""}> Diving planned</label>
+                <label class="inline-check"><input id="charter-info-medical-notes-present" type="checkbox" ${charterInfo.medical_notes_present ? "checked" : ""}> Medical notes present</label>
+                <label class="inline-check"><input id="charter-info-dietary-restrictions-present" type="checkbox" ${charterInfo.dietary_restrictions_present ? "checked" : ""}> Dietary restrictions present</label>
+                ${charterInfoField("charter-info-charter-preference-notes", "Charter preferences", `<textarea id="charter-info-charter-preference-notes">${escapeHtml(charterInfo.charter_preference_notes || "")}</textarea>`, { full: true })}
+                ${charterInfoField("charter-info-drink-preferences-notes", "Drink preferences", `<textarea id="charter-info-drink-preferences-notes">${escapeHtml(charterInfo.drink_preferences_notes || "")}</textarea>`, { full: true })}
+              </div>
+            </section>
+            <section class="form-section">
+              <h3>Notes</h3>
+              <div class="form-grid">
+                ${charterInfoField("charter-info-notes", "Charter notes", `<textarea id="charter-info-notes" rows="8">${escapeHtml(charterInfo.notes || "")}</textarea>`, { full: true })}
+              </div>
+            </section>
+          </div>
         </form>
       </section>
     `;
@@ -6127,136 +6125,115 @@
     });
   }
 
+  function readCharterInfoForm(charterInfo) {
+    const value = id => document.getElementById(id).value;
+    const checked = id => document.getElementById(id).checked;
+    return {
+      ...charterInfo,
+      name: value("charter-info-name").trim(),
+      start_date: value("charter-info-start-date"),
+      end_date: value("charter-info-end-date"),
+      arrival: { date: value("charter-info-arrival-date"), time: value("charter-info-arrival-time"), flight: value("charter-info-arrival-flight").trim() },
+      primary_contact: { name: value("charter-info-primary-contact-name").trim(), phones: normalizeCharterPhoneList(value("charter-info-primary-contact-phones")) },
+      charter_style: value("charter-info-charter-style").trim() || "flexible",
+      non_swimmers_present: checked("charter-info-non-swimmers-present"),
+      diving_planned: checked("charter-info-diving-planned"),
+      diving_guest_count: normalizeNonNegativeInteger(value("charter-info-diving-guest-count")),
+      medical_notes_present: checked("charter-info-medical-notes-present"),
+      dietary_restrictions_present: checked("charter-info-dietary-restrictions-present"),
+      charter_preference_notes: value("charter-info-charter-preference-notes"),
+      drink_preferences_notes: value("charter-info-drink-preferences-notes"),
+      notes: value("charter-info-notes"),
+      guest_count: normalizeGuestCount(value("charter-info-guest-count"))
+    };
+  }
+
+  // Spec-charters §4: the live overlap check. Returns the message ("" when clear) and toggles Save.
+  function syncCharterInfoOverlap() {
+    const core = window.IolantheChartersCore;
+    const warning = document.getElementById("charter-info-overlap");
+    const save = document.getElementById("charter-info-save");
+    if (!warning) {
+      return "";
+    }
+    const candidate = { id: state.selectedCharter, start_date: document.getElementById("charter-info-start-date").value, end_date: document.getElementById("charter-info-end-date").value };
+    const clashes = core.findOverlaps(candidate, core.overlapEntries(state.charters, state.reservedPeriods.periods), "charter");
+    const message = clashes.length ? `${core.overlapMessage(clashes)}. Choose other dates.` : "";
+    warning.textContent = message;
+    if (save) {
+      save.disabled = Boolean(message);
+    }
+    return message;
+  }
+
   function bindCharterInfoPanel(charterInfo) {
     const form = document.getElementById("charter-info-form");
     if (!form) {
       return;
     }
+    const core = window.IolantheChartersCore;
     let savedCharterInfo = cloneCharterInfo(charterInfo);
-    const cancelButton = document.getElementById("cancel-charter-info");
-    if (cancelButton) {
-      cancelButton.addEventListener("click", () => {
-        fillCharterInfoForm(savedCharterInfo);
-        setStatus("Charter info changes cancelled.", "ok");
-      });
-    }
-    form.addEventListener("submit", async event => {
-      event.preventDefault();
-      charterInfo.name = document.getElementById("charter-info-name").value.trim();
-      charterInfo.start_date = document.getElementById("charter-info-start-date").value;
-      charterInfo.end_date = document.getElementById("charter-info-end-date").value;
-      charterInfo.arrival = {
-        date: document.getElementById("charter-info-arrival-date").value,
-        time: document.getElementById("charter-info-arrival-time").value,
-        flight: document.getElementById("charter-info-arrival-flight").value.trim()
-      };
-      charterInfo.primary_contact = {
-        name: document.getElementById("charter-info-primary-contact-name").value.trim(),
-        phones: normalizeCharterPhoneList(document.getElementById("charter-info-primary-contact-phones").value)
-      };
-      charterInfo.charter_style = document.getElementById("charter-info-charter-style").value.trim() || "flexible";
-      charterInfo.non_swimmers_present = document.getElementById("charter-info-non-swimmers-present").checked;
-      charterInfo.diving_planned = document.getElementById("charter-info-diving-planned").checked;
-      charterInfo.diving_guest_count = normalizeNonNegativeInteger(document.getElementById("charter-info-diving-guest-count").value);
-      charterInfo.medical_notes_present = document.getElementById("charter-info-medical-notes-present").checked;
-      charterInfo.dietary_restrictions_present = document.getElementById("charter-info-dietary-restrictions-present").checked;
-      charterInfo.charter_preference_notes = document.getElementById("charter-info-charter-preference-notes").value;
-      charterInfo.drink_preferences_notes = document.getElementById("charter-info-drink-preferences-notes").value;
-      charterInfo.notes = document.getElementById("charter-info-notes").value;
-      charterInfo.guest_count = normalizeGuestCount(document.getElementById("charter-info-guest-count").value);
-      const saved = await saveCharterFile("charter.json", charterInfo, "Charter info saved.");
-      if (saved) {
+    const syncTiles = () => {
+      const draft = readCharterInfoForm(charterInfo);
+      const nights = core.nights(draft);
+      document.getElementById("charter-tile-nights").textContent = nights === null ? "–" : String(nights);
+      document.getElementById("charter-tile-guests").textContent = String(draft.guest_count);
+      document.getElementById("charter-tile-divers").textContent = String(draft.diving_guest_count);
+      document.getElementById("charter-info-title").textContent = draft.name || savedCharterInfo.name || state.selectedCharter;
+    };
+    ["charter-info-start-date", "charter-info-end-date"].forEach(id => {
+      document.getElementById(id).addEventListener("input", syncCharterInfoOverlap);
+    });
+    form.addEventListener("input", syncTiles);
+    syncCharterInfoOverlap();
+
+    bindSettingsFormController({
+      formId: "charter-info-form",
+      cancelButtonId: "cancel-charter-info",
+      readState: () => readCharterInfoForm(charterInfo),
+      save: async () => {
+        if (syncCharterInfoOverlap()) {
+          throw new Error("These dates overlap another charter or a reserved period.");
+        }
+        Object.assign(charterInfo, readCharterInfoForm(charterInfo));
+        // Not saveCharterFile(): its catch would swallow the server's message, and the controller needs the throw to keep the form dirty.
+        const payload = await api(`/api/admin/charter/${encodeURIComponent(state.selectedCharter)}/save`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ file: "charter.json", data: charterInfo })
+        });
+        const saved = payload && typeof payload === "object" && Object.prototype.hasOwnProperty.call(payload, "data") ? payload.data : payload;
+        if (state.bundle) {
+          state.bundle["charter.json"] = cloneData(saved);
+        }
+        setStatus("Charter info saved.", "ok");
         const normalizedSaved = normalizeCharterInfo(saved);
         Object.assign(charterInfo, normalizedSaved);
         const summary = currentCharterSummary();
         if (summary) {
           summary.name = normalizedSaved.name || summary.id;
           summary.charter = cloneCharterInfo(normalizedSaved);
+          summary.nights = core.nights(normalizedSaved);
+          summary.status = core.charterStatus(normalizedSaved, core.todayLocal());
         }
         savedCharterInfo = cloneCharterInfo(normalizedSaved);
         syncTopbar();
-        renderCharter();
+      },
+      reload: async () => {
+        await renderCharter();
       }
     });
-  }
 
-  function cloneCharterInfo(charterInfo) {
-    return JSON.parse(JSON.stringify(charterInfo || {}));
-  }
-
-  function fillCharterInfoForm(charterInfo) {
-    const info = charterInfo || {};
-    const name = document.getElementById("charter-info-name");
-    const guestCount = document.getElementById("charter-info-guest-count");
-    const startDate = document.getElementById("charter-info-start-date");
-    const endDate = document.getElementById("charter-info-end-date");
-    const arrivalDate = document.getElementById("charter-info-arrival-date");
-    const arrivalTime = document.getElementById("charter-info-arrival-time");
-    const arrivalFlight = document.getElementById("charter-info-arrival-flight");
-    const primaryContactName = document.getElementById("charter-info-primary-contact-name");
-    const primaryContactPhones = document.getElementById("charter-info-primary-contact-phones");
-    const charterStyle = document.getElementById("charter-info-charter-style");
-    const nonSwimmersPresent = document.getElementById("charter-info-non-swimmers-present");
-    const divingPlanned = document.getElementById("charter-info-diving-planned");
-    const divingGuestCount = document.getElementById("charter-info-diving-guest-count");
-    const medicalNotesPresent = document.getElementById("charter-info-medical-notes-present");
-    const dietaryRestrictionsPresent = document.getElementById("charter-info-dietary-restrictions-present");
-    const charterPreferenceNotes = document.getElementById("charter-info-charter-preference-notes");
-    const drinkPreferencesNotes = document.getElementById("charter-info-drink-preferences-notes");
-    const notes = document.getElementById("charter-info-notes");
-    if (name) {
-      name.value = info.name || "";
-    }
-    if (guestCount) {
-      guestCount.value = normalizeGuestCount(info.guest_count);
-    }
-    if (startDate) {
-      startDate.value = info.start_date || "";
-    }
-    if (endDate) {
-      endDate.value = info.end_date || "";
-    }
-    if (arrivalDate) {
-      arrivalDate.value = info.arrival && info.arrival.date ? info.arrival.date : "";
-    }
-    if (arrivalTime) {
-      arrivalTime.value = info.arrival && info.arrival.time ? info.arrival.time : "";
-    }
-    if (arrivalFlight) {
-      arrivalFlight.value = info.arrival && info.arrival.flight ? info.arrival.flight : "";
-    }
-    if (primaryContactName) {
-      primaryContactName.value = info.primary_contact && info.primary_contact.name ? info.primary_contact.name : "";
-    }
-    if (primaryContactPhones) {
-      primaryContactPhones.value = charterPhoneListText(info.primary_contact && info.primary_contact.phones ? info.primary_contact.phones : []);
-    }
-    if (charterStyle) {
-      charterStyle.value = info.charter_style || "flexible";
-    }
-    if (nonSwimmersPresent) {
-      nonSwimmersPresent.checked = Boolean(info.non_swimmers_present);
-    }
-    if (divingPlanned) {
-      divingPlanned.checked = Boolean(info.diving_planned);
-    }
-    if (divingGuestCount) {
-      divingGuestCount.value = normalizeNonNegativeInteger(info.diving_guest_count);
-    }
-    if (medicalNotesPresent) {
-      medicalNotesPresent.checked = Boolean(info.medical_notes_present);
-    }
-    if (dietaryRestrictionsPresent) {
-      dietaryRestrictionsPresent.checked = Boolean(info.dietary_restrictions_present);
-    }
-    if (charterPreferenceNotes) {
-      charterPreferenceNotes.value = info.charter_preference_notes || "";
-    }
-    if (drinkPreferencesNotes) {
-      drinkPreferencesNotes.value = info.drink_preferences_notes || "";
-    }
-    if (notes) {
-      notes.value = info.notes || "";
+    const makeActive = document.getElementById("charter-make-active");
+    if (makeActive) {
+      makeActive.addEventListener("click", async () => {
+        if (!await confirmDiscardPageChanges()) {
+          return;
+        }
+        if (await setActiveCharter(state.selectedCharter)) {
+          renderCharter();
+        }
+      });
     }
   }
 
@@ -7812,6 +7789,13 @@
         </svg>
       `;
     }
+    if (kind === "star") {
+      return `
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M12 3.5l2.6 5.6 6.1.7-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6L3.3 9.8l6.1-.7z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"></path>
+        </svg>
+      `;
+    }
     if (kind === "cancel") {
       return `
         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -7844,6 +7828,9 @@
   function iconButtonTone(kind) {
     if (kind === "preview") {
       return "preview";
+    }
+    if (kind === "star") {
+      return "gold";
     }
     if (kind === "purchase" || kind === "confirm" || kind === "save") {
       return "success";
