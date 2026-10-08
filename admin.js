@@ -34,7 +34,8 @@
 
   const GALLEY_PANELS = Object.freeze([
     { id: "menus", label: "Menus" },
-    { id: "guests", label: "Guests" }
+    { id: "guests", label: "Guests" },
+    { id: "preview", label: "Guest view" }
   ]);
   const GUEST_DRINKS_FILE_NAME = "guest_drinks.json";
   const CHARTER_ALCOHOL_PURCHASES_FILE_NAME = "charter-alcohol-purchases.json";
@@ -6511,7 +6512,7 @@
       return window.IolantheRoutes ? window.IolantheRoutes.render() : placeholderCard("Routes");
     }
     if (activePanel === "preview") {
-      return window.IolantheGuestPreviewPanel ? window.IolantheGuestPreviewPanel.render() : placeholderCard("Guest view");
+      return guestPreviewPanelHtml();
     }
     if (activePanel === "sites") {
       return renderSitesPanel();
@@ -6541,24 +6542,35 @@
       return;
     }
     if (activePanel === "preview") {
-      if (window.IolantheGuestPreviewPanel) {
-        const route = itinerary && typeof itinerary === "object" && itinerary.route && typeof itinerary.route === "object" ? itinerary.route : {};
-        window.IolantheGuestPreviewPanel.bind({
-          charterId: state.selectedCharter,
-          charter: charterInfo,
-          points: Array.isArray(route.points) ? route.points : [],
-          pill: charterInfoHeaderState(charterInfo).pill,
-          today: adminToday(),
-          focusDay: state.previewFocusDay || 0,
-          onOpenInfo: () => showCharterPanel("info")
-        });
-      }
-      state.previewFocusDay = 0;
+      bindGuestPreview(charterInfo, itinerary, "itinerary");
       return;
     }
     if (activePanel === "sites") {
       bindSitesPanel(siteLibrary);
     }
+  }
+
+  // The Guest view (spec B) in any section: Charter, Galley and Hotel each show it for their selected charter, opening the
+  // guest on the tab that section cares about (captain, 2026-10-08).
+  function bindGuestPreview(charterInfo, itinerary, initialTab) {
+    if (window.IolantheGuestPreviewPanel) {
+      const route = itinerary && typeof itinerary === "object" && itinerary.route && typeof itinerary.route === "object" ? itinerary.route : {};
+      window.IolantheGuestPreviewPanel.bind({
+        charterId: state.selectedCharter,
+        charter: charterInfo,
+        points: Array.isArray(route.points) ? route.points : [],
+        pill: charterInfoHeaderState(charterInfo).pill,
+        today: adminToday(),
+        focusDay: state.previewFocusDay || 0,
+        initialTab,
+        onOpenInfo: () => (canManageCharterAdmin() ? showCharterPanel("info") : setStatus("Ask Charter Admin to set the charter dates.", "error"))
+      });
+    }
+    state.previewFocusDay = 0;
+  }
+
+  function guestPreviewPanelHtml() {
+    return window.IolantheGuestPreviewPanel ? window.IolantheGuestPreviewPanel.render() : placeholderCard("Guest view");
   }
 
   async function renderCharter() {
@@ -6654,6 +6666,8 @@
       let content = "";
       if (activePanel === "guests") {
         content = renderGalleyGuestsPanel(guestList);
+      } else if (activePanel === "preview") {
+        content = guestPreviewPanelHtml();
       } else {
         const syncResult = syncMenusToItineraryDays(menus, activeItineraryDayCount);
         if (syncResult.changed) {
@@ -6679,6 +6693,9 @@
       els.workspace.innerHTML = sectionShell("galley", galleyPanelsForGuestList(guestList), activePanel, content, sectionToolbarHtml("galley"));
       bindSectionNav("galley", renderGalley);
       bindSectionToolbar("galley", renderGalley);
+      if (activePanel === "preview") {
+        bindGuestPreview(charterInfo, itinerary, "menu");
+      }
       if (activePanel === "menus" && document.getElementById("menu-days")) {
         const importButton = document.getElementById("import-menu");
         if (importButton) {
@@ -13504,7 +13521,8 @@
       { id: "guest-drinks", label: "Guest Alcohol" },
       { id: "available-alcohol", label: "Available Alcohol" },
       { id: "purchased-alcohol", label: "Purchased Alcohol" },
-      { id: "cocktails", label: "Cocktails" }
+      { id: "cocktails", label: "Cocktails" },
+      { id: "preview", label: "Guest view" }
     ];
     if (state.sectionPanels.hotel === "guest-alcohol") {
       state.sectionPanels.hotel = "available-alcohol";
@@ -13516,7 +13534,7 @@
     state.sectionPanels.hotel = activePanel;
     els.workspace.innerHTML = sectionShell("hotel", panels, activePanel, `<section class="card"><p class="muted">Loading hotel data...</p></section>`, sectionToolbarHtml("hotel"));
     try {
-      const needsCharterBundle = activePanel === "guests" || activePanel === "drink-stocks" || activePanel === "guest-drinks" || activePanel === "purchased-alcohol";
+      const needsCharterBundle = activePanel === "guests" || activePanel === "drink-stocks" || activePanel === "guest-drinks" || activePanel === "purchased-alcohol" || activePanel === "preview";
       const bundle = needsCharterBundle ? await loadCharter(state.selectedCharter) : {};
       const charterInfo = normalizeCharterInfo(bundle["charter.json"]);
       const drinks = normalizeGuestDrinks(bundle[GUEST_DRINKS_FILE_NAME]);
@@ -13541,12 +13559,18 @@
         content = renderAvailableAlcoholPanel(availableAlcohol);
       } else if (activePanel === "purchased-alcohol") {
         content = renderPurchasedAlcoholPanel();
+      } else if (activePanel === "preview") {
+        content = guestPreviewPanelHtml();
       } else {
         content = placeholderCard("Hotel");
       }
       els.workspace.innerHTML = sectionShell("hotel", panels, activePanel, content, sectionToolbarHtml("hotel"));
       bindSectionNav("hotel", renderHotel);
       bindSectionToolbar("hotel", renderHotel);
+      if (activePanel === "preview") {
+        bindGuestPreview(charterInfo, bundle["itinerary.json"] || {}, "drinks");
+        return;
+      }
       if (activePanel === "guests") {
         const fullGuestAccess = canManageCharterAdmin();
         bindGuestsPanel(guestList, {

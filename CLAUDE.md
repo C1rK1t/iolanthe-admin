@@ -41,7 +41,9 @@ URL access also requires `?key=<settings.admin.urlKey>`.
   Collapsed to a strip by default on the Route panel (localStorage `iolanthe-admin.gantt.collapsed`). Mounted by
   `admin.js` (`mountCharterGantt`) into `#charter-gantt-host`, which `sectionShell` renders for the Charter section.
   The first layout runs on a timeout, not requestAnimationFrame, so a background tab still draws.
-- `guest-preview-core.js` / `guest-preview.js` / `guest-preview.css` — Charter → **Guest view** (charter rework spec B):
+- `guest-preview-core.js` / `guest-preview.js` / `guest-preview.css` — **Guest view** (charter rework spec B), a tab in the
+  Charter, Galley and Hotel sections (`bindGuestPreview` in admin.js; it opens the guest on Itinerary / Today's Menu /
+  Wine & Drinks):
   the live guest site in a same-origin iframe at `/?preview=<date>&charter=<id>#<tab>`, under a day slider (day before
   boarding … day after the charter), phone 390 × 844 / tablet 820 × 1180 / PC 1280 × 800 scaled to fit, reload, open full screen. Eye
   buttons on the Charter Info and Route headers open it (`showCharterPanel("preview", { previewDay })`). The server

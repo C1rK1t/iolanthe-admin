@@ -58,7 +58,8 @@
     teardown = null;
   }
 
-  // ctx: { charterId, charter, points, pill: { tone, text }, today: "YYYY-MM-DD", focusDay: n | 0, onOpenInfo() }
+  // ctx: { charterId, charter, points, pill: { tone, text }, today: "YYYY-MM-DD", focusDay: n | 0, onOpenInfo(),
+  //        initialTab: the guest tab a fresh frame opens on (Charter: itinerary, Galley: menu, Hotel: drinks) }
   function bind(ctx) {
     destroy();
     const host = document.getElementById("guest-preview");
@@ -112,7 +113,7 @@
       try { return frame.contentWindow ? frame.contentWindow.location.hash : ""; } catch (e) { return ""; }
     }
     function currentUrl() {
-      return core().previewUrl({ date: steps[index].date, charterId: ctx.charterId, hash: currentHash() });
+      return core().previewUrl({ date: steps[index].date, charterId: ctx.charterId, hash: currentHash() || ctx.initialTab || "" });
     }
     function apply() {
       window.clearTimeout(dragTimer);
