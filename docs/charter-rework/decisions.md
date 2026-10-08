@@ -355,3 +355,14 @@ Brainstormed with the visual companion (`.superpowers/brainstorm/31923-*/content
   (stat tiles, form sections, status pill, segmented control, gold icon tone). `routes.css` untouched.
 - **C-D8. New charter keeps Copy from**, drops Set active, lands on the new charter's Info.
 - Rollout: server `feat/charter-gantt` then admin `feat/charter-gantt` (`admin-charters-1`); no migration.
+- **A2-T14 Start from… dialog (the captain: "a confusing mess", 2026-10-08).** Rebuilt as shape C: one grouped
+  native dropdown for the record (Unassigned routes, then charters by year, newest first, each with its stop count),
+  "Starting on", a positive "Bring its N items" switch, and a result line with a coloured dot ("Ends Mon 9 Nov · 1 day
+  before the charter ends") that replaces the help paragraph and the "−1 d" suffix. Shapes A (list beside settings)
+  and B (two steps) were drawn and rejected for width. Scales to twenty past charters without a server change.
+- **A2-T15 Arrow keys (the captain).** ← / → only worked while the card had focus; they now step the strip page-wide
+  (same guards as undo/redo) and Leaflet keyboard panning is off.
+- **A2-T13 decided:** hour and minute selects, minutes in 15-minute steps; an off-grid stored value is kept as one extra
+  option. T12 confirmed: 07:00 with nights, arrival + 2 h for a day stop, clamp 23:59; seeds move to 07:00 both sides.
+- **Round 2 design approved (David, 2026-10-08)** section by section; spec `spec-a2-round2.md` (T8–T15 + housekeeping);
+  read-only guard stays off with a reminder for mid-November 2026. Next: plan `plans/a2-04-round2.md`.
