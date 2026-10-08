@@ -10,8 +10,9 @@
     forcedCharter: "",
     todayOffsetDays: 0,
     reservedPeriods: { revision: 0, periods: [] },
-    ganttZoom: "active",
+    ganttZoom: "quarter",   // captain R3-3: three months by default
     gantt: null,
+    ganttOpen: false,       // R3-5: the band has been expanded over a page other than Charter Admin (reset on every charter render)
     charters: [],
     allowedSections: [],
     allowedDepartments: [],
@@ -26,7 +27,7 @@
     selectedSection: "",
     selectedCharter: "",
     charterContext: null,
-    routesSubject: "library",
+    routesSubject: "charter",   // captain R3-8: Route & Itinerary opens on this charter's route
     sites: [],
     selections: {},
     bundle: null
@@ -1623,7 +1624,8 @@
     return state.selectedCharter;
   }
 
-  const GANTT_COLLAPSED_KEY = "iolanthe-admin.gantt.collapsed";
+  // R3-5: the band is locked open on Charter Admin and starts collapsed everywhere else; nothing is remembered per browser.
+  const ganttLocked = () => state.sectionPanels.charter === "info";
 
   // Today as the server sees it: the browser's date corrected by the offset measured at bootstrap.
   function adminToday() {
@@ -1640,23 +1642,7 @@
   }
 
   function ganttCollapsedDefault() {
-    try {
-      const stored = window.localStorage.getItem(GANTT_COLLAPSED_KEY);
-      if (stored === "true" || stored === "false") {
-        return stored === "true";
-      }
-    } catch (error) {
-      // localStorage unavailable: fall through to the panel default.
-    }
-    return state.sectionPanels.charter === "routes";
-  }
-
-  function rememberGanttCollapsed(collapsed) {
-    try {
-      window.localStorage.setItem(GANTT_COLLAPSED_KEY, collapsed ? "true" : "false");
-    } catch (error) {
-      // ignore
-    }
+    return !ganttLocked() && !state.ganttOpen;
   }
 
   async function loadReservedPeriods() {
@@ -1682,6 +1668,8 @@
       today: adminToday(),
       zoom: state.ganttZoom,
       collapsed: ganttCollapsedDefault(),
+      locked: ganttLocked(),
+      overlay: !ganttLocked(),
       canManage: canManageCharterAdmin(),
       onSelectCharter: async charterId => {
         if (charterId === state.selectedCharter || !state.charters.some(charter => charter.id === charterId)) {
@@ -1692,12 +1680,13 @@
         }
         state.selectedCharter = charterId;
         state.bundle = null;
+        state.ganttOpen = false;   // R3-5: picking a charter rolls the band back up
         renderCharter();
       },
       onOpenPeriod: periodId => openReservedPeriodModal(periodId),
       onCreateCharter: openCreateCharterModal,
       onZoomChange: level => { state.ganttZoom = level; },
-      onToggleCollapsed: rememberGanttCollapsed
+      onToggleCollapsed: collapsed => { state.ganttOpen = !collapsed; }
     };
   }
 
@@ -1724,6 +1713,15 @@
   function activeCharterLabel() {
     const active = state.charters.find(charter => charter.id === state.activeCharter);
     return active ? (active.name || active.id) : (state.activeCharter || "None");
+  }
+
+  // Captain R3-7: the topbar says which kind of "active" this is.
+  function activeCharterHeading() {
+    const active = state.charters.find(charter => charter.id === state.activeCharter);
+    const status = active && window.IolantheChartersCore ? window.IolantheChartersCore.charterStatus(active, adminToday()) : "no-dates";
+    if (status === "upcoming") return "Next Active Charter";
+    if (status === "ended") return "Last Charter";
+    return "Active Charter";
   }
 
   function activeCharterDayCountLabel() {
@@ -1753,6 +1751,7 @@
 
   function syncTopbar() {
     els.activeSummary.classList.toggle("hidden", !state.authenticated);
+    els.activeSummary.querySelector("span").textContent = activeCharterHeading();
     els.activeSummary.querySelector("strong").textContent = activeCharterLabel();
     const dayCountLabel = activeCharterDayCountLabel();
     els.charterDaysLabel.textContent = dayCountLabel;
@@ -2086,6 +2085,7 @@
           return;
         }
         state.sectionPanels[section] = button.dataset.panel;
+        if (section === "charter" && button.dataset.panel === "routes") state.routesSubject = "charter";   // captain R3-8
         renderFn();
       });
     });
@@ -6584,6 +6584,7 @@
     ];
     const activePanel = panels.some(panel => panel.id === state.sectionPanels.charter) ? state.sectionPanels.charter : "info";
     state.sectionPanels.charter = activePanel;
+    state.ganttOpen = false;   // R3-5: a page change or a charter change rolls the band up again
     const paint = contentHtml => {
       clearPageUnsavedGuard();
       els.workspace.innerHTML = sectionShell("charter", panels, activePanel, contentHtml, "");
