@@ -587,10 +587,15 @@ test("removeStop strips id, arrive, depart, nights and depart_time with the othe
   assert.deepEqual(out[1], { latitude: 2, longitude: 2, name: "A" });
 });
 
-test("routeSnapshot changes when nights, depart_time, id, arrive or depart change", () => {
-  const base = { name: "r", description: "", speed_kn: 8, points: [P(1, 1, { stop: true, id: "stp_a", nights: 1 }), P(2, 2)] };
+test("routeSnapshot changes when id, arrive, depart, an item or the dirty list change; ignores the legacy template fields", () => {
+  const base = { name: "r", description: "", speed_kn: 8, points: [P(1, 1, { stop: true, id: "stp_a", depart: { day: 1 } }), P(2, 2)], activities: [], dirty_stop_ids: [] };
   const a = core.routeSnapshot(base);
-  assert.notEqual(a, core.routeSnapshot({ ...base, points: [P(1, 1, { stop: true, id: "stp_a", nights: 2 }), P(2, 2)] }));
-  assert.notEqual(a, core.routeSnapshot({ ...base, points: [P(1, 1, { stop: true, id: "stp_a", nights: 1, depart_time: "09:00" }), P(2, 2)] }));
-  assert.notEqual(a, core.routeSnapshot({ ...base, points: [P(1, 1, { stop: true, id: "stp_a", nights: 1, depart: { day: 1 } }), P(2, 2)] }));
+  assert.notEqual(a, core.routeSnapshot({ ...base, points: [P(1, 1, { stop: true, id: "stp_b", depart: { day: 1 } }), P(2, 2)] }));
+  assert.notEqual(a, core.routeSnapshot({ ...base, points: [P(1, 1, { stop: true, id: "stp_a", depart: { day: 2 } }), P(2, 2)] }));
+  assert.notEqual(a, core.routeSnapshot({ ...base, points: [P(1, 1, { stop: true, id: "stp_a", arrive: { day: 1 }, depart: { day: 1 } }), P(2, 2)] }));
+  assert.notEqual(a, core.routeSnapshot({ ...base, activities: [{ id: "act_1", stop_id: "stp_a", day: 1, order: 0, title: "Swim", notes: "" }] }));
+  assert.notEqual(a, core.routeSnapshot({ ...base, dirty_stop_ids: ["stp_a"] }));
+  assert.notEqual(a, core.routeSnapshot({ ...base, welcome_message: "Hello" }));
+  assert.equal(a, core.routeSnapshot({ ...base, points: [P(1, 1, { stop: true, id: "stp_a", depart: { day: 1 }, nights: 2, depart_time: "08:00" }), P(2, 2)] }));
+  assert.equal(a, core.routeSnapshot({ name: "r", description: "", speed_kn: 8, points: base.points }));   // missing lists count as empty
 });

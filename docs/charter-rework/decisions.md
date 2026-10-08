@@ -239,3 +239,38 @@ workplace per charter.
   `routes-lists.js`, `routes-places.js`, `routes-popup.js`, `routes-ui.js`, `itinerary.js` (Days-tab renderer to
   reuse), `itinerary-core.js` exports and `admin.js`'s charter dispatcher (the previous survey lived in a session temp
   file). Then execute both with Sonnet subagents + browser verification, server first.
+- **A2-D21 (planning, 2026-10-08, admin plan `a2-02-admin.md` written and dry-run).** Decisions taken while writing the
+  admin plan, for David to confirm on review: (1) `setStopDays` and `promoteRoute` are deleted along with
+  `edgeStates`/`moveEdge` (the former carries the removed over-the-end rule, the latter writes the legacy template
+  fields; `toUnassignedRoute` replaces it); (2) `estimateTimes` assumes 09:00 for an overnight stop with no departure
+  time instead of breaking the chain, so every card shows an estimated arrival; (3) the welcome message, previously
+  edited only on the Itinerary panel, is edited in the Route page's Description slot (relabelled "Welcome message" in
+  charter mode); (4) edge shrink curve 26, 18, 12, 8, 6 then 4 px; `routes-lists.js` keeps its own file (Legs);
+  (5) undo/redo history holds the whole working route (points, items, dirty ids). Dry-run: the core and routes-core code
+  assembled from the plan text passes 110 tests; the two new browser modules parse. Next: execute A2-01 (server, with
+  the docker-vm migration rehearsal), deploy, then A2-02 on `feat/itinerary-a2` with Sonnet subagents and browser
+  verification, then merge.
+- **2026-10-08 plan A2-01 (server) EXECUTED** on `iolanthe-server` branch `feat/itinerary-a2` (9 commits, 65 tests, was
+  52), Sonnet/Haiku implementers with this session reviewing each diff against the plan. One fix beyond the plan: a
+  `null` or empty `duration_min` means "no duration" (Number() made it 0 and the bounds check rejected it); mirrored in
+  plan a2-02. Checklist 10/10 on the scratch server; migration v5 rehearsed on docker-vm in a throwaway container on a
+  copy of the live volume (4 routes, 16 anchorages, 6 charters; live untouched, `live_version` 4). PR
+  C1rK1t/iolanthe-server#2 open. Next: David's go to merge + `./update.sh` on the vessel, then execute plan a2-02 on
+  admin `feat/itinerary-a2`.
+- **2026-10-08 server DEPLOYED (spec A2).** PR iolanthe-server#2 merged as `cbde12e`; safe server-only update on the
+  vessel (`git pull --ff-only` + `docker compose up -d --build iolanthe-server`). Live migration v5 ran at startup:
+  backup `data-before-migration-2026-10-08-035503`, 4 library routes, 16 anchorages, 6 charter records; `/api/schema`
+  `live_version` 5; `/api/charter` and `/api/planned-route` 200. Until admin plan a2-02 merges, the live admin's
+  Itinerary panel "Apply library route" calls the removed `apply-route` endpoint (404); everything else on the live
+  admin works. Next: execute a2-02 on admin `feat/itinerary-a2`.
+- **2026-10-08 plan A2-02 (admin) EXECUTED** on admin branch `feat/itinerary-a2` (18 commits; 110 tests). Sonnet/Haiku
+  implementers per task, every diff reviewed against the plan (all verbatim), browser passes by this session on the
+  scratch server. Fixes found in the browser: `renderPills` appended the text "null" when there was nothing to check
+  (`replaceChildren(null)`); the sticky map floated over the strip when scrolling (map now scrolls with the page and is
+  sized so map + strip fit: `--map-h: max(380px, min(100vh − 380px, 640px))`); admin's global input styles inflated
+  the Start from… radios; "Day N" was doubled on the tabs of a route without charter dates; phone width needed the
+  edges as thin rows above and below a full-width card. Observed on the migrated csaba data: the stored arrival days
+  disagree with the computed ones, so the first geometry edit re-dates most stops and marks them to check (by design;
+  the captain will see it on first contact). Not exercised (code paths unchanged): KML/GPX import/export, Add another
+  route. PR C1rK1t/iolanthe-admin#6 open; merging releases it to the vessel within 5 minutes (server A2 is live).
+

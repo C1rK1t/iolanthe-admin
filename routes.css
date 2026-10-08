@@ -123,6 +123,7 @@
 .routes-panel .mk-anch { width: 26px; height: 26px; border-radius: 50%; background: #fff; color: var(--stop); display: grid; place-items: center; box-shadow: 0 1px 5px rgba(0,0,0,.5); }
 .routes-panel .mk-anch svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
 .routes-panel .mk-anch.dim { opacity: .6; }
+.routes-panel .mk-anch.kind-stop svg { fill: currentColor; stroke: none; }
 .routes-panel .mk-site { width: 20px; height: 20px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg) translate(2px, -2px); background: var(--site); border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.5); }
 .routes-panel .mk-pin { width: 16px; height: 16px; transform: rotate(45deg); background: var(--pin); border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.5); }
 .routes-panel .mk-mid { width: 11px; height: 11px; border-radius: 50%; background: rgba(255,255,255,.55); border: 1px solid rgba(29,53,64,.7); }
@@ -221,3 +222,59 @@
   .routes-panel .map-hint { max-width: calc(100% - 24px); bottom: 34px; }
   .routes-panel .seg button .lbl { display: none; }
 }
+
+/* Spec A2: header with the Working-on select and the pills; the strip docked under the map */
+/* The strip is the workplace, so the map no longer sticks (it would float over the strip) and is sized so map + strip fit the viewport. */
+.routes-panel { --map-h: max(380px, min(calc(100vh - 380px), 640px)); }
+.routes-panel .map-wrap { position: relative; top: 0; }
+.routes-panel .card-header .subject { display: flex; align-items: center; gap: 8px; margin: 0; }
+.routes-panel .card-header .subject .side-label { margin: 0; white-space: nowrap; }
+.routes-panel .card-header .subject select { min-width: 200px; max-width: 320px; border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; background: var(--panel); color: var(--ink); font: inherit; }
+.routes-panel .pills { display: flex; gap: 6px; align-items: center; flex: 1; }
+.routes-panel .pill { display: inline-grid; place-items: center; min-width: 36px; height: 28px; padding: 0 10px; border-radius: 999px; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; background: var(--soft); color: var(--muted); cursor: help; }
+.routes-panel .pill.fit-match { background: #cfe8cf; color: #1e5a3b; }
+.routes-panel .pill.fit-short, .routes-panel .pill.fit-over { background: var(--warn-bg); color: var(--warn); }
+.routes-panel .pill.check { background: #f5c6c2; color: #7a2a24; }
+.routes-panel .planner { grid-template-areas: "side map" "strip strip"; grid-template-rows: auto auto; }
+.routes-panel .planner .side { grid-area: side; }
+.routes-panel .planner .map-wrap { grid-area: map; }
+.routes-panel .strip-host { grid-area: strip; min-width: 0; }
+.routes-panel .mk-stop.selected { width: 34px; height: 34px; background: var(--accent); border-width: 3px; font-size: 14px; }
+.routes-panel .mk-stop.plain.selected { background: #fff; color: var(--accent); border-color: var(--accent); }
+@media (max-width: 900px) {
+  .routes-panel .planner { grid-template-areas: none; grid-template-rows: none; }
+  .routes-panel .planner .side, .routes-panel .planner .map-wrap, .routes-panel .strip-host { grid-area: auto; }
+  .routes-panel .strip-host { order: 3; }
+  .routes-panel .side > .field:first-child { order: 3; }
+}
+/* Days tab: the read-only tube line (spec A2 §5.2), ported from itinerary.css */
+.routes-panel .days { --tube: #8b0000; --day: rgba(120, 160, 255, 0.07); --day-border: rgba(120, 160, 255, 0.55); --sub-border: rgba(120, 160, 255, 0.45); --act-border: rgba(70, 170, 200, 0.8); }
+.routes-panel .days-board { display: grid; grid-template-columns: minmax(70px, 110px) 32px minmax(0, 1fr); gap: 0 6px; position: relative; align-items: start; }
+.routes-panel .days-titles { position: relative; }
+.routes-panel .days-line { display: block; overflow: visible; }
+.routes-panel .days-list { display: flex; flex-direction: column; }
+.routes-panel .days-stop-title { position: absolute; right: 0; transform: translateY(-50%); text-align: right; max-width: 100%; cursor: pointer; }
+.routes-panel .days-stop-name { font-weight: 700; font-size: 12px; line-height: 1.2; }
+.routes-panel .days-stop-times { font-size: 10.5px; line-height: 1.3; white-space: normal; }
+.routes-panel .days-stop-times.est { font-style: italic; }
+.routes-panel .days-trunk { stroke: var(--tube); stroke-width: 5; stroke-linecap: round; }
+.routes-panel .days-terminal { stroke: var(--tube); stroke-width: 4; fill: #fff; stroke-linecap: round; }
+.routes-panel .days-loop { fill: #fff; stroke: var(--tube); stroke-width: 3.5; }
+.routes-panel .days-dot { fill: var(--tube); stroke: #fff; stroke-width: 2; }
+.routes-panel .days-clickable { cursor: pointer; }
+.routes-panel .days-day { background: var(--day); border: 1.4px solid var(--day-border); border-radius: 6px; padding: 6px 8px 8px; }
+.routes-panel .days-day + .days-day { border-top-left-radius: 0; border-top-right-radius: 0; border-top: none; }
+.routes-panel .days-day:first-child:not(:last-child) { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.routes-panel .days-day:not(:first-child):not(:last-child) { border-radius: 0; }
+.routes-panel .days-day-title { font-size: 11.5px; font-weight: 600; margin-bottom: 4px; }
+.routes-panel .days-passage { font-size: 11.5px; padding: 4px 0 2px; }
+.routes-panel .days-sub { background: rgba(255, 255, 255, 0.5); border: 1px solid var(--sub-border); border-radius: 4px; padding: 4px 6px; min-height: 26px; display: flex; flex-direction: column; gap: 3px; }
+.routes-panel .days-sub + .days-sub { margin-top: 4px; }
+.routes-panel .days-item { display: flex; gap: 6px; align-items: baseline; background: rgba(255, 255, 255, 0.95); border: 1px dashed var(--act-border); border-radius: 3px; padding: 2px 6px; font-size: 11.5px; }
+.routes-panel .days-item.site { border-style: solid; }
+.routes-panel .days-item-time { font-variant-numeric: tabular-nums; color: var(--muted); }
+.routes-modal .radio-list .side-label { margin: 6px 0 2px; }
+.routes-modal .radio-list input[type=radio] { width: 18px; height: 18px; min-height: 0; padding: 0; margin: 0; flex: none; accent-color: var(--accent); }
+.routes-modal .radio-list label > span { flex: 1; }
+.routes-modal .switch-row { display: flex; gap: 8px; align-items: center; font-size: 13px; text-transform: none; letter-spacing: 0; color: var(--ink); font-weight: 400; cursor: pointer; }
+.routes-modal .switch-row input[type=checkbox] { width: 16px; height: 16px; min-height: 0; padding: 0; margin: 0; flex: none; }

@@ -19,3 +19,14 @@ server, since the new panel needs the v2 bundle.
 
 **Deviation recorded:** plan 1 Task 4 keeps every stop *reached* before the from-day and closes the current one on
 the from-day (spec §3.2 originally said "departure before the from-day"); the spec has been updated to match.
+
+## Spec A2: the Route page is the itinerary (2026-10-08)
+
+Spec: [../spec-a2.md](../spec-a2.md). Two plans, server first; the admin branch merges only after the server is deployed
+on the vessel (admin `main` auto-deploys every 5 minutes).
+
+| # | Plan | Repo | What lands | Verified while planning |
+|---|---|---|---|---|
+| A2-1 | [a2-01-server.md](a2-01-server.md) | `iolanthe-server` | Record shape (`duration_min`, `dirty_stop_ids`, anchorage `kind`), unassigned routes in the record shape, `itinerary/import` replaces apply-route (re-bases, items travel, no length refusal), charter summaries `stops`, migration v5 | New code assembled onto the committed module: all new tests pass (the 3 exact-object tests the plan extends fail until extended) |
+| A2-2 | [a2-02-admin.md](a2-02-admin.md) | `iolanthe-admin` (branch `feat/itinerary-a2`) | Core: arrivals, cascade, dropped days, clashes, fit, rebase; Route page: one Working-on select, pills, Legs/Days tabs, stop strip and card (`stop-cards.js`), Start from…, anchorage kinds; Itinerary panel deleted | Core + routes-core assembled from the plan text: 110 tests pass; `stop-cards.js` and `routes-days.js` parse |
+

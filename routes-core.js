@@ -120,16 +120,19 @@
     return first.length && second.length ? distNm(first[first.length - 1], second[0]) : 0;
   }
 
-  // What counts as "unsaved changes": the editable fields only.
+  // What counts as "changed" for Save: the editable fields of the record (spec A2: items and the dirty list included).
   function routeSnapshot(route) {
-    const keys = ["latitude", "longitude", "name", "anchorage_id", "site_id", "site_ids", "leg_speed_kn", "stop", "id", "arrive", "depart", "nights", "depart_time"];
+    const keys = ["latitude", "longitude", "name", "anchorage_id", "site_id", "site_ids", "leg_speed_kn", "stop", "id", "arrive", "depart"];
     const points = (route.points || []).map((p) => {
       const out = {};
       keys.forEach((k) => { if (p[k] !== undefined) out[k] = p[k]; });
       return out;
     });
     const speed = route.speed_kn === undefined ? null : route.speed_kn;
-    return JSON.stringify({ name: route.name, description: route.description, speed_kn: speed, points });
+    return JSON.stringify({
+      name: route.name, description: route.description, welcome_message: route.welcome_message || "", speed_kn: speed, points,
+      activities: route.activities || [], dirty_stop_ids: route.dirty_stop_ids || []
+    });
   }
 
   const AUTO_LINK_NM = 2;    // spec §7 Q4: anchorage stops auto-link sites within 2 nm
@@ -168,7 +171,7 @@
     const stop = stopAt(anchorage, sites);
     // Keep what belongs to this stop in a charter itinerary (id, days) and its leg speed; the position comes from the anchorage.
     const carried = {};
-    ["leg_speed_kn", "id", "arrive", "depart", "nights", "depart_time"].forEach((key) => { if (old[key] !== undefined) carried[key] = old[key]; });
+    ["leg_speed_kn", "id", "arrive", "depart"].forEach((key) => { if (old[key] !== undefined) carried[key] = old[key]; });
     const next = { ...stop, ...carried };
     return { points: replaceAt(points, index, next), merged: false };
   }

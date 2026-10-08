@@ -18,7 +18,14 @@
     join: '<circle cx="5" cy="6" r="2"/><circle cx="5" cy="18" r="2"/><path d="M7 6h3a4 4 0 0 1 4 4v0a4 4 0 0 0 4 4h3M7 18h3a4 4 0 0 0 4-4"/><path d="M18 11l3 3-3 3"/>',
     import: '<path d="M12 16V4M7 9l5-5 5 5M4 20h16"/>',
     export: '<path d="M12 4v12M7 11l5 5 5-5M4 20h16"/>',
-    copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>'
+    copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>',
+    prev: '<path d="M15 6l-6 6 6 6"/>',
+    next: '<path d="M9 6l6 6-6 6"/>',
+    gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>',
+    revert: '<path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/>',
+    start: '<path d="M6 4l14 8-14 8z"/>',
+    search: '<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>',
+    grip: '<circle cx="9" cy="6" r="1.3"/><circle cx="15" cy="6" r="1.3"/><circle cx="9" cy="12" r="1.3"/><circle cx="15" cy="12" r="1.3"/><circle cx="9" cy="18" r="1.3"/><circle cx="15" cy="18" r="1.3"/>'
   };
   const svg = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
 
@@ -39,7 +46,7 @@
   // ---------- modals (house rules: green save + red cancel top right, outside click and Escape cancel) ----------
   let current = null; // closes the open routes modal, if any
 
-  function openModal({ title, body, onSave, saveTitle, wide, onClose }) {
+  function openModal({ title, body, onSave, saveTitle, wide, onClose, cancelIcon, cancelTitle }) {
     if (current) current();
     const backdrop = el("div", { class: "routes-modal modal-backdrop" });
     let busy = false;
@@ -65,7 +72,7 @@
         el("h2", {}, title),
         el("div", { class: "icon-row" },
           onSave ? iconBtn("check", saveTitle || "Save", "success", save) : null,
-          iconBtn("cancel", "Cancel", "danger", close))),
+          iconBtn(cancelIcon || "cancel", cancelTitle || "Cancel", "danger", close))),
       el("div", { class: "modal-body" }, body));
     backdrop.append(card);
     backdrop.addEventListener("mousedown", (e) => { if (e.target === backdrop) close(); });

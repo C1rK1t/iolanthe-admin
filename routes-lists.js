@@ -1,11 +1,10 @@
-// Routes panel: the Stops and Legs tab lists and the time tile. Stop cards (depth, moved/deleted warnings, site
-// chips) and stop-to-stop leg cards with per-leg speeds. Created once per bind() by routes.js.
+// Routes panel: the Legs tab list and the time tile. Stop-to-stop leg cards with per-leg speeds. Created once per bind() by routes.js.
 (function () {
   "use strict";
 
-  // ctx: { A, core, places, getWork, speedKn(), defaultSpeed, maxSpeed, editPoints(fn), focusPoint(i), focusLeg(leg), stopMeta(point) (optional) }
+  // ctx: { A, core, getWork, speedKn(), defaultSpeed, maxSpeed, editPoints(fn), focusLeg(leg) }
   function create(ctx) {
-    const { core: c, places } = ctx;
+    const { core: c } = ctx;
     const { el } = window.IolantheRoutesUi;
     const points = () => ctx.getWork().route.points;
     const legsFor = (pts) => (pts.length < 2 ? [] : c.stopLegs(pts, ctx.speedKn()));
@@ -16,32 +15,6 @@
       const anyOwn = legs.some((l) => l.own);
       const label = hours === null ? "set a speed" : (anyOwn ? "h:mm underway" : `h:mm at ${ctx.speedKn()} kn`);
       return el("div", { class: "stat" }, el("b", {}, hours === null ? "—" : c.fmtHm(hours)), el("span", {}, label));
-    }
-
-    // A stop row with anchorage depth, moved/deleted warnings and site chips (ids that no longer exist are dropped quietly).
-    // A plain stop (no anchorage) shows "Holding / drifting" where the depth would be.
-    function stopItem(p, i, n) {
-      const a = places ? places.findAnchorage(p.anchorage_id) : null;
-      const moved = places ? c.anchorageMovedM(p, a) : 0;
-      const siteChips = places ? (p.site_ids || []).map(places.findSite).filter(Boolean).map((s) => el("span", { class: "chip" }, s.title)) : [];
-      const deleted = places && places.isLoaded() && p.anchorage_id && !a;
-      return el("div", { class: "stop-item", onclick: () => ctx.focusPoint(i) },
-        el("div", { class: "title" }, el("span", { class: "stop-num" }, n), p.name || "Stop",
-          a && a.depth_m ? el("span", { class: "meta", style: "font-weight:400" }, `${a.depth_m} m`) : null,
-          p.anchorage_id ? null : el("span", { class: "meta", style: "font-weight:400" }, "Holding / drifting")),
-        ctx.stopMeta && ctx.stopMeta(p) ? el("div", { class: "stop-meta muted" }, ctx.stopMeta(p)) : null,
-        moved ? el("div", { class: "warn-text" }, `⚠ Anchorage moved ${Math.round(moved)} m since placed`) : null,
-        deleted ? el("div", { class: "warn-text" }, "⚠ Anchorage deleted. The stop keeps its position.") : null,
-        siteChips.length ? el("div", { class: "chips" }, siteChips) : el("div", { class: "empty", style: "margin-top:4px" }, "No sites linked"));
-    }
-
-    function renderStops(box) {
-      let n = 0;
-      const stops = points().map((p, i) => ({ p, i })).filter(({ p }) => c.isStop(p)).map(({ p, i }) => {
-        n += 1;
-        return stopItem(p, i, n);
-      });
-      box.replaceChildren(...(stops.length ? stops : [el("div", { class: "empty" }, "No stops yet. In Add mode, tap an anchorage to add one, or use Make stop here on a waypoint.")]));
     }
 
     function setLegSpeed(leg, value) {
@@ -102,7 +75,7 @@
         : "Couldn't copy to the clipboard in this browser.", ok ? "" : "error"));
     }
 
-    return { timeStat, renderStops, renderLegs, copyLegs, legCount: () => legsFor(points()).length };
+    return { timeStat, renderLegs, copyLegs, legCount: () => legsFor(points()).length };
   }
 
   window.IolantheRoutesLists = Object.freeze({ create });
