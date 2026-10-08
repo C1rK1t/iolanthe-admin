@@ -313,3 +313,22 @@ workplace per charter.
   captain's first contact on the bridge tablet; restore the ended-charter read-only guard once the historical records
   are repaired; plan 5 Task 8 shims; specs B and C.
 
+## Spec A2 tweak round 2 (David, 2026-10-08, after the first round went live) — NOT YET PLANNED
+
+- **A2-T8 Days tab: stop text into the sub-boxes.** The stop name and its Arr/Dep line move from the left titles column
+  into the (currently empty) blue sub-box for that stop and day, as a header above the items; the titles column goes
+  and the tube line sits directly left of the day boxes. Frees width in the narrow side column.
+- **A2-T9 Separation.** A gap between consecutive day boxes in the Days tab, and spacing between the nights input and
+  the time input in the Depart tile.
+- **A2-T10 Line → card → map.** Clicking a stop on the tube line scrolls the strip's card into view *and* moves the map
+  to that stop; and whenever the map moves because of the line or a card, it zooms in on the stop as well as panning
+  (`setView(latlng, max(currentZoom, ~13))`), not just `panTo`.
+- **A2-T11 Wording on unassigned routes:** the Depart tile is titled "Stop duration"; a "Departure time" label sits
+  above the time picker (both modes).
+- **A2-T12 Default departure time** instead of a blank picker: 07:00 when nights > 0; for a day stop (nights = 0) David
+  wrote "last departure time + 2 hours" — to confirm: read as *arrival estimate + 2 h* (a day stop cannot leave before
+  it arrives). The stored default is written when the card sets or changes the stay; the blank-time fallback in
+  `estimateTimes` / the server's `SEED_DEPART_TIME` moves from 09:00 to 07:00 on both sides.
+- **A2-T13 (question) time picker usability:** the native `<input type="time">` is fiddly on the tablet; consider a
+  pair of selects (hour, 5-minute steps) or ±15-min buttons beside it.
+
