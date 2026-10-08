@@ -71,8 +71,8 @@
       host.replaceChildren(
         el("div", { class: "card-header" }, title, pill),
         el("div", { class: "gp-empty" },
-          el("p", {}, "Set the charter dates on Charter Info to preview the guest view."),
-          el("button", { type: "button", class: "gp-text-btn", onclick: () => ctx.onOpenInfo() }, "Charter Info")));
+          el("p", {}, "Set the charter dates on Charter Admin to preview the guest view."),
+          el("button", { type: "button", class: "gp-text-btn", onclick: () => ctx.onOpenInfo() }, "Charter Admin")));
       return;
     }
 
