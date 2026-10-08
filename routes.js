@@ -980,6 +980,13 @@
       onStopClick: (stopId) => { if (cards) cards.select(stopId); }
     });
     days.render($("days"));
+    cards = window.IolantheStopCards.create({
+      A: A(), core: icore(), rcore: core(), el, svg, openModal, places: myPlaces,
+      getWork: () => work, getCharter: charterOrNull, getDayCount: dayCount, getSiteLibrary: () => siteLibrary,
+      readOnly, editRecord, askDrop,
+      removeStop: (stopId) => { const i = work.route.points.findIndex((p) => p.id === stopId); if (i >= 0) removeStopAt(i); },
+      panToStop, highlightStop, openStartFrom, status
+    });
     initMap(mine);
     if (isCharter()) {
       $("name-field").hidden = true;

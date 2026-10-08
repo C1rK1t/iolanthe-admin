@@ -1,0 +1,106 @@
+/* The stop strip and the stop card (spec A2 §5.4–5.5). Scoped under .routes-panel; colours follow routes.css. */
+
+/* Strip: prev | left edges | card | right edges | next */
+.routes-panel .strip { display: flex; align-items: stretch; gap: 6px; min-height: 240px; }
+.routes-panel .strip > .icon-btn { align-self: center; flex: none; }
+.routes-panel .strip-edges { display: flex; align-items: stretch; gap: 2px; flex: none; }
+.routes-panel .strip-edges.left { flex-direction: row; }
+.routes-panel .strip-edges.right { flex-direction: row; }
+.routes-panel .strip-edge { position: relative; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--muted); padding: 0; min-height: 0; cursor: pointer; overflow: hidden; font-weight: 400; }
+.routes-panel .strip-edge:hover { border-color: var(--accent); background: #fff; }
+.routes-panel .strip-edge:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.routes-panel .strip-edge-label { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); writing-mode: vertical-rl; font-size: 11px; white-space: nowrap; color: inherit; }
+.routes-panel .strip-edge.dirty { background: #f5c6c2; border-color: var(--danger); color: #7a2a24; }
+.routes-panel .strip-edge.good { background: #cfe8cf; border-color: var(--ok); color: #1e5a3b; }
+.routes-panel .strip-empty { display: flex; align-items: center; gap: 10px; min-height: 64px; padding: 12px 14px; border: 1px dashed var(--line); border-radius: 8px; }
+
+/* Card */
+.routes-panel .stop-card { flex: 1; min-width: 0; background: #fff; border: 1.6px solid var(--accent); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.routes-panel .stop-card.dirty { border-color: var(--danger); }
+.routes-panel .stop-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.routes-panel .stop-card-head { display: flex; align-items: center; gap: 10px; touch-action: pan-y; }
+.routes-panel .stop-card-head .stop-num { width: 26px; height: 26px; font-size: 13px; }
+.routes-panel .stop-card-title { flex: 1; min-width: 0; }
+.routes-panel .stop-card-title h3 { margin: 0; font-size: 16px; line-height: 1.2; }
+.routes-panel .stop-card-sub { font-size: 12px; }
+.routes-panel .icon-btn.small.on { background: var(--accent); color: #fff; }
+.routes-panel .icon-btn.small.quiet { background: transparent; }
+.routes-panel .icon-btn.small.quiet:hover { background: #f7e3e1; color: var(--danger); }
+
+/* Tiles: Arrive · Depart · Next leg */
+.routes-panel .tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.routes-panel .tile { background: var(--soft); border-radius: 8px; padding: 8px 10px; min-height: 64px; }
+.routes-panel .tile.blank { background: transparent; }
+.routes-panel .tile-k { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.routes-panel .tile-v { font-size: 15px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.routes-panel .tile.estimated .tile-v { color: var(--muted); font-style: italic; font-weight: 600; }
+.routes-panel .tile-s { font-size: 11px; color: var(--muted); margin-top: 3px; }
+.routes-panel .tile-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.routes-panel .tile input.tile-time, .routes-panel .tile input.tile-date { min-height: 0; height: 28px; font: inherit; font-size: 13px; font-weight: 700; padding: 0 6px; border: 1px solid var(--line); border-radius: 5px; background: #fff; color: var(--ink); }
+.routes-panel .tile input.tile-time { width: 92px; }
+.routes-panel .tile input.tile-date { width: 150px; }
+.routes-panel .tile input.tile-time.est { font-style: italic; font-weight: 600; color: var(--muted); }
+.routes-panel .tile input:disabled { opacity: .7; }
+
+/* Day tabs and the ⚙ tab */
+.routes-panel .card-body { display: flex; flex-direction: column; gap: 8px; }
+.routes-panel .card-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+.routes-panel .card-tab { border: 1px solid var(--line); border-radius: 6px; background: var(--soft); color: var(--ink); padding: 4px 10px; min-height: 0; text-align: left; cursor: pointer; display: grid; font-weight: 400; }
+.routes-panel .card-tab[aria-selected="true"] { background: #fff; border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.routes-panel .card-tab.over { outline: 2px solid var(--accent); outline-offset: 1px; }
+.routes-panel .card-tab-t { font-size: 12px; font-weight: 700; }
+.routes-panel .card-tab-d { font-size: 10px; color: var(--muted); }
+
+/* Items */
+.routes-panel .items { display: flex; flex-direction: column; gap: 4px; min-height: 28px; border-radius: 6px; }
+.routes-panel .items.over { outline: 2px solid var(--accent); outline-offset: 2px; }
+.routes-panel .item { display: grid; grid-template-columns: 4px 48px minmax(0, 1fr) auto auto auto; align-items: center; gap: 8px; background: #fff; border: 1px solid var(--line); border-radius: 6px; padding: 0 6px 0 0; min-height: 30px; font-size: 13px; cursor: text; }
+.routes-panel .item-bar { align-self: stretch; border-radius: 6px 0 0 6px; background: var(--accent); }
+.routes-panel .item.site .item-bar { background: var(--stop); }
+.routes-panel .item.clash { background: #fbeeed; border-color: var(--danger); }
+.routes-panel .item.clash .item-bar { background: var(--danger); }
+.routes-panel .item-time { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; padding-left: 4px; }
+.routes-panel .item-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.routes-panel .item-site { font-size: 12px; white-space: nowrap; }
+.routes-panel .item-clash { font-size: 12px; color: var(--danger); white-space: nowrap; }
+.routes-panel .item-grip { display: inline-grid; place-items: center; width: 22px; height: 22px; color: var(--muted); cursor: grab; touch-action: none; }
+.routes-panel .item-grip svg { width: 16px; height: 16px; fill: currentColor; stroke: none; }
+.routes-panel .item .icon-btn.small { width: 26px; height: 26px; }
+.routes-panel .item .icon-btn.small svg { width: 14px; height: 14px; }
+.routes-panel .item.ghost { position: fixed; z-index: 50; pointer-events: none; opacity: .85; box-shadow: var(--shadow); width: auto; }
+.routes-panel .item.source { opacity: .35; }
+.routes-panel .item.editing { display: block; padding: 6px; cursor: default; }
+.routes-panel .item-edit { display: flex; flex-direction: column; gap: 6px; }
+.routes-panel .item-edit-row { display: grid; grid-template-columns: minmax(0, 1fr) 100px 72px auto; gap: 6px; align-items: center; }
+.routes-panel .item-edit input, .routes-panel .item-edit textarea { font: inherit; font-size: 13px; min-height: 0; padding: 4px 6px; border: 1px solid var(--line); border-radius: 4px; background: #fff; color: var(--ink); }
+.routes-panel .item-edit textarea { resize: vertical; min-height: 40px; }
+.routes-panel .items-add { position: relative; display: flex; align-items: center; gap: 6px; }
+.routes-panel .items-hint { font-size: 12px; margin-left: 6px; }
+.routes-panel .card-menu { position: absolute; z-index: 600; left: 0; top: 100%; margin-top: 4px; width: min(320px, 100%); background: #fff; border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); padding: 8px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.routes-panel .menu-item { text-align: left; border: 1px solid var(--line); background: #fff; color: var(--ink); border-radius: 4px; padding: 5px 8px; min-height: 0; font-weight: 400; cursor: pointer; }
+.routes-panel .menu-item:hover { border-color: var(--accent); background: #fff; }
+.routes-panel .menu-item.near { font-weight: 700; }
+.routes-panel .menu-search { font: inherit; padding: 4px 6px; border: 1px solid var(--line); border-radius: 4px; }
+.routes-panel .menu-results { display: flex; flex-direction: column; gap: 4px; max-height: 200px; overflow: auto; }
+
+/* ⚙ settings */
+.routes-panel .settings .site-pick { max-height: 180px; }
+.routes-panel .settings .site-row { display: flex; gap: 6px; align-items: center; padding: 3px 0; font-size: 12.5px; text-transform: none; letter-spacing: 0; color: var(--ink); font-weight: 400; margin: 0; cursor: pointer; }
+.routes-panel .settings .site-row.near { font-weight: 700; }
+.routes-panel .settings .site-row .d { margin-left: auto; font-weight: 400; }
+.routes-panel .settings .site-row input[type=checkbox], .routes-panel .settings .switch-row input[type=checkbox] { width: 16px; height: 16px; min-height: 0; padding: 0; margin: 0; flex: none; }
+.routes-panel .settings .site-more summary { cursor: pointer; font-size: 12px; padding: 4px 0; }
+.routes-panel .settings .switch-row { display: flex; gap: 8px; align-items: center; font-size: 13px; cursor: pointer; }
+.routes-panel .settings .field input[type=number] { width: 80px; }
+.routes-panel .settings-foot { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+
+/* Read-only after the charter has ended */
+.routes-panel .strip.ro .stop-card { border-style: dashed; }
+.routes-panel .strip.ro .items-add, .routes-panel .strip.ro .item-grip, .routes-panel .strip.ro .item .icon-btn { display: none; }
+
+@media (max-width: 900px) {
+  .routes-panel .tiles { grid-template-columns: 1fr; }
+  .routes-panel .item { grid-template-columns: 4px 48px minmax(0, 1fr) auto auto; }
+  .routes-panel .item-site { display: none; }
+  .routes-panel .strip-edge-label { display: none; }
+}
