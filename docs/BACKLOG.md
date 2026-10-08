@@ -47,6 +47,27 @@ overview**, not a separate route report.
   - Branding (the vessel logo and the watermark already used on print pages)?
   - Should it show the Primary plan only, or both plans?
 
+## Route page
+
+### Visit the same anchorage more than once (captain, 2026-10-08)
+
+*Relayed by David, 2026-10-08.* The captain wants a route to call at one anchorage twice, above all when a charter
+starts and ends at the same anchorage.
+
+- **What already works:** the record allows two stops with the same `anchorage_id` as long as they are not next to
+  each other (`routes-core.js` `makeStopAt` / `appendStop` only merge with the neighbouring stop, spec A §7 Q3). Days,
+  items and legs are per stop, so nothing in the itinerary model needs to change.
+- **What breaks:** both stops sit on the same position, so their map markers stack; only the top one can be seen,
+  clicked or dragged, and the number badge shows one stop number. Snap / sticky logic in `routes-places.js` and
+  `routes.js` also assumes one point per anchorage (`sameStop`, `routesUsingAnchorage`).
+- **Captain's map solution (sketch received):** where an anchorage or plain stop has more than one visit, the marker
+  shows a "multiple" glyph instead of a number; on hover (or tap) N satellite markers fan out around it, one per
+  visit, each carrying its stop number; a satellite selects, opens the card, or drags like a normal single-visit stop.
+- **Also asked, parked:** back-tracking along the same path (a leg that retraces an earlier leg). The path is the
+  legs, so retracing means duplicate points on the line; David's view is that the juice isn't worth the squeeze.
+- **To decide:** fan-out geometry and radius at each zoom; whether the first and last visit get distinct glyphs
+  (origin / terminus loops on the Days tab already exist); how the stop strip labels the two cards.
+
 ## Admin-wide
 
 ### Roll the Route Planner mockup style out across the Admin site
