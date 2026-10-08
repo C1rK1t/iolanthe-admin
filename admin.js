@@ -6575,9 +6575,10 @@
 
   async function renderCharter() {
     const panels = [
-      { id: "info", label: "Charter Info" },
+      // Labels are HTML (sectionShell): the <br> sets the two-line wrap the captain asked for (2026-10-08).
+      { id: "info", label: "Charter<br>Admin" },
+      { id: "routes", label: "Route &amp;<br>Itinerary" },
       { id: "crew", label: "Crew" },
-      { id: "routes", label: "Route" },
       { id: "preview", label: "Guest view" },
       { id: "sites", label: "Site Editor" }
     ];

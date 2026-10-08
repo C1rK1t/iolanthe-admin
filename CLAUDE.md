@@ -49,6 +49,8 @@ URL access also requires `?key=<settings.admin.urlKey>`.
   buttons on the Charter Info and Route headers open it (`showCharterPanel("preview", { previewDay })`). The server
   serves `?charter=` only to an admin session; the guest's preview mode lives in `iolanthe-guest/preview-mode.js`.
   Device choice in localStorage `iolanthe-admin.preview.device`.
+- The Charter section menu reads **Charter Admin** (the info panel, id `info`), **Route & Itinerary** (`routes`), Crew,
+  Guest view, Site Editor; the two-line wraps are `<br>`s in the labels (`renderCharter`).
 - Reserved periods (maintenance / unavailable / other) come from `/api/admin/reserved-periods` and save with a
   `base_revision`; the admin and the server both refuse dates that overlap a charter or a period.
 - The active charter is computed by the server (in date = the day before start to the end date, else the crew's
