@@ -659,6 +659,117 @@
     return `${n}${suffix}`;
   }
 
+  // Spec A2 §5.5 ⚙ Remove stop: the point becomes a waypoint, its items go, origin/terminus rules re-apply, arrivals recompute.
+  function removeStop(record, stopId) {
+    const stops = stopEntries(record.route.points);
+    const k = stops.findIndex((e) => e.point.id === stopId);
+    if (k < 0) return record;
+    const { anchorage_id: _a, stop: _s, site_ids: _ids, id: _id, arrive: _arr, depart: _dep, leg_speed_kn: speed, ...rest } = stops[k].point;
+    let points = record.route.points.map((p, i) => (i === stops[k].index ? (i === 0 && speed ? { ...rest, leg_speed_kn: speed } : rest) : p));
+    const remaining = stopEntries(points);
+    if (remaining.length) {
+      const first = remaining[0].index;
+      const last = remaining[remaining.length - 1].index;
+      points = points.map((p, i) => {
+        if (i === first && p.arrive) { const { arrive: _x, ...q } = p; p = q; }
+        if (i === last && p.depart) { const { depart: _y, ...q } = p; p = q; }
+        return p;
+      });
+    }
+    const activities = renumberActivities(record.activities.filter((a) => a.stop_id !== stopId));
+    return recomputeArrivals(addDirty({ ...withPoints(record, points), activities }, remaining.slice(k).map((e) => e.point.id)));
+  }
+
+  // Spec A2 D12. Map activity id → reason: overlapping windows on the same day (default 1 h), or outside the boat's
+  // presence on the day it arrives or leaves. Items without a time never clash.
+  function clashes(record) {
+    const out = new Map();
+    const times = estimateTimes(record);
+    const stops = new Map(stopEntries(record.route.points).map((e) => [e.point.id, e.point]));
+    const timed = record.activities.filter((a) => a.time);
+    const windowOf = (a) => { const start = timeToMinutes(a.time); return [start, start + (a.duration_min || DEFAULT_DURATION_MIN)]; };
+    timed.forEach((a) => {
+      const [s, e] = windowOf(a);
+      const other = timed.find((b) => b.id !== a.id && b.day === a.day && (([s2, e2]) => s < e2 && s2 < e)(windowOf(b)));
+      if (other) { out.set(a.id, `clashes with ${other.title || "another item"}`); return; }
+      const stop = stops.get(a.stop_id);
+      const t = stop ? times.get(stop.id) : null;
+      if (!stop || !t) return;
+      if (stop.arrive && a.day === stop.arrive.day && t.arrive && s < timeToMinutes(t.arrive.time)) {
+        out.set(a.id, `before arrival ${t.arrive.estimated ? "~" : ""}${t.arrive.time}`);
+      } else if (stop.depart && a.day === stop.depart.day && t.depart && e > timeToMinutes(t.depart.time)) {
+        out.set(a.id, `after departure ${t.depart.estimated ? "~" : ""}${t.depart.time}`);
+      }
+    });
+    return out;
+  }
+
+  // The leg that leaves each stop, for the Next-leg and Arrive tiles. Map stopId → { nm, hours, toId, toName,
+  // departTime, departEstimated, arriveTime, arriveDay, overnight }; the terminus has no entry.
+  function legSummaries(record) {
+    const points = record.route.points;
+    const speed = record.route.speed_kn || DEFAULT_SPEED_KN;
+    const times = estimateTimes(record);
+    const stops = stopEntries(points);
+    const out = new Map();
+    stops.forEach((entry, k) => {
+      const to = stops[k + 1];
+      if (!to || !entry.point.depart) return;
+      let nm = 0;
+      for (let i = entry.index; i < to.index; i += 1) nm += distNm(points[i], points[i + 1]);
+      const hours = legHours(points, entry.index, to.index, speed);
+      const t = times.get(entry.point.id);
+      const departMinutes = t && t.depart ? timeToMinutes(t.depart.time) : timeToMinutes(SEED_DEPART_TIME);
+      const total = departMinutes + hours * 60;
+      const arriveDay = entry.point.depart.day + Math.floor(total / 1440);
+      out.set(entry.point.id, {
+        nm, hours, toId: to.point.id, toName: to.point.name || `Stop ${k + 2}`,
+        departTime: minutesToTime(departMinutes), departEstimated: !(t && t.depart && !t.depart.estimated),
+        arriveTime: minutesToTime(total), arriveDay, overnight: arriveDay > entry.point.depart.day
+      });
+    });
+    return out;
+  }
+
+  // Spec A2 §5.1 fit pill: the last arrival day against the charter's day count.
+  // { state: "match" | "short" | "over" | "none", delta, endsDay, label, title }.
+  function fit(record, charter) {
+    const dayCount = charterDayCount(charter);
+    const stops = stopEntries(toObj(toObj(record).route).points);
+    if (!dayCount || !stops.length) {
+      return { state: "none", delta: 0, endsDay: 0, label: "—", title: dayCount ? "No stops yet." : "No charter dates." };
+    }
+    const last = stops[stops.length - 1].point;
+    const endsDay = last.arrive ? last.arrive.day : (last.depart ? last.depart.day : 1);
+    const delta = endsDay - dayCount;
+    const title = `Ends ${dayDateLabel(charter, endsDay)}; the charter ends ${dayDateLabel(charter, dayCount)}.`;
+    if (!delta) return { state: "match", delta, endsDay, label: "✓", title };
+    return { state: delta > 0 ? "over" : "short", delta, endsDay, label: `${delta > 0 ? "+" : "−"}${Math.abs(delta)} d`, title };
+  }
+
+  // A record's days are relative to its day 1; lay it onto `fromDay` (same rule as the server's import, spec A2-D20).
+  function rebaseRecord(record, fromDay) {
+    const delta = (Number.isInteger(fromDay) ? fromDay : 1) - 1;
+    if (!delta) return record;
+    const shift = (dt) => (dt ? { ...dt, day: dt.day + delta } : dt);
+    const points = record.route.points.map((p) => (isStop(p) ? { ...p, ...(p.arrive ? { arrive: shift(p.arrive) } : {}), ...(p.depart ? { depart: shift(p.depart) } : {}) } : p));
+    return { ...withPoints(record, points), activities: record.activities.map((a) => ({ ...a, day: a.day + delta })) };
+  }
+
+  // Spec A2 §5.1 Save as unassigned: the same record as a new library route, items kept, dirty list dropped.
+  function toUnassignedRoute(record, name) {
+    return {
+      id: "",
+      name: toStr(name, MAX_TITLE_LENGTH),
+      description: "",
+      revision: 0,
+      speed_kn: record.route.speed_kn,
+      source: { type: "planner" },
+      points: record.route.points.map((p) => ({ ...p })),
+      activities: record.activities.map((a) => ({ ...a }))
+    };
+  }
+
   return {
     ITINERARY_VERSION, DEFAULT_SPEED_KN, MAX_TITLE_LENGTH, MAX_NOTES_LENGTH, TIME_RE,
     MIN_DURATION_MIN, MAX_DURATION_MIN, DEFAULT_DURATION_MIN, SEED_DEPART_TIME,
@@ -671,6 +782,7 @@
     setStopTime, setStopSites, sitesByDistance,
     renumberActivities, canDropActivity, moveActivity, addActivity, updateActivity, removeActivity,
     reconcileRoutePoints,
-    recordDayCount, recomputeArrivals, shiftFromStop, setDeparture, droppedDays, itemsDroppedByImport, dayOrdinal
+    recordDayCount, recomputeArrivals, shiftFromStop, setDeparture, droppedDays, itemsDroppedByImport, dayOrdinal,
+    removeStop, clashes, legSummaries, fit, rebaseRecord, toUnassignedRoute
   };
 });

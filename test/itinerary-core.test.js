@@ -446,3 +446,96 @@ test("A2 dayOrdinal: date ordinals from the charter start, 'day N' without one",
   assert.deepEqual([11, 12, 13].map((d) => core.dayOrdinal({ start_date: "2026-10-01" }, d)), ["11th", "12th", "13th"]);
   assert.equal(core.dayOrdinal(null, 4), "day 4");
 });
+
+test("A2 removeStop: the point stays as a waypoint, its items go, later arrivals recompute and go dirty", () => {
+  const it = sevenDays();
+  const out = core.removeStop(it, "stp_capo");
+  const point = out.route.points[2];
+  assert.deepEqual(point, { latitude: 14.95, longitude: 120.11, name: "Capones Is." });
+  assert.deepEqual(out.activities.map((a) => a.id), ["act_3", "act_4"]);
+  assert.deepEqual(daysOf(out, "stp_herm"), [1, 2]);        // Anawangin 14:00 + 36.5 nm → 18:34 day 1
+  assert.deepEqual(daysOf(out, "stp_poti"), [2, 4]);
+  assert.deepEqual(daysOf(out, "stp_hund"), [4, 5]);
+  assert.deepEqual(daysOf(out, "stp_subic2"), [5, null]);
+  assert.deepEqual(itemDays(out), { act_3: 3, act_4: 2 });
+  assert.deepEqual(out.dirty_stop_ids, ["stp_herm", "stp_poti", "stp_hund", "stp_subic2"]);
+  assert.deepEqual(core.validateItinerary(out, 7), []);
+
+  const noOrigin = core.removeStop(it, "stp_subic1");
+  assert.equal(stopOf(noOrigin, "stp_anaw").arrive, undefined);          // Anawangin is the origin now
+  assert.deepEqual(stopOf(noOrigin, "stp_anaw").depart, { day: 1, time: "14:00" });
+  assert.deepEqual(core.validateItinerary(noOrigin, 7), []);
+
+  const noTerminus = core.removeStop(it, "stp_subic2");
+  assert.equal(stopOf(noTerminus, "stp_hund").depart, undefined);        // Hundred Islands is the terminus now
+  assert.deepEqual(core.validateItinerary(noTerminus, 7), []);
+  assert.equal(core.removeStop(it, "stp_nope"), it);
+});
+
+test("A2 clashes: overlapping windows on a day (default 1 h), before the arrival, after the departure", () => {
+  const it = sevenDays();
+  it.activities = [
+    { id: "k", stop_id: "stp_poti", day: 4, order: 0, title: "Kayaks", notes: "", time: "09:30" },
+    { id: "s", stop_id: "stp_poti", day: 4, order: 1, title: "Snorkel", notes: "", time: "10:00", duration_min: 30 },
+    { id: "b", stop_id: "stp_poti", day: 4, order: 2, title: "BBQ", notes: "", time: "10:30" },                 // starts when Kayaks ends: no clash
+    { id: "n", stop_id: "stp_poti", day: 4, order: 3, title: "Nap", notes: "" },                                 // no time, never clashes
+    { id: "e", stop_id: "stp_capo", day: 1, order: 0, title: "Early", notes: "", time: "14:00" },                // Capones is reached ~15:07
+    { id: "l", stop_id: "stp_capo", day: 2, order: 0, title: "Late", notes: "", time: "08:00" },                 // Capones leaves 08:30
+    { id: "f", stop_id: "stp_capo", day: 1, order: 1, title: "Fine", notes: "", time: "16:00" }
+  ];
+  const out = core.clashes(core.normalizeItinerary(it));
+  assert.equal(out.get("k"), "clashes with Snorkel");
+  assert.equal(out.get("s"), "clashes with Kayaks");
+  assert.equal(out.get("b"), undefined);
+  assert.equal(out.get("n"), undefined);
+  assert.equal(out.get("e"), "before arrival ~15:07");
+  assert.equal(out.get("l"), "after departure 08:30");
+  assert.equal(out.get("f"), undefined);
+});
+
+test("A2 legSummaries: distance, hours and the computed arrival of the leg leaving each stop; none for the terminus", () => {
+  const it = sevenDays();
+  const legs = core.legSummaries(it);
+  const first = legs.get("stp_subic1");
+  assert.ok(Math.abs(first.nm - 4.44) < 0.05);
+  assert.ok(Math.abs(first.hours - 0.56) < 0.01);
+  assert.deepEqual([first.toName, first.departTime, first.departEstimated, first.arriveTime, first.arriveDay, first.overnight], ["Anawangin", "09:00", false, "09:33", 1, false]);
+  assert.deepEqual([legs.get("stp_herm").departTime, legs.get("stp_herm").departEstimated], ["09:00", true]);
+  assert.equal(legs.get("stp_poti").arriveTime, "22:34");
+  assert.equal(legs.has("stp_subic2"), false);
+  const night = core.setDeparture(it, "stp_poti", { time: "20:00" });
+  const leg = core.legSummaries(night).get("stp_poti");
+  assert.deepEqual([leg.arriveTime, leg.arriveDay, leg.overnight], ["00:34", 6, true]);
+});
+
+test("A2 fit: match, short, over, none", () => {
+  const it = sevenDays();
+  assert.deepEqual(core.fit(it, CHARTER_7), { state: "match", delta: 0, endsDay: 7, label: "✓", title: "Ends Sun 18 Oct; the charter ends Sun 18 Oct." });
+  const short = core.fit(core.recomputeArrivals(it), CHARTER_7);
+  assert.deepEqual([short.state, short.delta, short.label, short.title], ["short", -1, "−1 d", "Ends Sat 17 Oct; the charter ends Sun 18 Oct."]);
+  const over = core.fit(it, { start_date: "2026-10-12", end_date: "2026-10-16" });
+  assert.deepEqual([over.state, over.delta, over.label], ["over", 2, "+2 d"]);
+  assert.equal(core.fit(it, {}).state, "none");
+  assert.equal(core.fit(core.normalizeItinerary({}), CHARTER_7).state, "none");
+  assert.equal(core.fit(core.normalizeItinerary({}), CHARTER_7).label, "—");
+});
+
+test("A2 rebaseRecord: day 1 lands on the from-day; items follow; from-day 1 is the same record", () => {
+  const it = sevenDays();
+  const out = core.rebaseRecord(it, 3);
+  assert.deepEqual(stopOf(out, "stp_subic1").depart, { day: 3, time: "09:00" });
+  assert.deepEqual(daysOf(out, "stp_poti"), [5, 7]);
+  assert.deepEqual(itemDays(out), { act_1: 3, act_2: 3, act_3: 6, act_4: 5 });
+  assert.equal(core.rebaseRecord(it, 1), it);
+  assert.deepEqual(daysOf(it, "stp_poti"), [3, 5]);
+});
+
+test("A2 toUnassignedRoute: a new library record with the same stops, days and items", () => {
+  const it = { ...sevenDays(), dirty_stop_ids: ["stp_hund"] };
+  const route = core.toUnassignedRoute(it, "  North loop  ");
+  assert.deepEqual([route.id, route.name, route.revision, route.speed_kn, route.source], ["", "North loop", 0, 8, { type: "planner" }]);
+  assert.deepEqual(route.points, it.route.points);
+  assert.deepEqual(route.activities, it.activities);
+  assert.equal("dirty_stop_ids" in route, false);
+  assert.notEqual(route.points, it.route.points);                      // copies, not the same arrays
+});
