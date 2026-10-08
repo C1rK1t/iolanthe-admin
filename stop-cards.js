@@ -153,7 +153,7 @@
       return el("div", { class: `tile ${cls || ""}`.trim() }, el("div", { class: "tile-k" }, label), el("div", { class: "tile-v" }, value), sub ? el("div", { class: "tile-s" }, sub) : null);
     }
 
-    // Arrive: estimated (italic) or pinned (upright) time with the inbound leg underneath; the origin shows boarding.
+    // Arrive: always derived from the previous departure and the leg (spec A2 T2); the origin shows boarding.
     function arriveTile(stop, rec) {
       const p = stop.point;
       if (stop.position === "origin" || stop.position === "only") {
@@ -163,12 +163,9 @@
       const times = c.estimateTimes(rec).get(p.id) || { arrive: null };
       const prev = stops(rec)[stop.n - 2];
       const leg = prev ? c.legSummaries(rec).get(prev.point.id) : null;
-      const estimated = !(p.arrive && p.arrive.time);
-      const timeInput = el("input", { type: "time", class: `tile-time${estimated ? " est" : ""}`, value: times.arrive ? times.arrive.time : "", title: estimated ? "Estimated from the previous departure. Set a time to pin it." : "Pinned arrival time. Clear it to estimate again." });
-      timeInput.addEventListener("change", () => ctx.editRecord((r) => c.recomputeArrivals(c.setStopTime(r, p.id, "arrive", timeInput.value))));
-      const value = el("div", { class: "tile-row" }, estimated ? el("span", { class: "est" }, "~") : null, timeInput, el("span", {}, dayLabel(p.arrive ? p.arrive.day : 1)));
+      const value = el("div", { class: "tile-row" }, el("span", { class: "est" }, times.arrive ? `~${times.arrive.time}` : "—"), el("span", {}, dayLabel(p.arrive ? p.arrive.day : 1)));
       const sub = leg ? `${leg.nm.toFixed(0)} nm · ${fmtHours(leg.hours)} from ${prev.point.name || "the previous stop"}` : "";
-      return tile("Arrive", value, sub, estimated ? "estimated" : "pinned");
+      return tile("Arrive", value, sub, "estimated");
     }
 
     // Depart: a date (or day number without a charter) no earlier than the arrival day, and a time. Spec A2 D1, §5.6, §5.7.
