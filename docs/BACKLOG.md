@@ -78,8 +78,9 @@ boxes and cards, button styles, type and uppercase field labels. See
 
 ### Drag and drop instead of Move up / Move down (David, 2026-10-09)
 
-Replace every pair of Move up / Move down buttons, and the swap logic behind them, with drag to reorder. Four places
-use them today: dishes in a menu section, custom menu sections and menu days (all on Galley Menus), and guest order
-(Galley / Hotel Guests). It must work with touch on the bridge tablet (pointer events and a grip handle, not HTML5
-drag and drop, which does not fire on touch) and keep a keyboard way to move an item. Planned as one shared helper,
-built with the Galley Menus phase B page and reused on Guests (`docs/style-rollout/spec-b-pages.md`).
+Replace every pair of Move up / Move down buttons, and the swap logic behind them, with drag to reorder. They are on
+Galley Menus (dishes, custom sections, menu days), Guests (guest order), Guest Alcohol (sections and drinks) and
+Cocktails (ingredients). It must work with touch on the bridge tablet (pointer events and a grip handle, not HTML5
+drag and drop, which does not fire on touch) and keep a keyboard way to move an item. One shared helper, `drag-reorder.js`,
+built with the Galley Menus phase B page (2026-10-09); Guests, Guest Alcohol and Cocktails switch to it in their
+phase B passes (`docs/style-rollout/spec-b-pages.md`).

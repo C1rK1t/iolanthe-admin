@@ -6906,17 +6906,12 @@
     return sections.map(section => `${section.title}: ${menuValueHasMeaning(section.items) ? "Set" : "Empty"}`).join(" | ");
   }
 
-  function menuSectionSummaryHtml(day) {
-    const sections = menuDayPreviewSections(day);
-    if (!sections.length) {
-      return "No visible sections";
-    }
-    return sections.map(section => {
-      const stateHtml = menuValueHasMeaning(section.items)
-        ? "Set"
-        : `<span class="menu-empty-text">Empty</span>`;
-      return `${escapeHtml(section.title)}: ${stateHtml}`;
-    }).join(" | ");
+  // Style rollout B: one chip per visible section, green when it has dishes, dashed when empty
+  function menuSectionChipsHtml(day) {
+    return menuDayPreviewSections(day).map(section => {
+      const isSet = menuValueHasMeaning(section.items);
+      return `<span class="meal-chip${isSet ? " is-set" : ""}" title="${escapeAttribute(`${section.title}: ${isSet ? "set" : "empty"}`)}">${escapeHtml(section.title)}</span>`;
+    }).join("");
   }
 
   function menuDayTitle(day, fallbackIndex) {
@@ -7225,7 +7220,7 @@
       });
   }
 
-  function openMenuDayModal(menus, menuIndex, itinerary, itineraryDayCount) {
+  function openMenuDayModal(menus, menuIndex, itinerary, itineraryDayCount, dateLabel) {
     const original = menus.menus[menuIndex];
     if (!original) {
       return;
@@ -7234,19 +7229,19 @@
     let sectionDrafts = normalizeMenuDaySections(draft);
     const itineraryDay = menuItineraryDayForMenuDay(itinerary, draft, menuIndex);
     const dayNumber = draft.charter_day || draft.day || draft.order || menuIndex + 1;
+    const inactiveDay = original.active === false;
     const headerActionsHtml = `
       <div class="button-row modal-title-actions">
         ${iconSubmitButtonHtml("save", "Save menu day", ` form="menu-day-form"`)}
         ${iconButtonHtml("cancel", "Cancel", ` id="cancel-menu-day"`)}
-        ${iconButtonHtml("clone", "Clone menu day", ` id="clone-menu-day"`)}
+        <span class="header-sep"></span>
+        ${iconButtonHtml("clone", "Copy from another day", ` id="clone-menu-day"`)}
+        ${iconButtonHtml("remove", inactiveDay ? "Delete this inactive menu" : "Clear this day", ` id="clear-menu-day"`)}
       </div>
     `;
-    const modal = openDialogModal(`Edit Day ${dayNumber} Menu`, `
+    const modal = openDialogModal(`Day ${dayNumber}${dateLabel ? ` · ${dateLabel}` : ""}`, `
       <form id="menu-day-form" class="form-grid menu-day-form">
-        <label class="charter-day-field">Day
-          <input id="menu-day-number" class="charter-day-input" value="${escapeAttribute(dayNumber)}" readonly aria-readonly="true">
-        </label>
-        <label>Title
+        <label class="full">Title
           <input id="menu-day-title" value="${escapeAttribute(menuDayModalTitleValue(draft, itineraryDay, menuIndex))}" data-autofocus>
         </label>
         <label class="full">Notes
@@ -7286,6 +7281,29 @@
     });
     modal.querySelector("#cancel-menu-day").addEventListener("click", () => {
       closeDialogModal();
+    });
+    modal.querySelector("#clear-menu-day").addEventListener("click", async () => {
+      if (!await showAdminConfirm({
+        title: inactiveDay ? "Delete Inactive Menu" : "Clear Menu Day",
+        message: inactiveDay
+          ? "Delete this inactive menu row? This cannot be undone."
+          : "Clear all menu food data for this day?\nThe day slot will remain.",
+        confirmLabel: inactiveDay ? "Delete" : "Clear",
+        cancelLabel: "Cancel",
+        tone: "danger"
+      })) {
+        return;
+      }
+      markModalSaved(modal);
+      closeDialogModal();
+      if (inactiveDay) {
+        menus.menus = menus.menus.filter(entry => entry !== original);
+        await saveMenusAndRender(menus, "Inactive menu deleted.");
+        return;
+      }
+      clearMenuDayData(original);
+      syncMenusToItineraryDays(menus, itineraryDayCount);
+      await saveMenusAndRender(menus, "Menu day cleared.");
     });
     modal.querySelector("#menu-day-form").addEventListener("submit", async event => {
       event.preventDefault();
@@ -7366,22 +7384,23 @@
       list.innerHTML = `<p class="muted">No visible menu sections yet.</p>`;
       return;
     }
+    // Style rollout B: no red trash here. Breakfast, Lunch and Dinner hide (eye-off); a custom section is edited
+    // (and deleted) with its pencil and dragged by its grip
     visibleSections.forEach(section => {
       const row = document.createElement("section");
       row.className = `clone-panel menu-day-modal-section${section.locked ? " locked" : " custom"}`;
-      const visibleIndex = visibleSections.indexOf(section);
       row.innerHTML = `
-        <div class="card-header">
+        <div class="card-header menu-section-header">
+          ${section.locked ? "" : dragHandleHtml(`Move ${section.title}`, "section-grip")}
           <h3>${escapeHtml(section.title)}</h3>
           <div class="button-row record-actions">
             ${iconButtonHtml("add", `Add item to ${section.title}`, ` data-action="add-item"`)}
-            ${section.locked ? "" : iconButtonHtml("edit", "Edit section", ` data-action="edit-section"`)}
-            ${section.locked ? "" : iconButtonHtml("move-up", "Move section up", ` data-action="move-up"${visibleIndex <= 0 ? " disabled" : ""}`)}
-            ${section.locked ? "" : iconButtonHtml("move-down", "Move section down", ` data-action="move-down"${visibleIndex >= visibleSections.length - 1 ? " disabled" : ""}`)}
-            ${iconButtonHtml("remove", section.locked ? "Hide section" : "Delete section", ` data-action="delete-section"`)}
+            ${section.locked
+              ? iconButtonHtml("hide", "Hide section", ` data-action="hide-section"`)
+              : iconButtonHtml("edit", "Edit section", ` data-action="edit-section"`)}
           </div>
         </div>
-        <div class="menu-day-modal-items"></div>
+        <div class="menu-day-modal-items" data-section="${escapeAttribute(menuSectionKey(section))}"></div>
       `;
       row.querySelector("[data-action='add-item']").addEventListener("click", () => {
         openMenuFoodItemEditor(modal, section, null, onChange);
@@ -7392,47 +7411,46 @@
           openMenuSectionEditor(modal, sections, section, menus, onChange);
         });
       }
-      const moveUpButton = row.querySelector("[data-action='move-up']");
-      if (moveUpButton) {
-        moveUpButton.addEventListener("click", () => {
-          moveCustomMenuSection(sections, section, -1);
-          onChange();
-        });
-      }
-      const moveDownButton = row.querySelector("[data-action='move-down']");
-      if (moveDownButton) {
-        moveDownButton.addEventListener("click", () => {
-          moveCustomMenuSection(sections, section, 1);
-          onChange();
-        });
-      }
-      row.querySelector("[data-action='delete-section']").addEventListener("click", async () => {
-        const confirmed = await showAdminConfirm({
-          title: section.locked ? "Hide Menu Section" : "Delete Menu Section",
-          message: section.locked
-            ? `Hide and clear ${section.title}? It can be restored with Add Section.`
-            : `Delete ${section.title}?`,
-          confirmLabel: section.locked ? "Hide" : "Delete",
-          cancelLabel: "Cancel",
-          tone: "danger"
-        });
-        if (!confirmed) {
-          return;
-        }
-        if (section.locked) {
+      const hideSectionButton = row.querySelector("[data-action='hide-section']");
+      if (hideSectionButton) {
+        hideSectionButton.addEventListener("click", async () => {
+          if (!await showAdminConfirm({
+            title: "Hide Menu Section",
+            message: `Hide and clear ${section.title}? It can be restored with Add Section.`,
+            confirmLabel: "Hide",
+            cancelLabel: "Cancel",
+            tone: "danger"
+          })) {
+            return;
+          }
           section.hidden = true;
           section.items = [];
-        } else {
-          const index = sections.indexOf(section);
-          if (index >= 0) {
-            sections.splice(index, 1);
-          }
-        }
-        onChange();
-      });
+          onChange();
+        });
+      }
       drawMenuFoodItems(row.querySelector(".menu-day-modal-items"), section, onChange, modal);
       list.appendChild(row);
     });
+    // A custom section moves among all the visible sections, one neighbour at a time like Move up / Move down did
+    window.IolantheDragReorder.attach(list, {
+      items: () => [...list.querySelectorAll(":scope > .menu-day-modal-section")],
+      handleSelector: ".section-grip",
+      onMove: (from, to) => {
+        const moving = visibleMenuSections(sections)[from];
+        const direction = to > from ? 1 : -1;
+        for (let position = from; position !== to; position += direction) {
+          moveCustomMenuSection(sections, moving, direction);
+        }
+        onChange();
+      },
+      afterMove: to => {
+        list.querySelectorAll(":scope > .menu-day-modal-section")[to]?.querySelector(".section-grip")?.focus();
+      }
+    });
+  }
+
+  function menuSectionKey(section) {
+    return String(section.id || section.key || section.title || "");
   }
 
   function drawMenuFoodItems(container, section, onChange, modal) {
@@ -7444,48 +7462,33 @@
       container.innerHTML = `<p class="muted">No items yet.</p>`;
       return;
     }
+    // Style rollout B: tap a dish to edit it (its delete is in the editor); drag the grip to reorder
     section.items.forEach((item, index) => {
       const row = document.createElement("div");
-      row.className = "menu-day-modal-item";
+      row.className = "menu-day-modal-item dish-row";
       row.innerHTML = `
-        <div>
+        ${dragHandleHtml(`Move ${item.name || item.title || "item"}`, "dish-grip")}
+        <div class="dish-text">
           <strong>${escapeHtml(item.name || item.title || "Item")}</strong>
           ${item.description ? `<span class="multiline-text">${escapeHtml(item.description)}</span>` : ""}
         </div>
-        <div class="button-row record-actions">
-          ${iconButtonHtml("edit", "Edit food item", ` data-action="edit-item"`)}
-          ${iconButtonHtml("move-up", "Move food item up", ` data-action="move-up"${index === 0 ? " disabled" : ""}`)}
-          ${iconButtonHtml("move-down", "Move food item down", ` data-action="move-down"${index === section.items.length - 1 ? " disabled" : ""}`)}
-          ${iconButtonHtml("remove", "Delete food item", ` data-action="delete-item"`)}
-        </div>
+        ${rowChevronHtml()}
       `;
-      row.querySelector("[data-action='edit-item']").addEventListener("click", () => {
-        openMenuFoodItemEditor(modal, section, index, onChange);
-      });
-      row.querySelector("[data-action='move-up']").addEventListener("click", () => {
-        if (moveListItem(section.items, index, -1)) {
-          onChange();
-        }
-      });
-      row.querySelector("[data-action='move-down']").addEventListener("click", () => {
-        if (moveListItem(section.items, index, 1)) {
-          onChange();
-        }
-      });
-      row.querySelector("[data-action='delete-item']").addEventListener("click", async () => {
-        if (!await showAdminConfirm({
-          title: "Delete Food Item",
-          message: "Delete this food item?",
-          confirmLabel: "Delete",
-          cancelLabel: "Cancel",
-          tone: "danger"
-        })) {
-          return;
-        }
-        section.items.splice(index, 1);
-        onChange();
-      });
+      bindTapRow(row, "Edit food item", () => openMenuFoodItemEditor(modal, section, index, onChange));
       container.appendChild(row);
+    });
+    window.IolantheDragReorder.attach(container, {
+      items: () => [...container.querySelectorAll(":scope > .dish-row")],
+      handleSelector: ".dish-grip",
+      onMove: (from, to) => {
+        section.items.splice(0, section.items.length, ...window.IolantheDragReorder.moveItem(section.items, from, to));
+        onChange();
+      },
+      afterMove: to => {
+        const key = menuSectionKey(section);
+        const items = [...modal.querySelectorAll(".menu-day-modal-items")].find(element => element.dataset.section === key);
+        items?.querySelectorAll(".dish-grip")[to]?.focus();
+      }
     });
   }
 
@@ -7552,6 +7555,7 @@
         <div class="button-row modal-title-actions">
           ${iconSubmitButtonHtml("save", "Save menu section", ` form="menu-section-form"`)}
           ${iconButtonHtml("cancel", "Cancel", ` data-stacked-modal-close`)}
+          ${editing ? `<span class="header-sep"></span>${iconButtonHtml("remove", "Delete section", ` data-action="delete-section"`)}` : ""}
         </div>
       `
     });
@@ -7572,6 +7576,27 @@
     };
     typeInputs.forEach(input => input.addEventListener("change", syncNameVisibility));
     syncNameVisibility();
+    const deleteSectionButton = sectionModal.querySelector("[data-action='delete-section']");
+    if (deleteSectionButton) {
+      deleteSectionButton.addEventListener("click", async () => {
+        if (!await showAdminConfirm({
+          title: "Delete Menu Section",
+          message: `Delete ${section.title}?`,
+          confirmLabel: "Delete",
+          cancelLabel: "Cancel",
+          tone: "danger"
+        })) {
+          return;
+        }
+        const index = sections.indexOf(section);
+        if (index >= 0) {
+          sections.splice(index, 1);
+        }
+        markModalSaved(sectionModal);
+        closeStackedDialogModal(sectionModal);
+        onSave();
+      });
+    }
     sectionModal.querySelector("#menu-section-form").addEventListener("submit", event => {
       event.preventDefault();
       if (editing) {
@@ -7636,6 +7661,7 @@
         <div class="button-row modal-title-actions">
           ${iconSubmitButtonHtml("save", "Save food item", ` form="menu-food-item-form"`)}
           ${iconButtonHtml("cancel", "Cancel", ` data-stacked-modal-close`)}
+          ${editing ? `<span class="header-sep"></span>${iconButtonHtml("remove", "Delete food item", ` data-action="delete-item"`)}` : ""}
         </div>
       `
     });
@@ -7659,6 +7685,24 @@
       closeStackedDialogModal(itemModal);
       onSave();
     });
+    const deleteItemButton = itemModal.querySelector("[data-action='delete-item']");
+    if (deleteItemButton) {
+      deleteItemButton.addEventListener("click", async () => {
+        if (!await showAdminConfirm({
+          title: "Delete Food Item",
+          message: "Delete this food item?",
+          confirmLabel: "Delete",
+          cancelLabel: "Cancel",
+          tone: "danger"
+        })) {
+          return;
+        }
+        section.items.splice(itemIndex, 1);
+        markModalSaved(itemModal);
+        closeStackedDialogModal(itemModal);
+        onSave();
+      });
+    }
   }
 
   function importedMenusForItinerary(sourceMenus, itineraryDayCount) {
@@ -7744,6 +7788,9 @@
     });
   }
 
+  // Which day's grip to focus once the Galley panel has re-rendered after a move (renderGalley is not awaited)
+  let pendingMenuDayGripFocus = null;
+
   function drawMenuRows(menus, itineraryDayCount, itinerary, charterInfo) {
     const container = document.getElementById("menu-days");
     if (!container) {
@@ -7755,92 +7802,65 @@
       container.innerHTML = `<p class="muted">No menu days are available yet.</p>`;
       return;
     }
-    const longestTitleLength = Math.max(
-      ...rows.map(({ day, index }) => menuDayTitle(day, index).length),
-      10
-    );
-    container.style.setProperty("--menu-title-column-width", `${longestTitleLength + 1}ch`);
-    const activeRows = rows.filter(({ day }) => day.active !== false);
+    // Style rollout B: tap a day to edit it (Clear lives in the dialog); drag the grip to move a day's menu
     rows.forEach(({ day, index }) => {
-      const section = document.createElement("section");
-      section.className = `itinerary-row-block menu-row-block${day.active === false ? " inactive" : ""}`;
-      const activeIndex = activeRows.findIndex(row => row.day === day);
+      const inactive = day.active === false;
+      const dayNumber = day.charter_day || index + 1;
       const dateLabel = menuDayShortDateLabel(charterInfo, day, index);
-      section.innerHTML = `
-        <div class="record-row menu-row${day.active === false ? " inactive" : ""}">
-          <div class="record-summary menu-record-summary">
-            <strong class="itinerary-day-label menu-day-number-label">
-              <span>Day ${escapeHtml(day.charter_day || index + 1)}</span>
-              ${dateLabel ? `<small>${escapeHtml(dateLabel)}</small>` : ""}
-            </strong>
-            <span class="menu-day-title">${escapeHtml(menuDayTitle(day, index))}</span>
-            <span class="menu-day-summary">${menuSectionSummaryHtml(day)}</span>
-            ${day.active === false ? `<span class="inactive-label">Inactive</span>` : ""}
-          </div>
-          <div class="button-row record-actions">
-            ${iconButtonHtml("edit", "Edit menu day", ` data-action="edit-menu"`)}
-            ${iconButtonHtml("preview", "Preview menu", ` data-action="preview-day"`)}
-            ${day.active === false && itineraryDayCount > 0 ? iconButtonHtml("promote", "Move menu to active", ` data-action="promote-menu"`) : ""}
-            ${day.active !== false ? iconButtonHtml("move-up", "Move menu day up", ` data-action="move-up"${activeIndex <= 0 ? " disabled" : ""}`) : ""}
-            ${day.active !== false ? iconButtonHtml("move-down", "Move menu day down", ` data-action="move-down"${activeIndex < 0 || activeIndex >= activeRows.length - 1 ? " disabled" : ""}`) : ""}
-            ${iconButtonHtml("remove", day.active === false ? "Delete inactive menu" : "Clear menu day", ` data-action="clear-menu"`)}
-          </div>
-        </div>
-        ${menuDayNotesValue(day) ? `<div class="itinerary-day-notes-preview multiline-text">${escapeHtml(menuDayNotesValue(day))}</div>` : ""}
+      const notes = menuDayNotesValue(day);
+      const row = document.createElement("div");
+      row.className = `menu-day-row${inactive ? " inactive" : ""}`;
+      row.innerHTML = `
+        ${inactive ? `<span class="drag-handle-spacer"></span>` : dragHandleHtml(`Move the Day ${dayNumber} menu`, "day-grip")}
+        <span class="menu-day-when">
+          <b>Day ${escapeHtml(dayNumber)}</b>
+          ${dateLabel ? `<small>${escapeHtml(dateLabel)}</small>` : ""}
+        </span>
+        <span class="menu-day-what">
+          <b>${escapeHtml(menuDayTitle(day, index))}</b>
+          ${notes ? `<span>${escapeHtml(notes)}</span>` : ""}
+        </span>
+        <span class="menu-day-chips">
+          ${menuSectionChipsHtml(day)}
+          ${inactive ? `<span class="inactive-label">Inactive</span>` : ""}
+        </span>
+        <span class="menu-day-actions">
+          ${inactive && itineraryDayCount > 0 ? iconButtonHtml("promote", "Move menu to active", ` data-action="promote-menu"`) : ""}
+          ${iconButtonHtml("preview", "Preview menu", ` data-action="preview-day"`)}
+        </span>
+        ${rowChevronHtml()}
       `;
-      section.querySelector("[data-action='edit-menu']").addEventListener("click", () => {
-        openMenuDayModal(menus, index, itinerary, itineraryDayCount);
+      bindTapRow(row, "Edit menu day", () => openMenuDayModal(menus, index, itinerary, itineraryDayCount, dateLabel));
+      row.querySelector("[data-action='preview-day']").addEventListener("click", () => {
+        renderPreviewLightbox(`${day.label || `Day ${dayNumber}`} Preview`, renderMenuDayPreview(day), { department: "galley", printable: true });
       });
-      section.querySelector("[data-action='preview-day']").addEventListener("click", () => {
-        renderPreviewLightbox(`${day.label || `Day ${day.charter_day || index + 1}`} Preview`, renderMenuDayPreview(day), { department: "galley", printable: true });
-      });
-      const promoteButton = section.querySelector("[data-action='promote-menu']");
+      const promoteButton = row.querySelector("[data-action='promote-menu']");
       if (promoteButton) {
         promoteButton.addEventListener("click", async () => {
           promoteInactiveMenuDay(menus, index, itineraryDayCount);
           await saveMenusAndRender(menus, "Inactive menu moved to active.");
         });
       }
-      const moveUpButton = section.querySelector("[data-action='move-up']");
-      if (moveUpButton) {
-        moveUpButton.addEventListener("click", async () => {
-          if (moveActiveMenuDay(menus, index, -1, itineraryDayCount)) {
-            await saveMenusAndRender(menus, "Menu day moved.");
-          }
-        });
-      }
-      const moveDownButton = section.querySelector("[data-action='move-down']");
-      if (moveDownButton) {
-        moveDownButton.addEventListener("click", async () => {
-          if (moveActiveMenuDay(menus, index, 1, itineraryDayCount)) {
-            await saveMenusAndRender(menus, "Menu day moved.");
-          }
-        });
-      }
-      section.querySelector("[data-action='clear-menu']").addEventListener("click", async () => {
-        const inactive = day.active === false;
-        if (!await showAdminConfirm({
-          title: inactive ? "Delete Inactive Menu" : "Clear Menu Day",
-          message: inactive
-            ? "Delete this inactive menu row? This cannot be undone."
-            : "Clear all menu food data for this day?\nThe day slot will remain.",
-          confirmLabel: inactive ? "Delete" : "Clear",
-          cancelLabel: "Cancel",
-          tone: "danger"
-        })) {
-          return;
-        }
-        if (inactive) {
-          menus.menus = menus.menus.filter((entry, entryIndex) => entryIndex !== index);
-          await saveMenusAndRender(menus, "Inactive menu deleted.");
-          return;
-        }
-        clearMenuDayData(day);
-        syncMenusToItineraryDays(menus, itineraryDayCount);
-        await saveMenusAndRender(menus, "Menu day cleared.");
-      });
-      container.appendChild(section);
+      container.appendChild(row);
     });
+    // Dropping Day 2's menu on Day 5 moves it there and shifts Days 3-5 up: the same as pressing Move down three times
+    const activeIndexes = rows.filter(({ day }) => day.active !== false).map(({ index }) => index);
+    window.IolantheDragReorder.attach(container, {
+      items: () => [...container.querySelectorAll(":scope > .menu-day-row:not(.inactive)")],
+      handleSelector: ".day-grip",
+      onMove: async (from, to) => {
+        const direction = to > from ? 1 : -1;
+        for (let position = from; position !== to; position += direction) {
+          moveActiveMenuDay(menus, activeIndexes[position], direction, itineraryDayCount);
+        }
+        pendingMenuDayGripFocus = to;
+        await saveMenusAndRender(menus, "Menu day moved.");
+      }
+    });
+    if (pendingMenuDayGripFocus !== null) {
+      container.querySelectorAll(":scope > .menu-day-row:not(.inactive) .day-grip")[pendingMenuDayGripFocus]?.focus();
+      pendingMenuDayGripFocus = null;
+    }
   }
 
   function moveActiveMenuDay(menus, menuIndex, direction, itineraryDayCount) {
@@ -7938,6 +7958,20 @@
           <rect x="8" y="7" width="10" height="12" rx="1.8" fill="none" stroke="currentColor" stroke-width="2.1"></rect>
           <path d="M6 15H5.8A1.8 1.8 0 0 1 4 13.2V5.8A1.8 1.8 0 0 1 5.8 4h7.4A1.8 1.8 0 0 1 15 5.8V6" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"></path>
           <path d="M13 10v6M10 13h6" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"></path>
+        </svg>
+      `;
+    }
+    if (kind === "grip") {
+      return `
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <g fill="currentColor"><circle cx="9" cy="6" r="1.7"></circle><circle cx="15" cy="6" r="1.7"></circle><circle cx="9" cy="12" r="1.7"></circle><circle cx="15" cy="12" r="1.7"></circle><circle cx="9" cy="18" r="1.7"></circle><circle cx="15" cy="18" r="1.7"></circle></g>
+        </svg>
+      `;
+    }
+    if (kind === "hide") {
+      return `
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M3 3l18 18M10.6 6.1A10.4 10.4 0 0 1 12 6c6 0 10 6 10 6a17.6 17.6 0 0 1-3.2 3.9M6.3 7.6C3.7 9.4 2 12 2 12s4 7 10 7a9.7 9.7 0 0 0 4.2-1M9.9 9.9a3 3 0 0 0 4.2 4.2" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"></path>
         </svg>
       `;
     }
@@ -8118,7 +8152,7 @@
     if (kind === "purchase" || kind === "confirm" || kind === "save") {
       return "success";
     }
-    if (kind === "add" || kind === "import" || kind === "edit" || kind === "promote" || kind === "clone" || kind === "move-up" || kind === "move-down" || kind === "prev" || kind === "next" || kind === "camera" || kind === "map" || kind === "refresh" || kind === "retry-primary" || kind === "restart-route" || kind === "notes" || kind === "invoice" || kind === "reverse") {
+    if (kind === "add" || kind === "import" || kind === "edit" || kind === "promote" || kind === "clone" || kind === "move-up" || kind === "move-down" || kind === "prev" || kind === "next" || kind === "camera" || kind === "map" || kind === "refresh" || kind === "retry-primary" || kind === "restart-route" || kind === "notes" || kind === "invoice" || kind === "reverse" || kind === "hide") {
       return "secondary";
     }
     return "danger";
@@ -8146,6 +8180,33 @@
       ${iconButtonHtml("move-up", `Move ${label} up`, ` data-action="move-up"${index === 0 ? " disabled" : ""}`)}
       ${iconButtonHtml("move-down", `Move ${label} down`, ` data-action="move-down"${index === total - 1 ? " disabled" : ""}`)}
     `;
+  }
+
+  // Style rollout B: a grip for IolantheDragReorder (drag-reorder.js), replacing a Move up / Move down pair
+  function dragHandleHtml(label, className) {
+    return `<button type="button" class="drag-handle ${className}" aria-label="${escapeAttribute(label)} (drag, or use the arrow keys)" title="Drag to move">${buttonIconSvg("grip")}</button>`;
+  }
+
+  function rowChevronHtml() {
+    return `<svg class="row-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>`;
+  }
+
+  // A whole row that opens its editor (Enter / Space too); the buttons inside it keep their own actions
+  function bindTapRow(row, label, open) {
+    row.tabIndex = 0;
+    row.setAttribute("role", "button");
+    row.title = label;
+    row.addEventListener("click", event => {
+      if (!event.target.closest("button, a, input, select, textarea")) {
+        open();
+      }
+    });
+    row.addEventListener("keydown", event => {
+      if (event.target === row && (event.key === "Enter" || event.key === " ")) {
+        event.preventDefault();
+        open();
+      }
+    });
   }
 
   function moveListItem(items, index, direction) {

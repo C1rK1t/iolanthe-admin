@@ -65,3 +65,43 @@ no console errors.
 - **SB-S6 (David, before merge): no position in the list.** The row is name, one-line description, media count and
   chevron; the position stays in the dialog. `formatSitePosition` and `formatDmmCoordinate` had no other callers and
   went too.
+
+**2026-10-09 LIVE:** PR iolanthe-admin#23 merged (`cbc0e3e`) and pulled onto the boat.
+
+## Galley Menus (2026-10-09)
+
+Mockup `menus-b.html`; David approved the list and the day dialog and asked for **drag and drop instead of Move up /
+Move down** (backlog "Drag and drop instead of Move up / Move down"), days included.
+
+- **SB-M1 Day rows, tap to edit.** One 52 px row per day: grip, DAY n and the date, the title with the notes on one
+  line under it (was a strip below the row), meal chips (green = has dishes, dashed = empty; they replace
+  "Breakfast: Set | Lunch: Empty"), a 32 px preview eye, a chevron. Inactive days keep a dashed border, the INACTIVE
+  label and their promote button, with no grip. Edit, Move up, Move down and the red Clear left the row.
+- **SB-M2 Drag a day's menu.** Dropping Day 2's menu on Day 5 moves it there and shifts Days 3-5 up, exactly what
+  pressing Move down three times did (`moveActiveMenuDay` step by step); it saves at once, as the arrows did.
+- **SB-M3 Day dialog.** Title "Day n · date"; the read-only Day box is gone. Header: save, cancel, separator, copy from
+  another day (the old Clone), clear this day (red; "delete this inactive menu" on an inactive day), with the same
+  confirmations the row had.
+- **SB-M4 Sections.** No gradient and no red trash: a teal uppercase heading, a 32 px + (add dish) and, for Breakfast /
+  Lunch / Dinner, a grey eye-off (hide, same confirmation). A custom section has a grip and a pencil; its delete moved
+  into the section editor (save, cancel, separator, delete). Custom sections drag among the visible sections one
+  neighbour at a time, as Move up / Move down did.
+- **SB-M5 Dishes.** Tap a dish to edit it; its delete moved into the dish editor (save, cancel, separator, delete);
+  drag the grip to reorder (saved with the day).
+- **SB-M6 Drag to reorder** (`drag-reorder.js`, shared): a 28 px grip; pointer events (mouse, finger, pen: HTML5 drag
+  and drop does not fire on touch) with `touch-action: none` on the grip; the item lifts and the others slide
+  (150 ms, none under reduced motion); the list auto-scrolls near the edge of its scroller (the dialog body or the
+  page); the arrow keys on a focused grip move one place and keep focus; a grip never opens its row.
+
+**2026-10-09 EXECUTED** on `feat/menus-b` (assets `admin-menus-b`, now 27 `?v=` strings with `drag-reorder.js`):
+`drag-reorder.js` + `test/drag-reorder.test.js` (154 tests); `admin.js` (grip and eye-off icons, `dragHandleHtml`,
+`rowChevronHtml`, `bindTapRow`, `menuSectionChipsHtml` replacing `menuSectionSummaryHtml`, `drawMenuRows`,
+`drawMenuDaySectionEditors`, `drawMenuFoodItems`, the day / section / dish dialogs); `admin.css` (day rows, chips,
+dialog sections and dishes, the grip; the old menu-row, notes-strip and read-only Day box rules removed). Two bugs found
+in the browser pass and fixed: a drop could not reach the last slot (the clamped centre sat exactly on its middle;
+`dropIndex` now counts reaching the middle), and keyboard focus was lost because `renderGalley` re-renders after the
+move (the list now refocuses the moved day's grip when it next draws). Browser pass on the scratch server: a real mouse
+drag of Day 1's menu onto Day 3 (Days 2-3 moved up), back with ArrowUp twice (focus kept); a dish dragged below its
+neighbour in the dialog; Snacks added, moved up two places by keyboard, deleted from its editor; Cancel → Discard kept
+the saved order; Clear on an empty Day 2 confirmed and saved; 820 and 390 px with no sideways scroll; no console
+errors. Not tried: a real finger on the bridge tablet.
