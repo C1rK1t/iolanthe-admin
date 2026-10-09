@@ -12033,11 +12033,12 @@
           <h2>Guest Alcohol</h2>
           <div class="button-row list-add-actions">
             ${iconButtonHtml("preview", "Preview Guest Alcohol", ` id="preview-guest-drinks"`)}
+            <span class="header-sep"></span>
             ${iconButtonHtml("save", "Save Guest Alcohol", ` id="save-guest-drinks"`)}
             ${iconButtonHtml("cancel", "Cancel Guest Alcohol changes", ` id="cancel-guest-drinks"`)}
           </div>
         </div>
-        <p class="muted">Alcohol requested for this charter.</p>
+        <p class="guest-order-hint">The charter's drinks in the order the guests see them. Drag a grip to change it, then save.</p>
         <div id="guest-drinks-sections" class="editor-list guest-drinks-list"></div>
       </section>
     `;
@@ -12054,76 +12055,77 @@
       container.innerHTML = `<p class="muted">No charter-linked drink stock items are assigned to this charter yet.</p>`;
       return;
     }
+    // Style rollout B: drag the grips to set the order of the sections and of the drinks in them (Save keeps it)
+    const applyOrder = () => {
+      drinks.sections = guestDrinkPresentationFromSections(guestDrinks.sections).sections;
+      markDirty();
+      redraw();
+    };
+    const movableSections = guestDrinks.sections.length > 1;
     guestDrinks.sections.forEach((section, sectionIndex) => {
+      const title = section.title || `Section ${sectionIndex + 1}`;
       const box = document.createElement("section");
       box.className = "editor-item guest-drinks-section";
       box.innerHTML = `
-        <div class="card-header">
-          <div>
-            <h3>${escapeHtml(section.title || `Section ${sectionIndex + 1}`)}</h3>
-            <p class="muted">${escapeHtml(section.items.length)} item${section.items.length === 1 ? "" : "s"}</p>
-          </div>
-          <div class="button-row">
-            ${orderingButtonsHtml("section", sectionIndex, guestDrinks.sections.length)}
-          </div>
+        <div class="guest-drinks-section-header">
+          ${movableSections ? dragHandleHtml(`Move ${title}`, "drink-section-grip") : ""}
+          <h3>${escapeHtml(title)}</h3>
+          <span class="status-pill">${escapeHtml(section.items.length)} item${section.items.length === 1 ? "" : "s"}</span>
         </div>
-        <div class="mini-list guest-drinks-item-list"></div>
+        <div class="guest-drinks-item-list"></div>
       `;
-      box.querySelector("[data-action='move-up']").addEventListener("click", () => {
-        if (moveListItem(guestDrinks.sections, sectionIndex, -1)) {
-          drinks.sections = guestDrinkPresentationFromSections(guestDrinks.sections).sections;
-          markDirty();
-          redraw();
-        }
-      });
-      box.querySelector("[data-action='move-down']").addEventListener("click", () => {
-        if (moveListItem(guestDrinks.sections, sectionIndex, 1)) {
-          drinks.sections = guestDrinkPresentationFromSections(guestDrinks.sections).sections;
-          markDirty();
-          redraw();
-        }
-      });
-      drawGuestDrinkItems(box.querySelector(".guest-drinks-item-list"), guestDrinks.sections, sectionIndex, drinks, markDirty, redraw);
+      drawGuestDrinkItems(box.querySelector(".guest-drinks-item-list"), guestDrinks.sections, sectionIndex, applyOrder);
       container.appendChild(box);
+    });
+    window.IolantheDragReorder.attach(container, {
+      items: () => [...container.querySelectorAll(":scope > .guest-drinks-section")],
+      handleSelector: ".drink-section-grip",
+      onMove: (from, to) => {
+        guestDrinks.sections.splice(0, guestDrinks.sections.length, ...window.IolantheDragReorder.moveItem(guestDrinks.sections, from, to));
+        applyOrder();
+      },
+      afterMove: to => {
+        container.querySelectorAll(":scope > .guest-drinks-section")[to]?.querySelector(".drink-section-grip")?.focus();
+      }
     });
   }
 
-  function drawGuestDrinkItems(container, sections, sectionIndex, drinks, markDirty, redraw) {
+  function drawGuestDrinkItems(container, sections, sectionIndex, applyOrder) {
     const section = sections[sectionIndex];
     container.innerHTML = "";
     if (!section.items.length) {
       container.innerHTML = `<p class="muted">No linked drinks found for this section.</p>`;
       return;
     }
+    const movable = section.items.length > 1;
     section.items.forEach((item, index) => {
       const row = document.createElement("div");
-      row.className = "record-row guest-drinks-row";
+      row.className = "guest-drinks-row";
       const displayName = formatGuestDrinkName(item, `Drink ${index + 1}`);
+      const countText = drinkStockBottleCountText(item.quantity, section.category);
       row.innerHTML = `
-        <div class="record-summary guest-drinks-summary">
+        ${movable ? dragHandleHtml(`Move ${displayName}`, "drink-grip") : `<span class="drag-handle-spacer"></span>`}
+        <span class="guest-drinks-text">
           <strong>${escapeHtml(displayName)}</strong>
-          ${item.quantity > 1 ? `<span>${escapeHtml(drinkStockBottleCountText(item.quantity, section.category))}</span>` : ""}
-          ${item.description ? `<span class="full muted multiline-text">${escapeHtml(item.description)}</span>` : ""}
-        </div>
-        <div class="button-row record-actions">
-          ${orderingButtonsHtml("drink", index, section.items.length)}
-        </div>
+          ${item.description ? `<span>${escapeHtml(item.description)}</span>` : ""}
+        </span>
+        ${item.quantity > 1
+          ? `<span class="stock-bottles" title="${escapeAttribute(countText)}"><svg viewBox="0 0 14 16" aria-hidden="true"><path d="M5 0h4v4l2 3v9H3V7l2-3z"></path></svg>× ${escapeHtml(item.quantity)}</span>`
+          : `<span></span>`}
       `;
-      row.querySelector("[data-action='move-up']").addEventListener("click", () => {
-        if (moveListItem(section.items, index, -1)) {
-          drinks.sections = guestDrinkPresentationFromSections(sections).sections;
-          markDirty();
-          redraw();
-        }
-      });
-      row.querySelector("[data-action='move-down']").addEventListener("click", () => {
-        if (moveListItem(section.items, index, 1)) {
-          drinks.sections = guestDrinkPresentationFromSections(sections).sections;
-          markDirty();
-          redraw();
-        }
-      });
       container.appendChild(row);
+    });
+    window.IolantheDragReorder.attach(container, {
+      items: () => [...container.querySelectorAll(":scope > .guest-drinks-row")],
+      handleSelector: ".drink-grip",
+      onMove: (from, to) => {
+        section.items.splice(0, section.items.length, ...window.IolantheDragReorder.moveItem(section.items, from, to));
+        applyOrder();
+      },
+      afterMove: to => {
+        document.querySelectorAll("#guest-drinks-sections > .guest-drinks-section")[sectionIndex]
+          ?.querySelectorAll(".drink-grip")[to]?.focus();
+      }
     });
   }
 
