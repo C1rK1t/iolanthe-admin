@@ -3151,6 +3151,68 @@
     event.returnValue = "";
   });
 
+  // Spec C §4.4: back on the tab, the open page redraws when a file it shows was saved elsewhere, unless it has unsaved
+  // edits or a dialog is open. Pages reload their files whenever they open, so tab focus is the only other moment. The
+  // Route page keeps its own copy (itinerary.json), so it is left out. A raw fetch, not api(): this check is not
+  // activity and must not keep an idle session alive.
+  const FRESHNESS_PANEL_FILES = Object.freeze({
+    charter: { info: ["charter.json"], crew: ["crew_list.json"], sites: ["sites.json"] },
+    galley: { menus: ["menus.json", "charter.json"], guests: ["guest_list.json", "charter.json"] },
+    hotel: {
+      guests: ["guest_list.json", "charter.json"],
+      "drink-stocks": ["drink-stocks.json"],
+      "guest-drinks": [GUEST_DRINKS_FILE_NAME, "drink-stocks.json"],
+      "available-alcohol": ["available-alcohol.json", "drink-stocks.json"],
+      "purchased-alcohol": ["drink-stocks.json"],
+      cocktails: ["cocktails.json"]
+    }
+  });
+  let freshnessCheck = null;
+
+  function knownRevision(file, charterId) {
+    const bundle = state.bundle && state.bundle.charter_id === charterId ? state.bundle : null;
+    if (bundle && bundle[file]) {
+      return mergeCore().revisionOf(bundle[file]);
+    }
+    return Object.prototype.hasOwnProperty.call(seenRevisions, file) ? seenRevisions[file] : null;
+  }
+
+  async function checkFreshness() {
+    const section = state.selectedSection;
+    const files = ((FRESHNESS_PANEL_FILES[section] || {})[state.sectionPanels[section]]) || [];
+    const charterId = state.selectedCharter;
+    const busy = () => hasPageUnsavedChanges() || document.body.classList.contains("modal-open");
+    if (!state.authenticated || !files.length || busy()) {
+      return;
+    }
+    try {
+      const response = await fetch(apiUrl(`/api/admin/revisions${charterId ? `?charter=${encodeURIComponent(charterId)}` : ""}`), { credentials: "same-origin" });
+      if (!response.ok) {
+        return;
+      }
+      const stamps = await response.json();
+      const served = { ...(stamps.library || {}), ...(stamps.charter || {}) };
+      const moved = files.some(file => {
+        const known = knownRevision(file, charterId);
+        return known !== null && served[file] && served[file].revision !== known;
+      });
+      if (moved && !busy() && state.selectedSection === section && state.selectedCharter === charterId) {
+        await ({ charter: renderCharter, galley: renderGalley, hotel: renderHotel })[section]();
+        setStatus("Updated with changes saved elsewhere.", "ok");
+      }
+    } catch (error) {
+      // A missed check is harmless: the next save merges.
+    }
+  }
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && !freshnessCheck) {
+      freshnessCheck = checkFreshness().finally(() => {
+        freshnessCheck = null;
+      });
+    }
+  });
+
   function syncModalOpenState() {
     const dialogOpen = dialogModal && !dialogModal.classList.contains("hidden");
     const loginOpen = els.loginModal && !els.loginModal.classList.contains("hidden");
