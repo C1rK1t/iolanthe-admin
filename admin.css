@@ -532,6 +532,7 @@ label:not(.routes-panel label, .routes-modal label) .field-hint {
   text-align: right;
 }
 
+/* Only section pages (the dark --bg above) carry data-admin-section; admin.js removes it when signed out */
 body[data-admin-section] .status-panel {
   color: rgba(255, 255, 255, 0.68);
 }
@@ -542,6 +543,25 @@ body[data-admin-section] .status-panel {
 
 .status-panel.ok {
   color: var(--ok);
+}
+
+/* Refused access (a wrong URL key, or a guest / owner / unknown network): the message is all there is on the page,
+   so it is a centred card in the error tone instead of the corner status line */
+.status-panel.status-panel--refused {
+  width: min(28rem, calc(100% - 2rem));
+  min-height: 0;
+  margin: max(2rem, 22vh) auto 0;
+  padding: 1.1rem 1.4rem;
+  border: 1px solid #f0b8b1;
+  border-radius: 8px;
+  background: #f7e3e1;
+  box-shadow: var(--shadow);
+  color: var(--danger);
+  font-size: 1.1rem;
+  font-weight: 700;
+  line-height: 1.4;
+  text-align: center;
+  text-wrap: balance;
 }
 
 /* Login dialog (style rollout B): the department's name and icon, a larger password field with show / hide,
