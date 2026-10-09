@@ -145,3 +145,33 @@ preferences including "no preferences"; guest count 4 → 3) and restored afterw
 and Emma with red edges and pills, Sarah and Oliver with dashes, Emma inactive (count 3, last non-principal), the menu
 button red; with James's allergy set to "none" the button turned off (Emma is inactive). Hotel → Guests showed the
 hint and the same active guests. 177 tests; no console errors from this change.
+
+**2026-10-09 LIVE:** PR iolanthe-admin#27 merged (`cf3fc9f`) and pulled onto the boat.
+
+## Hotel Guests (2026-10-09)
+
+Mockup `hotel-guests-b.html`; David chose **B, icon chips**.
+
+- **SB-H1 Tap to edit; drag to reorder.** One 52 px row per guest: grip, preferred name (♛ for the principal) with the
+  full name under it, the cabin as a teal tag, icon chips, a chevron. The principal has no grip; only active guests
+  other than the principal have one and only they are drop targets, so nothing lands above the principal. Each drop runs
+  `moveGuest` step by step (what Move up / Move down did) and saves; the arrow keys on a grip move one place.
+  Grips appear only with full access (`allowReorder`: Charter Admin on the bridge), as the arrows did.
+- **SB-H2 Icon chips:** medical notes first (amber), then drinks, diving (ability, qualification, last dive, wetsuit)
+  and notes; "None" / "N/A" and the like are left out. Allergies and dietary preferences stay off this list (Galley's
+  page); the dialog still edits them.
+- **SB-H3 Inactive guests** sit under an "Inactive" heading with a dashed border and keep Promote on the row (same
+  confirmation; the last active guest is demoted to make room).
+- **SB-H4 Delete in the dialog:** an inactive guest's dialog has delete after a separator (same confirmation). Active
+  guests have no delete on Hotel (`allowDelete: false`), as before; "Clear guest slot" appears only where a caller
+  allows it.
+- **SB-H5 Header:** the guest count as a pill by the title; the order hint (SB-G4) under it.
+
+**2026-10-09 EXECUTED** on `feat/hotel-guests-b` (assets `admin-hotel-guests-b`): `drawGuestEditors` rewritten with
+`guestRowElement`, `removeGuestFromList` and `guestDetailChipsHtml`; `openGuestEditModal` gets `onDelete`;
+`renderGuestsPanel` gets `count`; CSS `.guest-row*`, `.guest-chip*`, `.guest-cabin`, `.guest-group-title` (the old
+`.guest-record-*` rules removed). 177 tests. Browser pass with Larry's charter temporarily seeded (5 guests, count 4)
+and restored afterwards: chips as designed (Oliver's "Diving: None" dropped, Sarah's medical chip first and amber);
+a real mouse drag of Emma onto the principal stopped just below him; ArrowDown twice moved her back with focus kept;
+ArrowUp on the first movable guest did nothing; Promote on Liam demoted Emma; Emma's dialog showed delete (Cancel kept
+the dialog), Oliver's none; 820 and 390 px with no sideways scroll.
