@@ -14057,5 +14057,8 @@
     getCharterContext
   });
 
-  loadBootstrap();
+  // Start on DOMContentLoaded, once every deferred script has run: the first render reads modules that load after this
+  // file (routes-ui.js, routes.js, itinerary-core.js, guest-preview.js, charter-pack.js). Starting straight away let a
+  // slow one arrive after the render (2026-10-09: "reading 'timeOptions'" on Charter Admin after a reload).
+  document.addEventListener("DOMContentLoaded", () => loadBootstrap());
 })();
