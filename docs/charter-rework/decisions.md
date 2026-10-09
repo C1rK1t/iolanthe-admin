@@ -596,5 +596,6 @@ suggested zenvue.app. Spec: [spec-pack.md](spec-pack.md). Mockups in `.superpowe
 - **P-D15 Site marker style (David, 2026-10-09).** Use a ring of yellow pips around a small centre as the **site**
   marker on our Leaflet maps (admin Route page, guest and crew maps, and the pack map if sites ever show there), with
   the name in white text with a dark halo to its right. Reference: [assets/site-marker-pips.png](assets/site-marker-pips.png).
-  Today the admin uses a teardrop pin (`.mk-site`, routes.css) and the guest a plain `circleMarker`. Not scheduled;
+  Source: the Apo Reef dive map (`images/sites/map.jpeg`, credited snorkeling-report.com), so we draw our own
+  icon in that spirit (SVG or CSS), not a copy. Today the admin uses a teardrop pin (`.mk-site`, routes.css) and the guest a plain `circleMarker`. Not scheduled;
   pick it up with the next map work.
