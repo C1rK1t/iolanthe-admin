@@ -12342,7 +12342,12 @@
       return "Unknown";
     }
     const date = new Date(value);
-    return Number.isFinite(date.getTime()) ? date.toLocaleString() : value;
+    if (!Number.isFinite(date.getTime())) {
+      return value;
+    }
+    const day = date.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+    const time = date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
+    return `${day}, ${time}`;
   }
 
   function purchasedAlcoholAmountText(value, currency) {
@@ -13291,17 +13296,18 @@
       <section class="card full">
         <div class="card-header">
           <h2>Purchased Alcohol</h2>
+          <div class="button-row list-add-actions">
+            ${iconButtonHtml("invoice", "Generate Customer Bill", ` id="purchased-alcohol-invoice-action"`)}
+          </div>
         </div>
-        <p class="muted">Charter purchase log with reversals and running bar bill.</p>
-        <div class="purchased-alcohol-summary-bar">
-          <div id="purchased-alcohol-total" class="purchased-alcohol-total"></div>
-          <button type="button" id="purchased-alcohol-invoice-action" class="purchased-alcohol-print-button" title="Generate Customer Bill" aria-label="Generate Customer Bill">Print Bill</button>
+        <div class="stat-tiles purchased-alcohol-tiles">
+          <div class="stat-tile"><b id="purchased-alcohol-total">0</b><span>Running bar bill</span></div>
+          <div class="stat-tile"><b id="purchased-alcohol-count">0</b><span>Bottles purchased</span></div>
         </div>
+        <p class="guest-order-hint">The charter's purchases, newest first. Reverse one to return it to available stock.</p>
         <div id="purchased-alcohol-list-shell" class="purchased-alcohol-list-shell">
-          <div id="purchased-alcohol-list-header" class="purchased-alcohol-list-header record-row purchased-alcohol-row" hidden>
+          <div id="purchased-alcohol-list-header" class="purchased-alcohol-list-header" hidden>
             <span>Name</span>
-            <span>Category</span>
-            <span>Sub-category</span>
             <span>Price</span>
             <span>Purchased</span>
             <span class="purchased-alcohol-list-header-spacer" aria-hidden="true"></span>
@@ -13321,7 +13327,11 @@
       return;
     }
     const activeItems = activeCharterAlcoholPurchases(purchases).slice().sort(compareCharterAlcoholPurchase);
-    total.textContent = `Running Bar Bill: ${purchasedAlcoholTotalText(purchases)}`;
+    total.textContent = purchasedAlcoholTotalText(purchases);
+    const count = document.getElementById("purchased-alcohol-count");
+    if (count) {
+      count.textContent = String(activeItems.length);
+    }
     if (invoiceButton) {
       const canGenerateInvoice = activeItems.length > 0;
       invoiceButton.disabled = !canGenerateInvoice;
@@ -13343,19 +13353,19 @@
     }
     activeItems.forEach(purchase => {
       const displayName = formatAvailableAlcoholName(purchase, "Selection");
+      const kind = [availableAlcoholCategoryText(purchase), availableAlcoholSubCategoryText(purchase)].filter(Boolean).join(" · ");
       const row = document.createElement("div");
-      row.className = "record-row purchased-alcohol-row";
+      row.className = "purchased-alcohol-row";
       row.innerHTML = `
-        <div class="record-summary purchased-alcohol-summary">
-          <strong class="purchased-alcohol-cell purchased-alcohol-name-cell" data-label="Name">${escapeHtml(displayName)}</strong>
-          <span class="purchased-alcohol-cell" data-label="Category">${escapeHtml(availableAlcoholCategoryText(purchase))}</span>
-          <span class="purchased-alcohol-cell" data-label="Sub-category">${escapeHtml(availableAlcoholSubCategoryText(purchase))}</span>
-          <span class="purchased-alcohol-cell" data-label="Price">${escapeHtml(purchasedAlcoholPriceText(purchase))}</span>
-          <span class="purchased-alcohol-cell" data-label="Purchased">${escapeHtml(purchasedAlcoholTimeText(purchase.purchased_at))}</span>
-        </div>
-        <div class="button-row record-actions">
+        <span class="purchased-alcohol-cell purchased-alcohol-name-cell">
+          <strong>${escapeHtml(displayName)}</strong>
+          ${kind ? `<small>${escapeHtml(kind)}</small>` : ""}
+        </span>
+        <span class="purchased-alcohol-cell purchased-alcohol-price-cell">${escapeHtml(purchasedAlcoholPriceText(purchase))}</span>
+        <span class="purchased-alcohol-cell purchased-alcohol-time-cell">${escapeHtml(purchasedAlcoholTimeText(purchase.purchased_at))}</span>
+        <span class="purchased-alcohol-actions">
           ${iconButtonHtml("reverse", "Reverse purchase", ` data-action="reverse-purchase"`)}
-        </div>
+        </span>
       `;
       row.querySelector("[data-action='reverse-purchase']")?.addEventListener("click", async () => {
         if (!await showAdminConfirm({
