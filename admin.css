@@ -544,6 +544,93 @@ body[data-admin-section] .status-panel {
   color: var(--ok);
 }
 
+/* Login dialog (style rollout B): the department's name and icon, a larger password field with show / hide,
+   and a clear "Log in" button */
+#login-form.login-card {
+  width: min(380px, 100%);
+}
+
+.login-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.login-card-header h2 {
+  margin: 0;
+  font-size: 1.3rem;
+}
+
+.login-modal-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.password-input {
+  display: flex;
+  align-items: center;
+  border: 2px solid var(--field-line);
+  border-radius: 6px;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.password-input:focus-within {
+  border-color: var(--accent);
+}
+
+#login-form .password-input input {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 1.1rem;
+  letter-spacing: 0.08em;
+}
+
+#login-form .password-input input:focus {
+  outline: none;
+}
+
+#login-form button.password-eye {
+  width: 44px;
+  min-height: 44px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+}
+
+#login-form button.password-eye:hover,
+#login-form button.password-eye:focus {
+  background: #e8eef0;
+  color: var(--ink);
+}
+
+#login-form button.password-eye[aria-pressed="true"] {
+  color: var(--accent);
+}
+
+#login-form button.password-eye svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+#login-form .button-row button {
+  min-width: 6.5rem;
+}
+
 .login-panel {
   display: grid;
   min-height: calc(100vh - 150px);

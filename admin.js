@@ -1914,10 +1914,21 @@
     }
   }
 
+  // Style rollout B: the dialog carries the tapped department's name and tile icon; the password can be shown
   function openLoginModal(department, title) {
     state.loginDepartmentTitle = title || departmentLabel(department);
     els.department.value = department;
     els.loginModalTitle.textContent = state.loginDepartmentTitle;
+    const tileIcon = document.querySelector(`.login-department[data-department="${department}"] .onboarding-icon`);
+    const modalIcon = document.getElementById("login-modal-icon");
+    if (modalIcon) {
+      modalIcon.hidden = !tileIcon;
+      if (tileIcon) {
+        modalIcon.src = tileIcon.getAttribute("src");
+      }
+    }
+    bindPasswordVisibilityToggle();
+    setPasswordVisible(false);
     els.password.value = "";
     els.loginError.textContent = "";
     els.loginModal.classList.remove("hidden");
@@ -1925,8 +1936,30 @@
     window.setTimeout(() => els.password.focus(), 0);
   }
 
+  function setPasswordVisible(visible) {
+    const toggle = document.getElementById("toggle-password-visibility");
+    els.password.type = visible ? "text" : "password";
+    if (toggle) {
+      toggle.setAttribute("aria-pressed", String(visible));
+      toggle.setAttribute("aria-label", visible ? "Hide password" : "Show password");
+    }
+  }
+
+  function bindPasswordVisibilityToggle() {
+    const toggle = document.getElementById("toggle-password-visibility");
+    if (!toggle || toggle.dataset.bound) {
+      return;
+    }
+    toggle.dataset.bound = "true";
+    toggle.addEventListener("click", () => {
+      setPasswordVisible(els.password.type === "password");
+      els.password.focus();
+    });
+  }
+
   function closeLoginModal() {
     els.loginModal.classList.add("hidden");
+    setPasswordVisible(false);
     els.password.value = "";
     els.loginError.textContent = "";
     els.loginButton.disabled = false;

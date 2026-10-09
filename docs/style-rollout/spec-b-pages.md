@@ -312,3 +312,31 @@ refresh, retry | save, cancel; four sections; tiles "Fri 9 Oct, 10:13"; switches
 Settings: 26 chips (7 on), a tap turns a chip teal, a switch toggles, leaving the page asks to discard, Discard restores;
 OBS Feed switch; Route Track restart | save, cancel and 24-hour tiles; Passwords unchanged; 390 px without sideways
 scroll.
+
+**2026-10-09 LIVE:** PR iolanthe-admin#35 merged (`8c28842`, after merging main: the startup-race fix #32 had landed;
+assets `admin-settings-b2`, 179 tests) and pulled onto the boat.
+
+## Login screen (2026-10-09)
+
+Mockup `login-b.html`; David chose **B, a clear "Log in" button**. The three department tiles are unchanged.
+
+- **SB-L1 The dialog names the department:** the title is the tapped tile's name ("Charter Admin", "Galley", "Hotel")
+  with its icon (was "Department Login" for all).
+- **SB-L2 Password field:** larger (44 px, 1.1 rem), the label wraps the field (small uppercase like every field), and
+  a show / hide eye (`aria-pressed`, back to hidden on every open and close). Enter still logs in.
+- **SB-L3 Buttons:** Cancel (grey) and Log in (green) at the bottom right: the one place a word beats an icon, for
+  someone new on the bridge.
+
+**2026-10-09 EXECUTED** on `feat/login-b` (assets `admin-login-b`): `index.html` login form, `openLoginModal`,
+`setPasswordVisible`, `bindPasswordVisibilityToggle`, `closeLoginModal`; CSS `.login-card*`, `.password-input`,
+`.password-eye`. 179 tests. Browser pass (scratch, logged out on purpose and back in afterwards): Charter tile → "Charter
+Admin" with its icon, focus in the field; the eye shows the password ("Hide password"); a wrong password ("xx") shows
+"Access denied" and keeps the dialog; Cancel closes and hides the password again; the Hotel tile → "Hotel" with its icon.
+
+## Phase B complete (2026-10-09)
+
+Every Admin page has had its pass: Crew, Site Editor, Galley Menus, Galley Guests, Hotel Guests, Drink Stocks, Guest
+Alcohol, Available Alcohol, Purchased Alcohol, Cocktails, Settings and the login screen (Charter Admin and Route &
+Itinerary had the look from the charter rework). No Move up / Move down remains (drag everywhere), times are 24-hour
+throughout, and every dialog follows save · cancel · separator · delete. Open from the rollout: try the drags with a
+finger on the bridge tablet; the Settings → Vessel tab (cabins) is in the backlog.
