@@ -23,6 +23,10 @@ iolanthe-admin  (index.html, admin.css, admin.js, assets/)
 
 URL access also requires `?key=<settings.admin.urlKey>`.
 
+The server also checks the network (iolanthe-server `lib/admin-network.js`) and reports it as the bootstrap `role`:
+bridge gets every department, crew Galley and Hotel. Guest, owner and `unknown` (an address in no CIDR) get no admin,
+and the console shows "This network cannot access admin." instead of the login.
+
 ## Stack
 
 - Plain HTML, CSS, JavaScript — no build step, no framework
