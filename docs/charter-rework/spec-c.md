@@ -1,6 +1,6 @@
 # Charter rework — spec C: conflict-safe saves (draft 1)
 
-Written 2026-10-09 from the brainstorm recorded in [decisions.md](decisions.md) (entries SC-D1 … SC-D12). Spec A's
+Written 2026-10-09 from the brainstorm recorded in [decisions.md](decisions.md) (entries SC-D1 … SC-D12; the changes made while planning are SC-D13). Spec A's
 introduction reserved spec C for "conflict-safe saves for the remaining charter files". Today every file below is saved
 as a whole-file overwrite: two people editing the same file at the same time silently lose one person's work. The
 itinerary, the route library, the anchorages, the reserved periods and the charter pack already carry a revision and
@@ -20,7 +20,7 @@ first**, then **A**.
 |---|---|
 | SC-D1 | **Scope: nine files.** Charter files `charter.json`, `crew_list.json`, `guest_list.json`, `menus.json`, `guest_drinks.json`, `available-alcohol.json`; shared library files `drink-stocks.json`, `cocktails.json`, `sites.json`. |
 | SC-D2 | **Revision + auto-rebase.** A whole-file revision guards every save; on a 409 the admin merges its change into the stored copy and saves again. It asks only when both people changed the same field of the same record. |
-| SC-D3 | **Stable record ids.** Crew members, guests, menus (one per day slot) and cocktails get an `id` once, through migration v6. Drink stocks and sites already have ids; Guest Alcohol and Available Alcohol use their existing natural keys (section category, `stock_id`). |
+| SC-D3 | **Stable record ids.** Crew members, guests, menus (one per day slot) and cocktails get an `id` once, through migration v7 (v6 is the admin password hashing, iolanthe-server#11). Drink stocks and sites already have ids; Guest Alcohol and Available Alcohol use their existing natural keys (section category, `stock_id`). |
 | SC-D4 | **Old tabs are refused.** A save with no `base_revision` gets the same 409 as a stale one; reloading the page picks up the new admin. |
 | SC-D5 | **Both reordered: mine wins, with a note.** Content edits from both sides are kept; the status line says the other order was replaced. |
 | SC-D6 | **A real clash reopens the editor on their version** (mockup B): their saved record with my changes on top, what they wrote under each field we both changed. Save again, or Cancel to keep theirs. |
@@ -28,7 +28,7 @@ first**, then **A**.
 | SC-D8 | **Freshness on page open and tab focus.** The admin checks the revisions when a page opens and when the tab becomes visible, and quietly redraws a page whose file moved, unless it has unsaved edits or an open dialog. No polling. |
 | SC-D9 | **Who and when.** The server stamps each save with the department (`charter` / `galley` / `hotel`, or `system` for server-side writes) and the time; clash messages say "Hotel … 14:02". No personal names (logins are per department). |
 | SC-D10 | **Merge in the admin, one helper.** A pure `merge-core.js` (Node-tested) and one save helper replace every whole-file save path. |
-| SC-D11 | **Server-side writers bump the revision too** (bar purchase / reverse, the guest-count sync, charter create / clone, migration v6). |
+| SC-D11 | **Server-side writers bump the revision too** (bar purchase / reverse, the guest-count sync, charter create / clone, migration v7). |
 | SC-D12 | **No wait on the style rollout.** Phase B has merged for every page spec C touches (only Settings and the login screen remain). |
 
 ---
@@ -90,11 +90,11 @@ later stale save is refused and merged rather than undoing it:
 - the guest-count sync after a `charter.json` save (`syncGuestListForCharter` on `guest_list.json`), saved_by the
   acting department, and only when the normalised list differs from the stored one;
 - charter create and clone (`createAdminCharter`): new files start at `revision: 1`, `saved_by` the acting department;
-- `readCocktails()` creating a missing file, and migration v6 (§2.4): `revision: 0`, `saved_by: "system"`.
+- `readCocktails()` creating a missing file, and migration v7 (§2.4): `revision: 0`, `saved_by: "system"`.
 
-### 2.4 Migration v6: record ids
+### 2.4 Migration v7: record ids
 
-A new entry in `DATA_MIGRATIONS` (`version: 6`), run like v5 (backup `data-before-migration-<stamp>` first, idempotent):
+A new entry in `DATA_MIGRATIONS` (`version: 7`), run like v5 (backup `data-before-migration-<stamp>` first, idempotent):
 
 - every charter's `crew_list.json` `crew[]`, `guest_list.json` `guests[]` and `menus.json` `menus[]`, and the library's
   `cocktails.json` `cocktails[]`: each record without a string `id` gets one;
@@ -102,7 +102,7 @@ A new entry in `DATA_MIGRATIONS` (`version: 6`), run like v5 (backup `data-befor
   a guest that already carries `guest_id` keeps it as its `id`;
 - every one of the nine files without an integer `revision` gets `revision: 0`, `saved_by: "system"`, `saved_at` now.
 
-After v6 the normalisers keep and supply ids:
+After v7 the normalisers keep and supply ids:
 
 - `normalizeCocktailItem` keeps `id` (today it drops every field but name, description, ingredients);
 - `normalizeGuestRecord` keeps an id; the crew and menu saves (which are not normalised today) give any record without
@@ -247,18 +247,18 @@ icon buttons and D7's "little text" rule hold. Every time shown is 24-hour (R3b-
 
 **Order:** S, then A, the same day.
 
-1. Rehearse migration v6 on docker-vm against a copy of the live `data` (as for v5: `git archive | ssh docker-vm tar
+1. Rehearse migration v7 on docker-vm against a copy of the live `data` (as for v5: `git archive | ssh docker-vm tar
    -x` into a rehearsal folder, run the migration, inspect, delete the folder).
-2. Compare the live server commit with origin/main, then `./update.sh`; check `/api/version` live_version 6 and a
+2. Compare the live server commit with origin/main, then `./update.sh`; check `/api/schema` live_version 7 and a
    409 from a save with no `base_revision`.
 3. Merge A (auto-deploys in 5 min; pull at once). Tabs opened before the release get the 409 message until they
    reload (SC-D4). Bump every `?v=` in `index.html`.
 
 **Tests**
 
-- S `node --test`: `file-revisions` (check / stamp / strip, no mutation); migration v6 (ids added once and kept on a
+- S `node --test`: `file-revisions` (check / stamp / strip, no mutation); migration v7 (ids added once and kept on a
   second run, `guest_id` reused, revision 0, backup made); `normalizeCocktailItem` and the guest normaliser keep ids.
-- S endpoints: `scripts/check-revisions.sh` (like `check-itinerary-endpoints.sh`): for each of the nine files a good
+- S endpoints: `scripts/check-revisions.js` (a Node script, like `check-admin-network.js`): for each of the nine files a good
   save (revision + 1, stamp), a stale save and a missing `base_revision` (409 with `data`), a purchase bumping
   `drink-stocks.json`, a guest-count change bumping `guest_list.json`, the revisions endpoint.
 - A `node --test` `merge-core`: edits to different records (merged, no clash); the same field (clash, theirs kept);
