@@ -544,4 +544,9 @@ Brainstormed with the visual companion (`.superpowers/brainstorm/31923-*/content
   strip name click and Enter expand; a charter pick from an overlay rolls it up at once; arrival time selects write
   "HH:MM" to the hidden input and dirty the form; guest clock "Friday 9 Oct, 07:52". PRs iolanthe-admin#17 and
   iolanthe-guest#4 open; merge on David's word.
+- **2026-10-09 R3b-3 follow-up (captain: roll-up still jumpy and pushes the page down).** Cause: on Collapse the overlay
+  class was dropped at the same moment the fold started closing, so the full-height band fell into the page flow first.
+  Fix: `setCollapsed(true)` keeps the band floating until the body fold's `grid-template-rows` transition has ended
+  (or 340 ms), then drops the overlay. Measured roll-up 205 → 183 → 120 → 80 → 60 → 54 → 52 px with the map's top
+  fixed throughout. Assets `admin-band-roll`.
 

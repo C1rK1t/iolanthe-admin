@@ -10,6 +10,7 @@
   const MIN_PX_PER_DAY = 1.2;      // 3 years on ~1300 px
   const MAX_PX_PER_DAY = 80;       // ~2 weeks on ~1100 px
   const DRAG_THRESHOLD_PX = 4;
+  const FOLD_MS = 260;             // the roll transition in charter-gantt.css (.gantt-fold)
 
   const ICONS = {
     left: '<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>',
@@ -389,9 +390,26 @@
       ctx.collapsed = collapsed;
       ctx.onToggleCollapsed(collapsed);
       root.classList.toggle("is-collapsed", collapsed);
-      root.classList.toggle("is-overlay", Boolean(ctx.overlay && !collapsed));
+      if (collapsed) {
+        // Keep floating while the fold rolls up; drop the overlay only once it has closed, so the page never reflows
+        // mid-roll (the full-height band would otherwise fall into the flow and push the content down first).
+        const body = root.querySelector(".gantt-fold--body");
+        const thisRoot = root;
+        let settled = false;
+        const settle = () => {
+          if (settled) return;
+          settled = true;
+          body.removeEventListener("transitionend", onEnd);
+          if (ctx.collapsed && root === thisRoot) { root.classList.remove("is-overlay"); syncOverlay(); }
+        };
+        const onEnd = (e) => { if (e.target === body && e.propertyName === "grid-template-rows") settle(); };
+        body.addEventListener("transitionend", onEnd);
+        window.setTimeout(settle, FOLD_MS + 80);   // reduced motion or a lost event: settle anyway
+        return;
+      }
+      root.classList.toggle("is-overlay", Boolean(ctx.overlay));
       syncOverlay();
-      if (!collapsed) afterLayout(() => { if (viewport.isConnected) { if (pxPerDay) syncTitle(); else applyZoom(ctx.zoom); } });
+      afterLayout(() => { if (viewport.isConnected) { if (pxPerDay) syncTitle(); else applyZoom(ctx.zoom); } });
     }
 
     // The scale and left edge to restore, or null when nothing has been drawn. Read from the last draw / scroll /
