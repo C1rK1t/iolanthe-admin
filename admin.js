@@ -1691,7 +1691,8 @@
         state.selectedCharter = charterId;
         state.bundle = null;
         state.ganttOpen = false;   // R3-5: picking a charter rolls the band back up
-        renderCharter();
+        await fadeOutSectionContent();
+        renderCharter({ fadeIn: true });
       },
       onOpenPeriod: periodId => openReservedPeriodModal(periodId),
       onCreateCharter: openCreateCharterModal,
@@ -6595,7 +6596,20 @@
     return window.IolantheGuestPreviewPanel ? window.IolantheGuestPreviewPanel.render() : placeholderCard("Guest view");
   }
 
-  async function renderCharter() {
+  // Captain 2026-10-09: a charter switch fades the old panel out and the new one in instead of swapping in one frame.
+  const PANEL_FADE_MS = 180;
+  function fadeOutSectionContent() {
+    const content = els.workspace.querySelector(".section-content");
+    if (!content || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return Promise.resolve();
+    }
+    content.classList.add("is-fading");
+    return new Promise(resolve => window.setTimeout(resolve, PANEL_FADE_MS));
+  }
+
+  // options.fadeIn: the final paint fades in (the loading placeholder stays invisible meanwhile).
+  async function renderCharter(options = {}) {
+    const entering = Boolean(options && options.fadeIn);
     const panels = [
       // Labels are HTML (sectionShell): the <br> sets the two-line wrap the captain asked for (2026-10-08).
       { id: "info", label: "Charter<br>Admin" },
@@ -6607,9 +6621,13 @@
     const activePanel = panels.some(panel => panel.id === state.sectionPanels.charter) ? state.sectionPanels.charter : "info";
     state.sectionPanels.charter = activePanel;
     state.ganttOpen = false;   // R3-5: a page change or a charter change rolls the band up again
-    const paint = contentHtml => {
+    const paint = (contentHtml, phase = "final") => {
       clearPageUnsavedGuard();
       els.workspace.innerHTML = sectionShell("charter", panels, activePanel, contentHtml, "");
+      if (entering) {
+        const content = els.workspace.querySelector(".section-content");
+        if (content) content.classList.add(phase === "loading" ? "is-fading" : "is-entering");
+      }
       bindSectionNav("charter", renderCharter);
       const host = document.getElementById("charter-gantt-host");
       if (state.gantt && host) {
@@ -6621,7 +6639,7 @@
         mountCharterGantt();
       }
     };
-    paint(`<section class="card"><p class="muted">Loading charter data...</p></section>`);
+    paint(`<section class="card"><p class="muted">Loading charter data...</p></section>`, "loading");
     const selectedCharter = syncSelectedCharter();
     if (!selectedCharter) {
       paint(`

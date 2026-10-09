@@ -549,4 +549,10 @@ Brainstormed with the visual companion (`.superpowers/brainstorm/31923-*/content
   Fix: `setCollapsed(true)` keeps the band floating until the body fold's `grid-template-rows` transition has ended
   (or 340 ms), then drops the overlay. Measured roll-up 205 → 183 → 120 → 80 → 60 → 54 → 52 px with the map's top
   fixed throughout. Assets `admin-band-roll`.
+- **2026-10-09 captain (after round 3b): fit warning as a road sign, light-red tint, fade between charters.** The fit
+  warning is the attached road-sign icon alone (red border, white gap, amber face, white exclamation; 34 px; the wrapping
+  tooltip bubble stays), no pill. EXPERIMENT: while the route does not fit, the Route page card tints light red
+  (`.routes-panel.fit-warn`, #f1d9d6, with the inputs/tiles a shade lighter) — David/captain to judge. A charter switch
+  from the band fades the old panel out (180 ms) and the new one in (220 ms) while the band stays put; nothing under
+  prefers-reduced-motion. Measured: 0.53 → 0.24 → 0.04 → 0, then 0.19 → 0.52 → 0.83 → 1. Assets `admin-warn-fade`.
 

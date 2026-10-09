@@ -2,7 +2,7 @@
 
 /* Strip: prev | left edges | card | right edges | next */
 .routes-panel .strip { display: flex; align-items: stretch; gap: 6px; min-height: 240px; }
-.routes-panel .strip > .icon-btn { align-self: center; flex: none; }
+.routes-panel .strip > .icon-btn { align-self: flex-start; margin-top: 60px; flex: none; }   /* pinned a third of the way down an empty card, whatever the card's height (captain 2026-10-09) */
 .routes-panel .strip-edges { display: flex; align-items: stretch; gap: 2px; flex: none; }
 .routes-panel .strip-edges.left { flex-direction: row; }
 .routes-panel .strip-edges.right { flex-direction: row; }

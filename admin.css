@@ -330,6 +330,15 @@ button.admin-icon-button--gold:focus {
   max-width: 100%;
 }
 
+/* A charter switch fades the panel out and the new one in (captain 2026-10-09); the band itself stays put */
+.section-content > :not(.charter-gantt-host) { transition: opacity 180ms ease; }
+.section-content.is-fading > :not(.charter-gantt-host) { opacity: 0; }
+.section-content.is-entering > :not(.charter-gantt-host) { animation: panel-fade-in 220ms ease; }
+@keyframes panel-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .section-content > :not(.charter-gantt-host) { transition: none; animation: none; }
+}
+
 .charter-gantt-host:empty {
   display: none;
 }

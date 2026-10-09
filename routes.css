@@ -233,10 +233,19 @@
 .routes-panel .pills { display: flex; gap: 6px; align-items: center; flex: 1; }
 .routes-panel .pill { display: inline-grid; place-items: center; min-width: 36px; height: 28px; padding: 0 10px; border-radius: 999px; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; background: var(--soft); color: var(--muted); cursor: help; }
 .routes-panel .pill.fit-match { background: #cfe8cf; color: #1e5a3b; }
-.routes-panel .pill.fit-short, .routes-panel .pill.fit-over { background: #f7e3e1; padding: 0 8px; }
+.routes-panel .pill.fit-short, .routes-panel .pill.fit-over { background: transparent; padding: 0; min-width: 0; height: auto; }   /* the sign alone (captain 2026-10-09) */
 .routes-panel .pill svg { width: 20px; height: 20px; }
+.routes-panel .pill.fit-short svg, .routes-panel .pill.fit-over svg { width: 34px; height: 34px; display: block; }
 .routes-panel .pill svg .tri { fill: var(--danger); stroke: var(--danger); stroke-width: 2; stroke-linejoin: round; }
 .routes-panel .pill svg .mark { fill: none; stroke: #fff; stroke-width: 2.2; stroke-linecap: round; }
+.routes-panel .pill svg .ws-red { fill: #e60000; stroke: #e60000; stroke-width: 1.6; stroke-linejoin: round; }
+.routes-panel .pill svg .ws-white { fill: #fff; stroke: #fff; stroke-width: 0.6; stroke-linejoin: round; }
+.routes-panel .pill svg .ws-amber { fill: #ffb400; stroke: #ffb400; stroke-width: 0.4; stroke-linejoin: round; }
+.routes-panel .pill svg .ws-mark { fill: none; stroke: #fff; stroke-width: 2.1; stroke-linecap: round; }
+.routes-panel .pill svg .ws-dot { fill: #fff; }
+/* Captain 2026-10-09: only the Route page's background tints light red while the route does not fit; inputs, tiles,
+   tabs and cards keep their default colours */
+.routes-panel.card.fit-warn { background: #f1d9d6; }
 /* Pill tooltips wrap (captain 2026-10-08): a styled bubble instead of the browser's one-line title */
 .routes-panel .pill { position: relative; }
 .routes-panel .pill-tip { display: none; position: absolute; top: calc(100% + 6px); left: 0; z-index: 30; width: max-content; max-width: 260px; padding: 6px 9px; border-radius: 6px; background: var(--ink); color: #fff; font-size: 12px; font-weight: 500; line-height: 1.35; text-align: left; white-space: normal; box-shadow: 0 4px 12px rgba(0,0,0,.25); pointer-events: none; }
