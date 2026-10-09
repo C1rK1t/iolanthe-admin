@@ -735,7 +735,7 @@ function migrateCabins(input) {
     return guests.filter(guest => guest && typeof guest.cabin_id !== "string");
   });
 
-  let cabins = Array.isArray(rawVessel.cabins) ? rawVessel.cabins.map(cabin => normalizeVessel({ cabins: [cabin] }).cabins[0]) : null;
+  let cabins = Array.isArray(rawVessel.cabins) ? rawVessel.cabins.map(normalizeCabin) : null;
   const vesselChanged = cabins === null;
   if (cabins === null) {
     const used = [];
