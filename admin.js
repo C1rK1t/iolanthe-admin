@@ -314,6 +314,16 @@
     return new URL(path, window.location.origin).toString();
   }
 
+  // sites.json stores media as "images/sites/<file>", relative to the site root. Under /admin/ a relative src would
+  // resolve to /admin/images/sites/..., so make it root-relative. Full URLs, blob:, data: and /paths pass through.
+  function siteMediaUrl(src) {
+    const value = typeof src === "string" ? src.trim() : "";
+    if (!value || /^(?:[a-z][a-z0-9+.-]*:|\/)/i.test(value)) {
+      return value;
+    }
+    return `/${value.replace(/^\.\//, "")}`;
+  }
+
   function groupBeveragesByCategory(items, categorySourceForItem = item => item) {
     const groups = DRINK_STOCK_CATEGORIES.map(category => ({ category, title: category, items: [] }));
     const groupsByKey = new Map(groups.map(group => [drinkCategoryKey(group.category), group]));
@@ -1581,8 +1591,8 @@
     lightbox.querySelector(".site-media-lightbox__counter").textContent = `${siteMediaLightboxState.index + 1} of ${items.length}`;
     const stage = lightbox.querySelector(".site-media-lightbox__stage");
     stage.innerHTML = item.type === "video"
-      ? `<video src="${escapeAttribute(item.src)}" controls preload="metadata"></video>`
-      : `<img src="${escapeAttribute(item.src)}" alt="${escapeAttribute(item.alt || title)}">`;
+      ? `<video src="${escapeAttribute(siteMediaUrl(item.src))}" controls preload="metadata"></video>`
+      : `<img src="${escapeAttribute(siteMediaUrl(item.src))}" alt="${escapeAttribute(item.alt || title)}">`;
     lightbox.querySelector("[data-site-media-prev]").disabled = items.length < 2;
     lightbox.querySelector("[data-site-media-next]").disabled = items.length < 2;
   }
@@ -5494,9 +5504,9 @@
     const renderMediaPreview = item => {
       const media = normalizeSiteMediaEntry(item);
       if (media.type === "video") {
-        return `<video class="site-media-preview" src="${escapeAttribute(media.src)}" controls preload="metadata"></video>`;
+        return `<video class="site-media-preview" src="${escapeAttribute(siteMediaUrl(media.src))}" controls preload="metadata"></video>`;
       }
-      return `<img class="site-media-preview" src="${escapeAttribute(media.src)}" alt="${escapeAttribute(media.alt || "")}">`;
+      return `<img class="site-media-preview" src="${escapeAttribute(siteMediaUrl(media.src))}" alt="${escapeAttribute(media.alt || "")}">`;
     };
 
     const drawImages = () => {
