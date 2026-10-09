@@ -49,8 +49,17 @@ URL access also requires `?key=<settings.admin.urlKey>`.
   buttons on the Charter Info and Route headers open it (`showCharterPanel("preview", { previewDay })`). The server
   serves `?charter=` only to an admin session; the guest's preview mode lives in `iolanthe-guest/preview-mode.js`.
   Device choice in localStorage `iolanthe-admin.preview.device`.
+- `pack-core.js` / `pack-render.js` / `charter-pack.js` / `charter-pack.css` — **Charter Pack** (charter rework spec P):
+  the charter's details as A4 pages for the client or agent, saved as a PDF with the browser's print dialog.
+  `pack-core.js` (pure, Node-tested) holds the preset rules (mirror of the server's `lib/charter-pack.js`) and
+  `buildPackModel(guestPayload, pack)`; `pack-render.js` (pure, Node-tested, no admin globals so phase 2 can reuse it)
+  turns the model into the cover and per-section blocks; `charter-pack.js` lays the blocks onto pages, draws the Leaflet
+  route map (light grey Esri tiles, day-number markers merged under 18 px, a key), auto-saves the preset to
+  `/api/admin/charter/<id>/pack` and prints by moving the live pages into `<body>` (`#pack-print-host`) and back on
+  `afterprint`. Data:
+  `/api/charter?charter=<id>`. Themes A / B / C are classes `.pack-theme-a/b/c`; assets in `assets/pack/`.
 - The Charter section menu reads **Charter Admin** (the info panel, id `info`), **Route & Itinerary** (`routes`), Crew,
-  Guest view, Site Editor; the two-line wraps are `<br>`s in the labels (`renderCharter`).
+  **Charter Pack** (`pack`), Guest view, Site Editor; the two-line wraps are `<br>`s in the labels (`renderCharter`).
 - Reserved periods (maintenance / unavailable / other) come from `/api/admin/reserved-periods` and save with a
   `base_revision`; the admin and the server both refuse dates that overlap a charter or a period.
 - The active charter is computed by the server (in date = the day before start to the end date, else the crew's
@@ -61,8 +70,8 @@ URL access also requires `?key=<settings.admin.urlKey>`.
 - `drag-reorder.js` — drag to reorder with a grip (pointer events, so it works on touch, plus the arrow keys on the
   focused grip), `window.IolantheDragReorder.attach(container, { items, handleSelector, onMove, afterMove })`; it
   replaces the Move up / Move down pairs (style rollout B: Galley Menus first). `moveItem` / `dropIndex` are pure.
-- `node --test` runs the tests in `test/` (154 tests), which cover `routes-core`, `itinerary-core`, `charters-core`,
-  `guest-preview-core` and `drag-reorder`
+- `node --test` runs the tests in `test/` (177 tests), which cover `routes-core`, `itinerary-core`, `charters-core`,
+  `guest-preview-core`, `pack-core`, `pack-render` and `drag-reorder`
 - `routes.js` / `routes.css` — the Route panel (Charter → Route): state, side panel, header, map, saving and wiring. A
   "Working on" selector gives it two subjects: the library routes (the route library, saved through
   `/api/admin/routes/*`) and this charter's route (the route stored in the charter's `itinerary.json`, saved through

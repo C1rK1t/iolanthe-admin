@@ -6537,6 +6537,9 @@
     if (activePanel === "preview") {
       return guestPreviewPanelHtml();
     }
+    if (activePanel === "pack") {
+      return window.IolantheCharterPack ? window.IolantheCharterPack.render() : placeholderCard("Charter Pack");
+    }
     if (activePanel === "sites") {
       return renderSitesPanel();
     }
@@ -6566,6 +6569,10 @@
     }
     if (activePanel === "preview") {
       bindGuestPreview(charterInfo, itinerary, "itinerary");
+      return;
+    }
+    if (activePanel === "pack") {
+      if (window.IolantheCharterPack) window.IolantheCharterPack.bind({ charterId: state.selectedCharter });
       return;
     }
     if (activePanel === "sites") {
@@ -6615,6 +6622,7 @@
       { id: "info", label: "Charter<br>Admin" },
       { id: "routes", label: "Route &amp;<br>Itinerary" },
       { id: "crew", label: "Crew" },
+      { id: "pack", label: "Charter<br>Pack" },
       { id: "preview", label: "Guest view" },
       { id: "sites", label: "Site Editor" }
     ];
@@ -6623,6 +6631,7 @@
     state.ganttOpen = false;   // R3-5: a page change or a charter change rolls the band up again
     const paint = (contentHtml, phase = "final") => {
       clearPageUnsavedGuard();
+      if (window.IolantheCharterPack) window.IolantheCharterPack.destroy();   // spec P: flushes a pending preset save
       els.workspace.innerHTML = sectionShell("charter", panels, activePanel, contentHtml, "");
       if (entering) {
         const content = els.workspace.querySelector(".section-content");
@@ -13936,6 +13945,7 @@
   // Helpers for panels that live in their own files (routes.js). Read-only; add to it only what those files need.
   window.IolantheAdmin = Object.freeze({
     api,
+    apiUrl,
     setStatus,
     escapeHtml,
     showAdminConfirm,
