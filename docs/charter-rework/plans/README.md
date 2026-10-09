@@ -30,3 +30,17 @@ on the vessel (admin `main` auto-deploys every 5 minutes).
 | A2-1 | [a2-01-server.md](a2-01-server.md) | `iolanthe-server` | Record shape (`duration_min`, `dirty_stop_ids`, anchorage `kind`), unassigned routes in the record shape, `itinerary/import` replaces apply-route (re-bases, items travel, no length refusal), charter summaries `stops`, migration v5 | New code assembled onto the committed module: all new tests pass (the 3 exact-object tests the plan extends fail until extended) |
 | A2-2 | [a2-02-admin.md](a2-02-admin.md) | `iolanthe-admin` (branch `feat/itinerary-a2`) | Core: arrivals, cascade, dropped days, clashes, fit, rebase; Route page: one Working-on select, pills, Legs/Days tabs, stop strip and card (`stop-cards.js`), Start from…, anchorage kinds; Itinerary panel deleted | Core + routes-core assembled from the plan text: 110 tests pass; `stop-cards.js` and `routes-days.js` parse |
 
+
+## Spec P: the charter pack, phase 1 (2026-10-09)
+
+Spec: [../spec-pack.md](../spec-pack.md). Three plans, server first; the admin branch merges only after the server is
+released on the vessel. Plans P-2 and P-3 share the admin worktree and branch `feat/charter-pack`.
+
+| # | Plan | Repo | What lands | Verified while planning |
+|---|---|---|---|---|
+| P-1 | [p-01-server.md](p-01-server.md) | `iolanthe-server` (branch `feat/charter-pack-server`) | `lib/charter-pack.js` (presets, 409 on a stale revision, cover upload rules and clean-up), `GET/PUT …/pack`, `POST …/pack/cover`, `GET …/pack/cover/<file>` | Plan text applied to `main` f8939ab: 116 tests pass; endpoints exercised on a scratch server |
+| P-2 | [p-02-admin-core.md](p-02-admin-core.md) | `iolanthe-admin` (branch `feat/charter-pack`) | `pack-core.js` (preset rules, dates, markers, merge, `buildPackModel`), `pack-render.js` (cover and block HTML), csaba fixture | Plan text applied to `main` e108e7e: 168 tests pass |
+| P-3 | [p-03-admin-page.md](p-03-admin-page.md) | `iolanthe-admin` (branch `feat/charter-pack`) | `charter-pack.js` / `.css` (settings, A4 pagination, map, auto-save, cover upload, Save as PDF), menu entry, `apiUrl` export, `?v=admin-charter-pack` | Plan text applied after P-2: 168 tests pass, `node --check` clean; page exercised in the browser on a scratch server (all but a real print, which is Task 6) |
+
+The assets in `assets/pack/` (default hero placeholder, David's stamp, the line art) are committed with the spec PR, so
+the plans only check them.
