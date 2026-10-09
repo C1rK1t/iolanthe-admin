@@ -1992,7 +1992,8 @@
         setStatus("Access denied. Check the admin URL key.", "error");
         return;
       }
-      if (state.role === "guest" || state.role === "owner") {
+      // "unknown" is an address in none of the server's network CIDRs; the server refuses it like guest and owner.
+      if (state.role === "guest" || state.role === "owner" || state.role === "unknown") {
         els.loginPanel.classList.add("hidden");
         els.appPanel.classList.add("hidden");
         setStatus("This network cannot access admin.", "error");
