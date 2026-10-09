@@ -165,8 +165,9 @@ by turning the mockup's CSS (`:root` tokens, `.icon-btn`, `.stat`, `.banner`, `.
   - deleting a route that was already gone left it in the picker
   - a Save As regression kept the old name on the new copy
 - **Local dev server for the admin:** `routes-admin-dev` in the workspace `.claude/launch.json` (port 8124, data in
-  `iolanthe-server/data-local/routes-dev`). The Charter Admin test password is at `admin.passwords.charter` in that
-  folder's `settings.json`.
+  `iolanthe-server/data-local/routes-dev`). The Charter Admin test password was at `admin.passwords.charter` in that
+  folder's `settings.json`; since the server stores the passwords as hashes (iolanthe-server#11), type a plain test
+  password there instead (iolanthe-server CLAUDE.md, Admin passwords and URL key).
 
 ## Phase 2 (done, 2026-10-07)
 
