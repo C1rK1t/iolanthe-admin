@@ -248,3 +248,22 @@ the close. 177 tests. Browser pass on charter "New" (35 drinks): groups Wine / S
 became 35, USD selected; the switch turns teal; tapping a row opens the dialog ("Wine · 10 bottles"), remove asks first
 (cancelled), edit opens "Edit Drink Stock"; a tap in the price field does not open the dialog; purchase still asks
 first (cancelled); 820 px one line, 390 px two lines, no sideways scroll; nothing saved.
+
+**2026-10-09 LIVE:** PR iolanthe-admin#31 merged (`2af0d88`) and pulled onto the boat.
+
+## Purchased Alcohol (2026-10-09)
+
+No mockup (a log with one action per row); built directly and shown in the PR.
+
+- **SB-P1 Header and tiles:** Print Bill becomes an icon in the header; the running bar bill and the number of bottles
+  purchased are stat tiles (the bill pill and the text button went).
+- **SB-P2 Rows:** name with "category · sub-category" under it, price (bold), time, and a small reverse icon (same
+  confirmation). Reversed purchases stay hidden, as before.
+- **SB-P3 24-hour times:** purchase times were `toLocaleString()` (12-hour on some devices); now "Tue 3 Nov, 21:15"
+  (`en-GB`, `hour12: false`), the captain's rule.
+
+**2026-10-09 EXECUTED** on `feat/purchased-alcohol-b` (assets `admin-purchased-alcohol-b`): `renderPurchasedAlcoholPanel`,
+`drawPurchasedAlcoholItems`, `purchasedAlcoholTimeText`; CSS `.purchased-alcohol-*` (the old pill, print-button and
+per-cell label rules removed). 177 tests. Browser pass with a temporary purchases file on charter "New" (3 active, 1
+reversed; deleted afterwards): tiles "7000 PHP + 35 USD" and 3; rows newest first with 24-hour times; reverse asks
+first (cancelled); Print Bill opens the bill; 390 px two lines, no sideways scroll.
