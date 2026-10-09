@@ -92,3 +92,5 @@ One page per branch/PR: header actions top right (save green / cancel red, separ
 remaining text buttons to icons, plus `routes.css` token de-duplication. Proposed order, busiest first (David to
 confirm when A is live): Crew → Site Editor → Galley Menus → Galley Guests → Drink Stocks → the other Hotel alcohol
 pages → Cocktails → Settings → login screen.
+
+**2026-10-09 LIVE:** PR iolanthe-admin#21 merged (`b87e31a`) and pulled onto the boat; assets `admin-reskin-a`. Execution notes in `plans/a-01-reskin.md`.
