@@ -617,3 +617,10 @@ suggested zenvue.app. Spec: [spec-pack.md](spec-pack.md). Mockups in `.superpowe
   **Deviation from plan P-3:** with every tile failing, removing the map inside Leaflet's own `load` handler threw an
   uncaught `_fadeAnimated of null`; `mapFailed` now runs on the next tick (charter-pack.js), and the CLAUDE.md line on
   printing now says the live pages are moved, not copied.
+- **2026-10-09 final Sonnet review** (no blocking issues), three fixes in charter-pack.js, each verified: the 15 s map
+  limit now also covers Leaflet's own download (a held leaflet.js request: "Loading map…" at 5 s, the map note and
+  Save as PDF enabled at 16 s); `fitBounds` caps the zoom at 14 so a one-stop route draws its map instead of failing;
+  Save as PDF first draws any typing from the last 250 ms, and a redraw puts printed pages back before rebuilding (no
+  duplicate pages where print() does not block). Not fixed: an edit typed less than 800 ms before closing the tab is
+  not saved (no pagehide flush). Found and raised separately (a pre-existing server issue): `/data/` serves every
+  DATA_DIR file except settings.json without a session.

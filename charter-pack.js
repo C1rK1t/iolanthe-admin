@@ -226,6 +226,8 @@
     // Lays each section's blocks onto A4 pages: a block that overflows its page starts the next ("continued") page, and
     // a block taller than a whole page is split across pages.
     function drawPages() {
+      // Where print() does not block, a redraw can come while the pages sit in the print host: put them back first.
+      removePrintHost();
       model = core().buildPackModel(payload, pack);
       const out = R().renderPack(model, { coverUrl: coverUrl(), stampUrl: `${ASSETS}/stamp.png` });
       const footer = R().esc(model.footer);
@@ -307,14 +309,18 @@
 
     async function drawMap(slot) {
       setMapReady(false, "Loading map…");
+      // The time limit covers Leaflet's own download as well: a stalled request must not block printing (final review).
+      const currentSlot = () => mapBox || scaler.querySelector("[data-pack-map]");
+      window.clearTimeout(mapTimer);
+      mapTimer = window.setTimeout(() => { if (!mapReady) mapFailed(currentSlot()); }, MAP_TIMEOUT_MS);
       let L;
       try {
         L = await A().loadLeaflet();
       } catch (error) {
-        mapFailed(slot);
+        mapFailed(currentSlot());
         return;
       }
-      if (!alive || !slot.isConnected) return;
+      if (!alive || mapBroken || !slot.isConnected) return;
       try {
         buildMap(L, slot);
       } catch (error) {
@@ -331,7 +337,8 @@
       });
       mapBox = slot;
       map.attributionControl.setPrefix(false);
-      map.fitBounds(L.latLngBounds(line).pad(0.08));
+      // maxZoom: a one-stop route has zero-size bounds, which would otherwise ask for an infinite zoom (final review).
+      map.fitBounds(L.latLngBounds(line).pad(0.08), { maxZoom: 14 });
       mapLine = L.polyline(line, { color: tint(), weight: 2.5, opacity: 0.9, interactive: false }).addTo(map);
       const points = route.markers.map((m) => {
         const p = map.latLngToContainerPoint([m.lat, m.lng]);
@@ -354,7 +361,6 @@
         else window.setTimeout(() => mapFailed(mapBox), 0);
       });
       tiles.addTo(map);
-      mapTimer = window.setTimeout(() => { if (!mapReady) mapFailed(mapBox); }, MAP_TIMEOUT_MS);
     }
 
     // ---- saving ------------------------------------------------------------------------------------------------
@@ -394,7 +400,8 @@
       pack = { ...pack, ...patch };
       syncControls();
       window.clearTimeout(redrawTimer);
-      if (typing) redrawTimer = window.setTimeout(drawPages, TEXT_REDRAW_MS);
+      redrawTimer = 0;
+      if (typing) redrawTimer = window.setTimeout(() => { redrawTimer = 0; drawPages(); }, TEXT_REDRAW_MS);
       else drawPages();
       window.clearTimeout(saveTimer);
       saveTimer = window.setTimeout(save, SAVE_DELAY_MS);
@@ -422,6 +429,12 @@
     function printPack() {
       if (!mapReady) return;
       removePrintHost();
+      // Typing in the last 250 ms has not been drawn yet: draw it before printing (final review).
+      if (redrawTimer) {
+        window.clearTimeout(redrawTimer);
+        redrawTimer = 0;
+        drawPages();
+      }
       const printHost = el("div", { id: "pack-print-host", class: `pack-theme-${pack.theme}` }, ...pages());
       document.body.append(printHost);
       document.body.classList.add("pack-printing");
