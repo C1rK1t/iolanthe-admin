@@ -8235,13 +8235,6 @@
     `;
   }
 
-  function orderingButtonsHtml(label, index, total) {
-    return `
-      ${iconButtonHtml("move-up", `Move ${label} up`, ` data-action="move-up"${index === 0 ? " disabled" : ""}`)}
-      ${iconButtonHtml("move-down", `Move ${label} down`, ` data-action="move-down"${index === total - 1 ? " disabled" : ""}`)}
-    `;
-  }
-
   // Style rollout B: a grip for IolantheDragReorder (drag-reorder.js), replacing a Move up / Move down pair
   function dragHandleHtml(label, className) {
     return `<button type="button" class="drag-handle ${className}" aria-label="${escapeAttribute(label)} (drag, or use the arrow keys)" title="Drag to move">${buttonIconSvg("grip")}</button>`;
@@ -8267,17 +8260,6 @@
         open();
       }
     });
-  }
-
-  function moveListItem(items, index, direction) {
-    const nextIndex = index + direction;
-    if (!Array.isArray(items) || nextIndex < 0 || nextIndex >= items.length) {
-      return false;
-    }
-    const current = items[index];
-    items[index] = items[nextIndex];
-    items[nextIndex] = current;
-    return true;
   }
 
   function mealLabel(meal) {
@@ -13475,20 +13457,22 @@
         <div class="card-header">
           <h2>Cocktails</h2>
           <div class="button-row list-add-actions">
-            ${iconButtonHtml("preview", "Preview Cocktails", ` id="preview-cocktails"`)}
             ${iconButtonHtml("add", "Add Cocktail", ` id="add-cocktail"`)}
+            ${iconButtonHtml("preview", "Preview Cocktails", ` id="preview-cocktails"`)}
+            <span class="header-sep"></span>
             ${iconButtonHtml("save", "Save Cocktails", ` id="save-cocktails"`)}
             ${iconButtonHtml("cancel", "Cancel Cocktails changes", ` id="cancel-cocktails"`)}
           </div>
         </div>
-        <p class="muted">Global cocktail recipes managed as a simple standalone list.</p>
+        <p class="guest-order-hint">The cocktail list guests see, in this order (the same for every charter). Drag a grip to change the order, then save.</p>
         <div id="cocktails-list" class="editor-list cocktails-list"></div>
       </section>
     `;
   }
 
-  function openCocktailItemModal(item, onSave) {
+  function openCocktailItemModal(item, onSave, onDelete) {
     const draft = normalizeCocktailItem(item || { name: "", description: "", ingredients: [] });
+    // Style rollout B: save / cancel in the header (delete after a separator); ingredients drag by their grip
     const modal = openDialogModal(item ? "Edit Cocktail" : "Add Cocktail", `
       <form id="cocktail-item-form" class="form-grid">
         <label class="full">Name
@@ -13498,17 +13482,23 @@
           <textarea id="cocktail-item-description">${escapeHtml(draft.description)}</textarea>
         </label>
         <div class="full">
-          <div class="card-header">
-            <h3>Cocktail Ingredients</h3>
-            <div class="button-row">
-              ${iconButtonHtml("add", "Add ingredient", ` id="add-cocktail-ingredient"`)}
-            </div>
+          <div class="cocktail-ingredients-header">
+            <h3>Ingredients</h3>
+            ${iconButtonHtml("add", "Add ingredient", ` id="add-cocktail-ingredient"`)}
           </div>
           <div id="cocktail-item-ingredients-list" class="cocktail-ingredients-list"></div>
         </div>
-        ${modalActionButtonsHtml({ submitLabel: "Save cocktail" })}
       </form>
-    `, { hideClose: true });
+    `, {
+      hideClose: true,
+      headerActionsHtml: `
+        <div class="button-row modal-title-actions">
+          ${iconSubmitButtonHtml("save", "Save cocktail", ` form="cocktail-item-form"`)}
+          ${iconButtonHtml("cancel", "Cancel", ` data-modal-close`)}
+          ${item && typeof onDelete === "function" ? `<span class="header-sep"></span>${iconButtonHtml("remove", "Delete cocktail", ` data-action="delete-cocktail"`)}` : ""}
+        </div>
+      `
+    });
     const ingredientsContainer = modal.querySelector("#cocktail-item-ingredients-list");
     const drawIngredientEditorRows = () => {
       const ingredients = Array.isArray(draft.ingredients) ? draft.ingredients : [];
@@ -13516,37 +13506,18 @@
         ingredientsContainer.innerHTML = `<p class="muted">No ingredients yet.</p>`;
         return;
       }
-      ingredientsContainer.innerHTML = ingredients.map((ingredient, index) => {
-        return `
-          <div class="mini-item cocktail-ingredient-row" data-modal-ingredient-index="${index}">
-            <label>
-              <span>Ingredient ${index + 1}</span>
-              <input data-ingredient-name value="${escapeAttribute(ingredient && ingredient.name ? ingredient.name : "")}" placeholder="Ingredient name">
-            </label>
-            <div class="button-row">
-              ${orderingButtonsHtml("ingredient", index, ingredients.length)}
-              ${iconButtonHtml("remove", `Delete ingredient ${index + 1}`, ` data-action="delete-ingredient"`)}
-            </div>
-          </div>
-        `;
-      }).join("");
+      ingredientsContainer.innerHTML = ingredients.map((ingredient, index) => `
+        <div class="cocktail-ingredient-row" data-modal-ingredient-index="${index}">
+          ${ingredients.length > 1 ? dragHandleHtml(`Move ingredient ${index + 1}`, "ingredient-grip") : `<span class="drag-handle-spacer"></span>`}
+          <input data-ingredient-name value="${escapeAttribute(ingredient && ingredient.name ? ingredient.name : "")}" placeholder="Ingredient name" aria-label="Ingredient ${index + 1}">
+          ${iconButtonHtml("remove", `Delete ingredient ${index + 1}`, ` data-action="delete-ingredient"`)}
+        </div>
+      `).join("");
       ingredientsContainer.querySelectorAll("[data-modal-ingredient-index]").forEach(row => {
         const index = Number(row.dataset.modalIngredientIndex);
         row.querySelector("[data-ingredient-name]")?.addEventListener("input", event => {
           draft.ingredients[index].name = event.target.value;
           markModalDirty(modal);
-        });
-        row.querySelector("[data-action='move-up']").addEventListener("click", () => {
-          if (moveListItem(draft.ingredients, index, -1)) {
-            markModalDirty(modal);
-            drawIngredientEditorRows();
-          }
-        });
-        row.querySelector("[data-action='move-down']").addEventListener("click", () => {
-          if (moveListItem(draft.ingredients, index, 1)) {
-            markModalDirty(modal);
-            drawIngredientEditorRows();
-          }
         });
         row.querySelector("[data-action='delete-ingredient']").addEventListener("click", async () => {
           if (!await showAdminConfirm({
@@ -13564,12 +13535,42 @@
         });
       });
     };
+    window.IolantheDragReorder.attach(ingredientsContainer, {
+      items: () => [...ingredientsContainer.querySelectorAll(":scope > .cocktail-ingredient-row")],
+      handleSelector: ".ingredient-grip",
+      onMove: (from, to) => {
+        draft.ingredients.splice(0, draft.ingredients.length, ...window.IolantheDragReorder.moveItem(draft.ingredients, from, to));
+        markModalDirty(modal);
+        drawIngredientEditorRows();
+      },
+      afterMove: to => {
+        ingredientsContainer.querySelectorAll(".ingredient-grip")[to]?.focus();
+      }
+    });
     modal.querySelector("#add-cocktail-ingredient").addEventListener("click", () => {
       draft.ingredients.push({ name: "" });
       markModalDirty(modal);
       drawIngredientEditorRows();
+      ingredientsContainer.querySelector(".cocktail-ingredient-row:last-child input")?.focus();
     });
     drawIngredientEditorRows();
+    const deleteCocktailButton = modal.querySelector("[data-action='delete-cocktail']");
+    if (deleteCocktailButton) {
+      deleteCocktailButton.addEventListener("click", async () => {
+        if (!await showAdminConfirm({
+          title: "Delete Cocktail",
+          message: `Delete ${item.name || "this cocktail"}?`,
+          confirmLabel: "Delete",
+          cancelLabel: "Cancel",
+          tone: "danger"
+        })) {
+          return;
+        }
+        markModalSaved(modal);
+        await closeDialogModal();
+        onDelete();
+      });
+    }
     modal.querySelector("#cocktail-item-form").addEventListener("submit", event => {
       event.preventDefault();
       onSave({
@@ -13593,55 +13594,46 @@
       container.innerHTML = `<p class="muted">No cocktails yet.</p>`;
       return;
     }
+    // Style rollout B: tap a cocktail to edit it (delete is in the dialog); drag the grip to change the order
+    const movable = cocktails.cocktails.length > 1;
     cocktails.cocktails.forEach((cocktail, index) => {
+      const name = cocktail.name || `Cocktail ${index + 1}`;
+      const ingredients = cocktailIngredientListText(cocktail.ingredients);
       const row = document.createElement("div");
-      row.className = "record-row cocktails-row";
+      row.className = "cocktails-row";
       row.innerHTML = `
-        <div class="record-summary cocktails-summary">
-          <strong>${escapeHtml(cocktail.name || `Cocktail ${index + 1}`)}</strong>
-          ${cocktail.description ? `<span class="full muted multiline-text">${escapeHtml(cocktail.description)}</span>` : ""}
-          ${cocktailIngredientListText(cocktail.ingredients) ? `<span class="full cocktail-ingredient-list-preview">${escapeHtml(cocktailIngredientListText(cocktail.ingredients))}</span>` : ""}
-        </div>
-        <div class="button-row record-actions">
-          ${orderingButtonsHtml("cocktail", index, cocktails.cocktails.length)}
-          ${iconButtonHtml("edit", "Edit cocktail", ` data-action="edit-cocktail"`)}
-          ${iconButtonHtml("remove", "Delete cocktail", ` data-action="delete-cocktail"`)}
-        </div>
+        ${movable ? dragHandleHtml(`Move ${name}`, "cocktail-grip") : `<span class="drag-handle-spacer"></span>`}
+        <span class="cocktails-text">
+          <strong>${escapeHtml(name)}</strong>
+          ${cocktail.description ? `<span class="cocktails-description">${escapeHtml(cocktail.description)}</span>` : ""}
+          ${ingredients ? `<span class="cocktail-ingredient-list-preview">${escapeHtml(ingredients)}</span>` : ""}
+        </span>
+        ${rowChevronHtml()}
       `;
-      row.querySelector("[data-action='move-up']").addEventListener("click", () => {
-        if (moveListItem(cocktails.cocktails, index, -1)) {
-          markDirty();
-          redraw();
-        }
-      });
-      row.querySelector("[data-action='move-down']").addEventListener("click", () => {
-        if (moveListItem(cocktails.cocktails, index, 1)) {
-          markDirty();
-          redraw();
-        }
-      });
-      row.querySelector("[data-action='edit-cocktail']").addEventListener("click", () => {
+      bindTapRow(row, "Edit cocktail", () => {
         openCocktailItemModal(cocktail, updated => {
           cocktails.cocktails[index] = normalizeCocktailItem(updated);
           markDirty();
           redraw();
+        }, () => {
+          cocktails.cocktails.splice(index, 1);
+          markDirty();
+          redraw();
         });
       });
-      row.querySelector("[data-action='delete-cocktail']").addEventListener("click", async () => {
-        if (!await showAdminConfirm({
-          title: "Delete Cocktail",
-          message: `Delete ${cocktail.name || "this cocktail"}?`,
-          confirmLabel: "Delete",
-          cancelLabel: "Cancel",
-          tone: "danger"
-        })) {
-          return;
-        }
-        cocktails.cocktails.splice(index, 1);
+      container.appendChild(row);
+    });
+    window.IolantheDragReorder.attach(container, {
+      items: () => [...container.querySelectorAll(":scope > .cocktails-row")],
+      handleSelector: ".cocktail-grip",
+      onMove: (from, to) => {
+        cocktails.cocktails.splice(0, cocktails.cocktails.length, ...window.IolantheDragReorder.moveItem(cocktails.cocktails, from, to));
         markDirty();
         redraw();
-      });
-      container.appendChild(row);
+      },
+      afterMove: to => {
+        container.querySelectorAll(".cocktail-grip")[to]?.focus();
+      }
     });
   }
 

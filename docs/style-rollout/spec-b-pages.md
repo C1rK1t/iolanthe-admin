@@ -267,3 +267,23 @@ No mockup (a log with one action per row); built directly and shown in the PR.
 per-cell label rules removed). 177 tests. Browser pass with a temporary purchases file on charter "New" (3 active, 1
 reversed; deleted afterwards): tiles "7000 PHP + 35 USD" and 3; rows newest first with 24-hour times; reverse asks
 first (cancelled); Print Bill opens the bill; 390 px two lines, no sideways scroll.
+
+**2026-10-09 LIVE:** PR iolanthe-admin#33 merged (`fadffd6`) and pulled onto the boat.
+
+## Cocktails (2026-10-09)
+
+No mockup (the established patterns); built directly and shown in the PR. The last Move up / Move down pairs in the
+admin were here.
+
+- **SB-K1 List:** tap a cocktail to edit; one 52 px row: grip, name, the description and the ingredients on a line each
+  (ellipsis). Drag the grip to change the order (the page still saves as a whole). Header: add, preview, separator,
+  save, cancel; the line under the title says the list is shared by every charter.
+- **SB-K2 Dialog:** save and cancel in the header (were at the bottom), delete after a separator (same confirmation).
+  Ingredients: a grip, the name field and a quieter remove (grey with a red icon, 32 px; same confirmation); "+"
+  focuses the new ingredient.
+- **SB-K3 Clean-up:** `orderingButtonsHtml` and `moveListItem` had no callers left and were removed; the move-up /
+  move-down icons stay in `buttonIconSvg` (unused).
+
+**2026-10-09 EXECUTED** on `feat/cocktails-b` (assets `admin-cocktails-b`). 177 tests. Browser pass (14 cocktails): keyboard
+move of a cocktail and of an ingredient with focus kept; dialog save renamed a cocktail in the list; delete and
+ingredient delete ask first (cancelled); Cancel on the page discarded everything; 390 px without sideways scroll.
