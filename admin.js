@@ -7148,7 +7148,8 @@
     const inactiveDays = inactiveMenuDays(menus).map((day, index) => normalizeMenuDay(day, itineraryDayCount + index + 1));
 
     while (activeDays.length < itineraryDayCount) {
-      activeDays.push(blankMenuDay(activeDays.length + 1));
+      const takenIds = new Set([...activeDays, ...inactiveDays].map(day => day.id).filter(Boolean));
+      activeDays.push({ ...blankMenuDay(activeDays.length + 1), id: mergeCore().newId("m", takenIds) });
     }
     if (activeDays.length > itineraryDayCount) {
       const excessDays = activeDays.slice(itineraryDayCount);
@@ -7502,7 +7503,21 @@
       });
   }
 
-  function openMenuDayModal(menus, menuIndex, itinerary, itineraryDayCount, dateLabel) {
+  // Spec C: the day dialog's element for each field of a day's menu, for the clash marks
+  const MENU_DAY_CLASH_FIELDS = Object.freeze({
+    label: "#menu-day-title",
+    title: "#menu-day-title",
+    todays_notes: "#menu-day-notes",
+    notes: "#menu-day-notes",
+    breakfast: ["#menu-day-section-list", "Breakfast"],
+    lunch: ["#menu-day-section-list", "Lunch"],
+    dinner: ["#menu-day-section-list", "Dinner"],
+    snacks: ["#menu-day-section-list", "Snacks"],
+    children: ["#menu-day-section-list", "Other sections"]
+  });
+
+  // clash (spec C §4.1): menus is a copy of theirs with my day on top at menuIndex; the dialog is marked.
+  function openMenuDayModal(menus, menuIndex, itinerary, itineraryDayCount, dateLabel, clash) {
     const original = menus.menus[menuIndex];
     if (!original) {
       return;
@@ -7547,6 +7562,7 @@
       });
     };
     redrawSections();
+    showClashMarks(modal, clash, MENU_DAY_CLASH_FIELDS, modal.querySelector("#menu-day-form"));
     modal.querySelector("#clone-menu-day").addEventListener("click", () => {
       openMenuDayCloneEditor(modal, menus, menuIndex, dayNumber, sourceDay => {
         const sourceCopy = cloneData(sourceDay);
@@ -7580,7 +7596,7 @@
       closeDialogModal();
       if (inactiveDay) {
         menus.menus = menus.menus.filter(entry => entry !== original);
-        await saveMenusAndRender(menus, "Inactive menu deleted.");
+        await saveMenusAndRender(menus, "Inactive menu deleted.", { onClash: result => deleteMenuDayAnyway(result, original.id) });
         return;
       }
       clearMenuDayData(original);
@@ -7599,12 +7615,48 @@
       }
       applyMenuSectionsToDay(original, sectionDrafts);
       syncMenusToItineraryDays(menus, itineraryDayCount);
-      const saved = await saveMenusAndRender(menus, "Menu day saved.");
+      const saved = await saveMenusAndRender(menus, "Menu day saved.", {
+        onClash: result => reopenMenuDayAfterClash(result, original.id, itinerary, itineraryDayCount, dateLabel)
+      });
       if (saved) {
         markModalSaved(modal);
         closeDialogModal();
       }
     });
+  }
+
+  // Spec C §4.1: the day dialog reopens on a copy of their menus with my day on top; the page shows theirs.
+  async function reopenMenuDayAfterClash(result, id, itinerary, itineraryDayCount, dateLabel) {
+    await closeDialogModal({ force: true });
+    await renderGalley();   // the page shows theirs (and may save its sync to the itinerary days) before the dialog opens
+    const clash = recordClash(result, "menus", id, "this day's menu");
+    if (!clash || !clash.record) {
+      setStatus(clashMessage(result, "the menus"), "error");
+      return;
+    }
+    const menus = normalizeMenus(state.bundle && state.bundle["menus.json"] ? state.bundle["menus.json"] : result.theirs);
+    const at = menus.menus.findIndex(day => day.id === id);
+    if (at >= 0) {
+      menus.menus[at] = normalizeMenuDay(clash.record, at + 1);
+    } else {
+      menus.menus.push(normalizeMenuDay(clash.record, menus.menus.length + 1));   // adding back a day someone deleted
+    }
+    openMenuDayModal(menus, at >= 0 ? at : menus.menus.length - 1, itinerary, itineraryDayCount, dateLabel, clash);
+  }
+
+  // Spec C SC-D7: I deleted an inactive menu someone else changed.
+  async function deleteMenuDayAnyway(result, id) {
+    const clash = recordClash(result, "menus", id, "this inactive menu");
+    if (clash && clash.deletedByMe && await confirmDeleteAnyway(clash)) {
+      const menus = normalizeMenus(result.theirs);
+      menus.menus = menus.menus.filter(day => day.id !== id);
+      await saveMenusAndRender(menus, "Inactive menu deleted.");
+      return;
+    }
+    if (!clash || !clash.deletedByMe) {
+      setStatus(clashMessage(result, "the menus"), "error");
+    }
+    renderGalley();
   }
 
   function openMenuDayCloneEditor(modal, menus, currentIndex, destinationDayNumber, onClone) {
@@ -8198,8 +8250,8 @@
     return true;
   }
 
-  async function saveMenusAndRender(menus, successMessage) {
-    const saved = await saveCharterFile("menus.json", menus, successMessage);
+  async function saveMenusAndRender(menus, successMessage, options = {}) {
+    const saved = await saveCharterFile("menus.json", menus, successMessage, options);
     if (saved) {
       state.bundle = state.bundle || {};
       state.bundle["menus.json"] = cloneData(saved);
