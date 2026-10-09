@@ -135,3 +135,12 @@ on-board guest portal, not for a document sent before the charter:
 **Options:** (a) a per-section "include in charter pack" flag on the vessel sections, set once where the vessel text
 is edited; (b) section tick-boxes on the Charter Pack page; (c) reword the portal text so it reads well in both places
 (for example "the vessel safety brief" without "included in this pack"); (a) or (b) together with (c) is likely best.
+
+### Settings → Vessel tab: cabins and other vessel specifics (David, 2026-10-09)
+
+A **Vessel** tab under Settings where the vessel's own details are managed, starting with the cabins: how many, each
+cabin's name, berths and occupancy (and similar specifics). Guests are then assigned to named cabins instead of the
+bare codes used today (A1, B2…). Today a guest's cabin is a free pick from the `cabins` list in the admin selections
+(`/api/admin/selections`, read by `guestSelectionLibraryValues("cabin")`): plain strings with no berths or occupancy.
+Needs a server side (where the vessel record lives, migration of existing cabin codes) as well as the admin page; the
+Hotel → Guests cabin tag (style rollout B) would then show the cabin name.
