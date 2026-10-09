@@ -30,6 +30,11 @@ Estimate fuel burn for a charter from its assigned route.
 
 *Requested by the captain, 2026-10-07, during the Route Planner review.*
 
+**Status (2026-10-09):** largely delivered by the **Charter Pack** (charter rework spec P,
+[charter-rework/spec-pack.md](charter-rework/spec-pack.md)), live on the boat: charter summary, day-by-day itinerary
+with a route map, crew and yacht, menus and drinks, saved as a PDF from the browser. Its follow-ups are under
+*Charter pack* below.
+
 A report to send to clients before or during a charter. It's an **itinerary report** that includes a **route
 overview**, not a separate route report.
 - **Contents:** charter name and dates, the day-by-day itinerary (sites, activities) and an overview map of the
@@ -84,3 +89,49 @@ Cocktails (ingredients). It must work with touch on the bridge tablet (pointer e
 drag and drop, which does not fire on touch) and keep a keyboard way to move an item. One shared helper, `drag-reorder.js`,
 built with the Galley Menus phase B page (2026-10-09); Guests, Guest Alcohol and Cocktails switch to it in their
 phase B passes (`docs/style-rollout/spec-b-pages.md`).
+
+## Charter pack
+
+Follow-ups pinned by David on 2026-10-09, after the first Save as PDF from the live Charter Pack (spec P,
+[charter-rework/spec-pack.md](charter-rework/spec-pack.md)). The captain makes packs on the bridge PC and on a laptop
+on the Bridge VLAN.
+
+### A dedicated Save / Download PDF button
+
+Save as PDF goes through the browser's print dialog today (Destination "Save as PDF", Margins default, Background
+graphics on, Headers and footers off). The captain may not get on with that, so a button that simply downloads the
+PDF would be easier.
+
+- **The catch:** a browser cannot write a real PDF of the page by itself, so a one-click download needs a renderer.
+- **Options to weigh:**
+  - Server-side: headless Chromium in its own container on docker-vm (not in `iolanthe-server`, which takes no npm
+    dependencies), rendering the pack page with `printToPDF` and returning the file. Same output as today's print;
+    roughly 300 MB+ of image.
+  - Phase 2: render the PDF on the zenvue droplet when the pack is published to the web mini-site.
+  - Client-side: rasterise the pages (html2canvas + jsPDF, vendored). No server work, but image-only PDFs: larger
+    files, softer text, no selectable text.
+- Keep the print dialog as the fallback either way.
+
+### Cover title: the charter name instead of "start → end"
+
+The cover's line under the vessel name is the first and last stop ("Cebu Yacht Club → Port Caltom"), which does not
+read well. Use the **charter name** (`charter.json` `name`) instead; keep the dates line.
+
+- **To decide:** charter names must then read well to a client (scratch charters are called "New" and the like), so
+  either name charters for the client, or add a **pack title** field to the pack settings that defaults to the
+  charter name.
+
+### Yacht information written for on board
+
+The Crew & Yacht section prints every section of `library/vessel.json`, and some of that text was written for the
+on-board guest portal, not for a document sent before the charter:
+
+- General Notes item 1: "...the vessel safety brief **included in this pack**, including the evacuation route from your
+  cabin" (the safety brief and escape routes are not in the charter pack).
+- General Notes item 2: life jackets and fire extinguishers "located in each cabin".
+- Waivers and Disclaimers: completed on board.
+- Sports Equipment, by contrast, suits a proposal well.
+
+**Options:** (a) a per-section "include in charter pack" flag on the vessel sections, set once where the vessel text
+is edited; (b) section tick-boxes on the Charter Pack page; (c) reword the portal text so it reads well in both places
+(for example "the vessel safety brief" without "included in this pack"); (a) or (b) together with (c) is likely best.

@@ -624,3 +624,8 @@ suggested zenvue.app. Spec: [spec-pack.md](spec-pack.md). Mockups in `.superpowe
   duplicate pages where print() does not block). Not fixed: an edit typed less than 800 ms before closing the tab is
   not saved (no pagehide flush). Found and raised separately (a pre-existing server issue): `/data/` serves every
   DATA_DIR file except settings.json without a session.
+- **2026-10-09 spec P LIVE** (server#7 ec0b0ea released, admin#24 d588c08). David's first Save as PDF looked good.
+  Devices: the captain makes packs on the bridge PC and on a laptop on the Bridge VLAN, so the tested Chrome/Edge
+  print path covers both (assuming Chrome or Edge on the laptop); the iPad/Safari question is closed. Pinned for later
+  in `docs/BACKLOG.md` → *Charter pack*: a dedicated Save / Download PDF button, the charter name as the cover title,
+  and yacht information written for on board (General Notes mention the safety brief "included in this pack").
