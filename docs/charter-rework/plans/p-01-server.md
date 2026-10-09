@@ -11,9 +11,9 @@
 one route block in front of the existing `charterMatch`. No new data endpoint: the admin reads the pack's content from
 `GET /api/charter?charter=<id>` (spec B).
 
-**Tech Stack:** Node ≥ 18, no dependencies, `node --test` (107 tests → 116). Server repo from `main` at `f8939ab` or later.
+**Tech Stack:** Node ≥ 18, no dependencies, `node --test` (107 tests → 117). Server repo from `main` at `f8939ab` or later.
 
-**Dry-run (done while planning):** this plan's text was applied to a copy of `main` at `f8939ab`: `node --test` 116/116,
+**Dry-run (done while planning):** this plan's text was applied to a copy of `main` at `f8939ab`: `node --test` 117/117,
 `node --check server.js` clean, and the endpoints exercised on a scratch server (Task 4's script): 401 without a session,
 404 unknown charter, defaults at revision 0, PUT 200 → 409 stale → 400 bad theme, JPEG cover 201 / GIF 400, cover GET
 200 `image/jpeg`, 401 without a session, 404 for traversal and missing names, 405 for DELETE.
@@ -161,17 +161,31 @@ test("saveCover: stores cover-<time>.<ext> in pack/ and refuses empty, oversized
   assert.throws(() => lib.saveCover(dir, Buffer.alloc(lib.COVER_MAX_BYTES + 1), "image/png"), (e) => e.statusCode === 413);
 });
 
-test("a saved cover can be chosen; saving the pack removes the covers it no longer uses", () => {
+test("covers: a save deletes only the cover it replaces; an upload deletes older unclaimed uploads", () => {
   const dir = charterDir();
+  const files = () => fs.readdirSync(path.join(dir, "pack")).sort();
   const first = lib.saveCover(dir, Buffer.from("one"), "image/png", 1700000000000);
-  const saved = lib.savePack(dir, { pack: { ...VALID, cover_image: first }, base_revision: 0 });
-  assert.equal(saved.pack.cover_image, first);
+  assert.equal(lib.savePack(dir, { pack: { ...VALID, cover_image: first }, base_revision: 0 }).pack.cover_image, first);
   const second = lib.saveCover(dir, Buffer.from("two"), "image/webp", 1700000000001);
-  assert.ok(fs.existsSync(path.join(dir, "pack", first)), "the old cover stays until the pack stops using it");
-  lib.savePack(dir, { pack: { ...VALID, cover_image: second }, base_revision: 1 });
-  assert.deepEqual(fs.readdirSync(path.join(dir, "pack")), [second]);
+  assert.deepEqual(files(), [first, second], "the cover in use stays until the pack stops using it");
+  const third = lib.saveCover(dir, Buffer.from("three"), "image/jpeg", 1700000000002);
+  assert.deepEqual(files(), [first, third], "an upload nobody saved is replaced by the next upload");
+  lib.savePack(dir, { pack: { ...VALID, cover_image: third }, base_revision: 1 });
+  assert.deepEqual(files(), [third]);
   lib.savePack(dir, { pack: { ...VALID, cover_image: null }, base_revision: 2 });
-  assert.deepEqual(fs.readdirSync(path.join(dir, "pack")), []);
+  assert.deepEqual(files(), []);
+});
+
+test("covers: a save that still names the old cover does not delete a fresh upload", () => {
+  const dir = charterDir();
+  const files = () => fs.readdirSync(path.join(dir, "pack")).sort();
+  const a = lib.saveCover(dir, Buffer.from("a"), "image/jpeg", 1700000000000);
+  lib.savePack(dir, { pack: { ...VALID, cover_image: a }, base_revision: 0 });
+  const b = lib.saveCover(dir, Buffer.from("b"), "image/jpeg", 1700000000001);
+  lib.savePack(dir, { pack: { ...VALID, prepared_for: "typed meanwhile", cover_image: a }, base_revision: 1 });
+  assert.deepEqual(files(), [a, b]);
+  assert.equal(lib.savePack(dir, { pack: { ...VALID, cover_image: b }, base_revision: 2 }).pack.cover_image, b);
+  assert.deepEqual(files(), [b]);
 });
 
 test("coverFile: only an existing cover-<time>.<ext> inside pack/", () => {
@@ -277,7 +291,8 @@ function packError(pack, charterDir) {
   return null;
 }
 
-function removeUnusedCovers(charterDir, keep) {
+// Deletes the cover files not named in keep (an array of names).
+function removeCoversExcept(charterDir, keep) {
   const dir = path.join(charterDir, COVER_DIR);
   let names = [];
   try {
@@ -285,7 +300,7 @@ function removeUnusedCovers(charterDir, keep) {
   } catch (error) {
     return;
   }
-  names.filter((name) => COVER_NAME_RE.test(name) && name !== keep).forEach((name) => fs.rmSync(path.join(dir, name), { force: true }));
+  names.filter((name) => COVER_NAME_RE.test(name) && !keep.includes(name)).forEach((name) => fs.rmSync(path.join(dir, name), { force: true }));
 }
 
 // body: { pack, base_revision } -> { revision, pack }
@@ -312,7 +327,10 @@ function savePack(charterDir, body) {
   const filePath = path.join(charterDir, FILE_NAME);
   fs.writeFileSync(`${filePath}.tmp`, `${JSON.stringify(saved, null, 2)}\n`);
   fs.renameSync(`${filePath}.tmp`, filePath);
-  removeUnusedCovers(charterDir, pack.cover_image);
+  // Only the cover this save replaces goes: a newer upload that a later save will name must survive (review H2).
+  if (stored.pack.cover_image && stored.pack.cover_image !== pack.cover_image) {
+    fs.rmSync(path.join(charterDir, COVER_DIR, stored.pack.cover_image), { force: true });
+  }
   return { revision: saved.revision, pack };
 }
 
@@ -321,7 +339,8 @@ function coverExtension(contentType) {
   return COVER_TYPES[type] || null;
 }
 
-// Stores an uploaded cover and returns its file name. The pack keeps using its old cover until it is saved with the new one.
+// Stores an uploaded cover and returns its file name. The pack keeps using its old cover until it is saved with the new
+// one; older uploads that no save ever named are deleted here.
 function saveCover(charterDir, buffer, contentType, now = Date.now()) {
   const extension = coverExtension(contentType);
   if (!extension) {
@@ -341,14 +360,15 @@ function saveCover(charterDir, buffer, contentType, now = Date.now()) {
   }
   const name = `cover-${stamp}${extension}`;
   fs.writeFileSync(path.join(dir, name), buffer, { flag: "wx" });
+  removeCoversExcept(charterDir, [readPack(charterDir).pack.cover_image, name]);
   return name;
 }
 
 module.exports = { FILE_NAME, THEMES, TYPES, SECTIONS, COVER_MAX_BYTES, defaultPack, readPack, savePack, coverExtension, saveCover, coverFile };
 ```
 
-- [ ] **Step 4: Run the tests.** `node --test test/charter-pack.test.js` → `ℹ pass 9`, `ℹ fail 0`. Then `node --test` →
-  `ℹ pass 116`, `ℹ fail 0`.
+- [ ] **Step 4: Run the tests.** `node --test test/charter-pack.test.js` → `ℹ pass 10`, `ℹ fail 0`. Then `node --test` →
+  `ℹ pass 117`, `ℹ fail 0`.
 
 - [ ] **Step 5: Commit.**
 
@@ -402,12 +422,13 @@ with
     // Charter pack (spec P §5): the preset, the cover upload and the cover file, for a Charter-section admin session.
     const packMatch = pathname.match(/^\/api\/admin\/charter\/([a-z0-9-]+)\/pack(?:\/cover(?:\/([A-Za-z0-9.-]+))?)?$/);
     if (packMatch) {
+      // The session check comes first, so a caller without one cannot tell which charter ids exist.
+      if (!requireAdmin(request, response, url, { section: "charter" })) {
+        return;
+      }
       const charterId = validateAdminCharterId(packMatch[1]);
       if (!charterId || !hasCharterDirectory(charterId)) {
         sendAdminError(response, 404, "Unknown charter");
-        return;
-      }
-      if (!requireAdmin(request, response, url, { section: "charter" })) {
         return;
       }
       const charterDir = path.join(CHARTERS_DIR, charterId);
@@ -424,10 +445,11 @@ with
       if (isCover && !coverName && method === "POST") {
         const length = Number(request.headers["content-length"]);
         if (Number.isFinite(length) && length > charterPackLib.COVER_MAX_BYTES) {
-          sendAdminError(response, 413, "The cover photo must be 10 MB or smaller.");
+          sendAdminError(response, 413, "The cover photo is too large (10 MB max).");
           return;
         }
-        const buffer = await readRequestBody(request, charterPackLib.COVER_MAX_BYTES, "The cover photo must be 10 MB or smaller.");
+        // "too large" in the message is what the admin error handler maps to 413 for a chunked upload.
+        const buffer = await readRequestBody(request, charterPackLib.COVER_MAX_BYTES, "The cover photo is too large (10 MB max).");
         sendJson(response, 201, { cover_image: charterPackLib.saveCover(charterDir, buffer, request.headers["content-type"]) });
         return;
       }
@@ -447,7 +469,7 @@ with
     const charterMatch = pathname.match(/^\/api\/admin\/charter\/([a-z0-9-]+)(?:\/(save|itinerary\/save|itinerary\/import))?$/);
 ```
 
-- [ ] **Step 2: Check.** `node --check server.js` (no output) and `node --test` → `ℹ pass 116`.
+- [ ] **Step 2: Check.** `node --check server.js` (no output) and `node --test` → `ℹ pass 117`.
 
 - [ ] **Step 3: Commit.**
 
@@ -512,7 +534,7 @@ Unit tests use Node's built-in runner (no npm packages): `npm test` (same as `no
 with
 
 ```md
-Unit tests use Node's built-in runner (no npm packages): `npm test` (same as `node --test`, 116 tests). They cover `lib/`
+Unit tests use Node's built-in runner (no npm packages): `npm test` (same as `node --test`, 117 tests). They cover `lib/`
 ```
 
 - [ ] **Step 2: Commit.**

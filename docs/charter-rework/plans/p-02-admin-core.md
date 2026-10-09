@@ -14,10 +14,10 @@ blocks. No DOM, no admin globals, so both run under `node --test` and phase 2 ca
 `max(charter days, route days)`, so a route that runs past the charter still shows every stop; the cover's "days" tile is
 the charter's own length.
 
-**Tech Stack:** plain JS, `node --test` (146 tests → 168). Admin repo from `main` at `e108e7e` or later.
+**Tech Stack:** plain JS, `node --test` (146 tests → 169). Admin repo from `main` at `e108e7e` or later.
 
 **Dry-run (done while planning):** both modules, both test files and the fixture were assembled from this plan's text
-onto a copy of `main` at `e108e7e`: `node --test` 168/168; then used by plan P-3's page in the browser on a scratch server.
+onto a copy of `main` at `e108e7e`: `node --test` 169/169; then used by plan P-3's page in the browser on a scratch server.
 
 **Shared checkout hazard:** another Claude session may work in the same checkouts. **Never** run `git checkout`,
 `git switch`, `git stash` or `git add -A` in the main checkouts under `S:/Users/David/OneDrive/Maker Space/GitHub`. All
@@ -909,6 +909,12 @@ test("renderPack: escapes text from the charter data", () => {
   assert.match(html, /&lt;script&gt;alert\(1\)&lt;\/script&gt; &amp; &quot;hi&quot;/);
 });
 
+test("renderPack: the welcome text becomes one paragraph per line", () => {
+  const data = { ...csaba, itinerary: { ...csaba.itinerary, welcome_message: "First line.\n\nSecond line.\nThird." } };
+  const out = render.renderPack(core.buildPackModel(data, core.defaultPack()), OPTS);
+  assert.equal(out.sections[0].blocks[1], '<div class="pack-block pack-welcome"><p>First line.</p><p>Second line.</p><p>Third.</p></div>');
+});
+
 test("renderPack: one entry per section, with blocks the paginator can move", () => {
   const out = render.renderPack(model(), OPTS);
   assert.deepEqual(out.sections.map((s) => s.id), ["summary", "route", "crew", "menus"]);
@@ -966,6 +972,8 @@ test("coverPageHtml wraps the cover", () => {
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   const lines = (value) => esc(value).replace(/\r?\n/g, "<br>");
   const block = (cls, inner) => `<div class="pack-block ${cls}">${inner}</div>`;
+  // One <p> per line, so a long text can continue on the next page (charter-pack.js splits blocks by paragraph).
+  const paragraphs = (value) => String(value || "").split(/\r?\n+/).map((t) => t.trim()).filter(Boolean).map((t) => `<p>${esc(t)}</p>`).join("");
 
   // Behind every inner page: IOLANTHE up the left edge, full height, and the vessel line art lower right (P-D8).
   const BRANDING = '<svg class="pack-wm" viewBox="0 0 210 297" preserveAspectRatio="none" aria-hidden="true">'
@@ -996,7 +1004,7 @@ test("coverPageHtml wraps the cover", () => {
     const facts = section.rows.map((r) => `<dt>${esc(r.label)}</dt><dd>${esc(r.value)}</dd>`).join("");
     return [
       block("pack-facts-block", `<dl class="pack-facts">${facts}</dl>`),
-      ...(section.welcome ? [block("pack-welcome", `<p>${lines(section.welcome)}</p>`)] : [])
+      ...(section.welcome ? [block("pack-welcome", paragraphs(section.welcome))] : [])
     ];
   }
 
@@ -1016,7 +1024,7 @@ test("coverPageHtml wraps the cover", () => {
 
   function crewBlocks(section) {
     const out = [];
-    if (section.description) out.push(block("pack-welcome", `<p>${lines(section.description)}</p>`));
+    if (section.description) out.push(block("pack-welcome", paragraphs(section.description)));
     if (section.details.length) {
       out.push(block("pack-specs-block", `<h3>The yacht</h3><dl class="pack-specs">${section.details.map((d) => `<dt>${esc(d.label)}</dt><dd>${esc(d.value)}</dd>`).join("")}</dl>`));
     }
@@ -1073,7 +1081,7 @@ test("coverPageHtml wraps the cover", () => {
 });
 ```
 
-- [ ] **Step 4: Run the tests.** `node --test test/pack-render.test.js` → `ℹ pass 7`. `node --test` → `ℹ pass 168`.
+- [ ] **Step 4: Run the tests.** `node --test test/pack-render.test.js` → `ℹ pass 8`. `node --test` → `ℹ pass 169`.
 
 - [ ] **Step 5: Commit.**
 

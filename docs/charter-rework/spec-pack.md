@@ -47,7 +47,7 @@ Ended charters (the read-only guard is off today) behave like any other: the pac
 
 ## 2. The pack document (P-D4, P-D7 … P-D10)
 
-A4 portrait, 12 mm margins, `@page { size: A4; margin: 0 }` with the margin drawn inside each page box so the
+A4 portrait, about 14 mm margins (16 mm on the left, beside the watermark), `@page { size: A4; margin: 0 }` with the margin drawn inside each page box so the
 watermark reaches the edge. Pages, in order, each only when its section is ticked and it has content:
 
 1. **Cover** (always). The cover photo (top ~58% of the page, `object-fit: cover`), then the title block:
@@ -106,8 +106,9 @@ A Leaflet map in the Route & itinerary page, built only for the pack (Leaflet lo
 - **Overlap**: at the map's print size and fitted zoom, markers closer than 18 px merge into one marker carrying both
   labels ("3, 4"); the key keeps one line per stop.
 - **Fit**: bounds of the route with 8 % padding; fixed size (full content width × 90 mm).
-- **Loading**: Save as PDF stays disabled with a "Loading map…" hint until the tiles report `load`; after 15 s, or on a
-  tile error, the map is replaced by "Map couldn't load — the route is listed below" and printing is allowed.
+- **Loading**: Save as PDF stays disabled with a "Loading map…" hint until the tiles report `load`; after 15 s, or when
+  no tile loaded at all (no internet; a few missing tiles are fine), the map is replaced by "Map couldn't load — the
+  route is listed below" and printing is allowed. A failed map stays failed until the page is reopened.
 - A charter with no stops shows no map and no key.
 
 ## 4. Data used
@@ -131,8 +132,9 @@ prints `vessel.json`; correct whichever is wrong.
   or the name of a file in the charter's pack folder.
 - `POST /api/admin/charter/<id>/pack/cover` uploads the cover, following the existing
   `/api/admin/sites/images/upload` pattern (`siteMediaUploadInfo`-style type check, image types only, 10 MB cap,
-  `readRequestBody` with a limit). Stored as `charters/<id>/pack/cover-<timestamp>.<ext>`; the previous upload is
-  deleted when replaced. Returns the file name; the admin then saves it into the preset.
+  `readRequestBody` with a limit). Stored as `charters/<id>/pack/cover-<timestamp>.<ext>`. A save deletes only the cover
+  it replaces; an upload deletes older uploads no save ever named (Fable review H2). Returns the file name; the admin
+  then saves it into the preset.
 - `GET /api/admin/charter/<id>/pack/cover/<file>` serves it, admin session only, with a strict file-name check (no
   path traversal).
 - All four routes need the Charter Admin session, like the rest of `/api/admin/charter/*`.
@@ -172,7 +174,8 @@ prints `vessel.json`; correct whichever is wrong.
 ## 9. Out of scope
 
 Phase 2 (the zenvue.app mini-site); crew photos (P-D12); picking individual days or menu days; emailing the pack from
-the admin; prices or contracts.
+the admin; prices or contracts. Known gap: custom menu sections beyond breakfast / lunch / dinner / snacks are not in
+the pack (the guest site ignores them too).
 
 ## 10. Before planning
 

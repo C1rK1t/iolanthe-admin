@@ -599,3 +599,12 @@ suggested zenvue.app. Spec: [spec-pack.md](spec-pack.md). Mockups in `.superpowe
   Source: the Apo Reef dive map (`images/sites/map.jpeg`, credited snorkeling-report.com), so we draw our own
   icon in that spirit (SVG or CSS), not a copy. Today the admin uses a teardrop pin (`.mk-site`, routes.css) and the guest a plain `circleMarker`. Not scheduled;
   pick it up with the next map work.
+- **P-D16 Plans and review (2026-10-09).** Plans `plans/p-01-server.md`, `p-02-admin-core.md`, `p-03-admin-page.md`,
+  written from a dry run (the plan text rebuilds the tested code exactly: server 117, admin 169 tests). No new data
+  endpoint: the pack reads `/api/charter?charter=<id>`. The route list runs to the longer of the charter and the route
+  (csaba's route goes to day 11 of a 9-day charter); the cover's days tile is the charter's. Fable reviewed the plans
+  (ready after fixes); folded in: saves one at a time (H1), cover clean-up that cannot delete a fresh upload (H2), blocks
+  taller than a page split with "(continued)" headings (H3), no tiles at all = map failed and it stays failed (M1, M2),
+  print the live pages not a copy (M3), 413 for an oversize chunked upload (M4), session check before the charter lookup
+  (L1), map errors caught (L7). A real print (headless Chrome `printToPDF`) found the stamp's white ground showing as a
+  box; fixed with `mix-blend-mode`. Default tiles: Esri World Light Gray Base.

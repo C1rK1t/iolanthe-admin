@@ -20,12 +20,22 @@ P-2 committed in the same worktree and plan P-1's server for the browser pass.
 
 **Dry-run (done while planning):** the files and replacements below were applied to a copy of admin `main` at `e108e7e`
 (with P-2) and served by plan P-1's dry-run server on a scratch data copy: `node --check` clean on all four JS files,
-`node --test` 168/168; in the browser, csaba gave 7 pages (cover, summary, route, route continued, crew, crew continued,
+`node --test` 169/169; in the browser, csaba gave 7 pages (cover, summary, route, route continued, crew, crew continued,
 menus) with no flow overflowing, the map loaded and merged the three Busuanga stops, themes A/B/C rendered, typing
 Prepared for / the note updated the cover and footer, an upload through the file input saved and showed the new cover,
-unticking down to one section locked the last box, the print copy held exactly the visible pages and was removed on
-`afterprint`, and a reload restored the preset. A real Save as PDF was **not** run (it opens the print dialog) — that is
-Task 6's job.
+unticking down to one section locked the last box, and a reload restored the preset. After the Fable review: a day with
+90 activities split over four pages with "(continued)" headings and nothing clipped; with every tile failing the map
+note appeared, printing stayed enabled and a theme change did not retry; two saves during slow responses ran one after
+the other (revisions 7 then 8, no 409, the typed text kept); printing moved the 11 live pages into the print host and
+back. Print output was checked with headless Chrome's `Page.printToPDF` (print media, backgrounds on): 11 A4 pages for
+11 preview pages, no blank page, map tiles, watermark, line art and the cover's navy and stamp all printed.
+
+**Fable review (2026-10-09), folded in:** H1 saves run one at a time; H2 a save deletes only the cover it replaces and
+an upload deletes older unclaimed uploads (P-1); H3 a block taller than a page splits item by item; M1 no tiles at all =
+map failed; M2 a failed map stays failed; M3 the live pages are printed, not a copy; M4 the oversize message says "too
+large" so a chunked upload gets 413 (P-1); L1 the session check before the charter lookup (P-1); L7 map errors caught.
+Also from the real print: the stamp's white ground drops out with `mix-blend-mode`. Known gap (L3): custom menu sections
+beyond breakfast / lunch / dinner / snacks are not in the pack (the guest ignores them too).
 
 **Shared checkout hazard:** another Claude session may work in the same checkouts. **Never** run `git checkout`,
 `git switch`, `git stash` or `git add -A` in the main checkouts under `S:/Users/David/OneDrive/Maker Space/GitHub`. All
@@ -135,7 +145,9 @@ work happens in the worktree made in Task 0. Stage files by name. Before each ta
 .pack-facts { display: grid; grid-template-columns: 34mm 1fr; gap: 2mm 6mm; margin: 0; }
 .pack-facts dt { color: var(--pack-accent); text-transform: uppercase; letter-spacing: .1em; font-size: 8pt; padding-top: .6mm; }
 .pack-facts dd { margin: 0; }
-.pack-welcome p { margin: 0; font-size: 11pt; font-style: italic; }
+.pack-welcome p { margin: 0 0 2mm; font-size: 11pt; font-style: italic; }
+.pack-welcome p:last-child { margin-bottom: 0; }
+.pack-cont::after { content: " (continued)"; font-weight: normal; font-size: 8pt; color: var(--pack-muted); }
 
 /* route */
 .pack-map { width: 100%; height: 90mm; border: 1px solid var(--pack-tint); background: #e9edee; }
@@ -182,9 +194,9 @@ work happens in the worktree made in Task 0. Stage files by name. Before each ta
 .pack-for-label { font-size: 8pt; letter-spacing: .18em; text-transform: uppercase; color: var(--pack-tint); }
 .pack-for-name { font-size: 13pt; }
 .pack-note { margin: 2mm 0 0; font-size: 9.5pt; font-style: italic; }
-.pack-stamp { width: 32mm; height: 32mm; flex: none; }
-/* A: navy cover, so the black stamp is inverted to cream (full contrast, P-D9) */
-.pack-theme-a .pack-stamp { filter: invert(93%) sepia(18%) saturate(300%) hue-rotate(5deg); }
+.pack-stamp { width: 32mm; height: 32mm; flex: none; mix-blend-mode: multiply; }   /* the stamp's white ground drops out */
+/* A: navy cover, so the black stamp is inverted to cream (full contrast, P-D9); its ground, now black, drops out */
+.pack-theme-a .pack-stamp { filter: invert(100%) sepia(18%) saturate(300%) hue-rotate(5deg); mix-blend-mode: screen; }
 /* B: smaller photo, sans-serif title, stat tiles */
 .pack-theme-b .pack-cover-photo { height: 48%; }
 .pack-theme-b .pack-title { font-weight: bold; font-size: 24pt; }
@@ -285,7 +297,11 @@ git commit -m "feat(pack): charter-pack.css, the pack pages, themes and print ru
     teardown = null;
   }
 
+  let restorePrinted = null;   // puts the pages moved into #pack-print-host back into the preview
+
   function removePrintHost() {
+    if (restorePrinted) restorePrinted();
+    restorePrinted = null;
     const host = document.getElementById("pack-print-host");
     if (host) host.remove();
     document.body.classList.remove("pack-printing");
@@ -320,6 +336,9 @@ git commit -m "feat(pack): charter-pack.css, the pack pages, themes and print ru
     let mapLine = null;
     let mapTimer = 0;
     let mapReady = true;
+    let mapBroken = false;      // once the map has failed, redraws show the note instead of retrying (review M2)
+    let saving = null;          // the save in flight; saves run one at a time (review H1)
+    let saveAgain = false;
 
     // ---- settings ----------------------------------------------------------------------------------------------
     function segmented(label, options, current, onPick) {
@@ -402,7 +421,53 @@ git commit -m "feat(pack): charter-pack.css, the pack pages, themes and print ru
       stage.style.height = `${Math.ceil(current.offsetHeight * scale)}px`;
     }
 
-    // Lays each section's blocks onto A4 pages: a block that overflows its page starts the next ("continued") page.
+    const UNITS = "li, .pack-stop, .pack-course, .pack-crew-group, .pack-notes, .pack-welcome > p";
+    const LABEL = ".pack-day-head, .pack-stop-name, h3, h4";
+    const overflows = (flow) => flow.scrollHeight > flow.clientHeight + 1;
+
+    // The flow's only block is taller than the page: move its tail, one item at a time (a list item, stop, course or
+    // paragraph), into a continuation block until the page fits, keeping at least one item behind. Parts left holding
+    // only their heading follow their items; the headings of parts that continue are repeated. Review H3.
+    function splitBlock(flow) {
+      const block = flow.lastElementChild;
+      const rest = block.cloneNode(false);
+      const clones = new Map([[block, rest]]);
+      const cloneOf = (orig) => {
+        if (!clones.has(orig)) {
+          const c = orig.cloneNode(false);
+          cloneOf(orig.parentElement).prepend(c);
+          clones.set(orig, c);
+        }
+        return clones.get(orig);
+      };
+      while (overflows(flow)) {
+        const units = [...block.querySelectorAll(UNITS)];
+        const unit = units[units.length - 1];
+        if (!unit || !units.some((u) => u !== unit && !u.contains(unit))) break;
+        let parent = unit.parentElement;
+        cloneOf(parent).prepend(unit);
+        while (parent !== block && ![...parent.children].some((c) => !c.matches(LABEL))) {
+          const up = parent.parentElement;
+          const c = cloneOf(parent);
+          [...parent.children].reverse().forEach((label) => c.prepend(label));
+          parent.remove();
+          parent = up;
+        }
+      }
+      if (!rest.children.length) return null;
+      clones.forEach((c, orig) => {
+        if (!orig.isConnected || c.querySelector(`:scope > :is(${LABEL})`)) return;
+        [...orig.children].filter((ch) => ch.matches(LABEL)).reverse().forEach((label) => {
+          const copy = label.cloneNode(true);
+          copy.classList.add("pack-cont");
+          c.prepend(copy);
+        });
+      });
+      return rest;
+    }
+
+    // Lays each section's blocks onto A4 pages: a block that overflows its page starts the next ("continued") page, and
+    // a block taller than a whole page is split across pages.
     function drawPages() {
       model = core().buildPackModel(payload, pack);
       const out = R().renderPack(model, { coverUrl: coverUrl(), stampUrl: `${ASSETS}/stamp.png` });
@@ -417,10 +482,11 @@ git commit -m "feat(pack): charter-pack.css, the pack pages, themes and print ru
         let flow = newPage(section.title, false);
         section.blocks.forEach((html) => {
           flow.insertAdjacentHTML("beforeend", html);
-          if (flow.scrollHeight > flow.clientHeight + 1 && flow.children.length > 1) {
-            const moved = flow.lastElementChild;
+          while (overflows(flow)) {
+            const next = flow.children.length > 1 ? flow.lastElementChild : splitBlock(flow);
+            if (!next) break;   // a single item taller than a page: nothing left to move
             flow = newPage(section.title, true);
-            flow.append(moved);
+            flow.append(next);
           }
         });
       });
@@ -452,9 +518,12 @@ git commit -m "feat(pack): charter-pack.css, the pack pages, themes and print ru
       mapLine = null;
     }
 
+    const failedNote = () => el("p", { class: "pack-map-failed" }, "Map couldn't load — the route is listed below.");
+
     function mapFailed(slot) {
       dropMap();
-      if (slot && slot.isConnected) slot.replaceWith(el("p", { class: "pack-map-failed" }, "Map couldn't load — the route is listed below."));
+      mapBroken = true;
+      if (slot && slot.isConnected) slot.replaceWith(failedNote());
       setMapReady(true);
     }
 
@@ -464,6 +533,10 @@ git commit -m "feat(pack): charter-pack.css, the pack pages, themes and print ru
       if (!slot) {
         dropMap();
         setMapReady(true);
+        return;
+      }
+      if (mapBroken) {
+        slot.replaceWith(failedNote());
         return;
       }
       if (map && mapBox) {
@@ -485,6 +558,14 @@ git commit -m "feat(pack): charter-pack.css, the pack pages, themes and print ru
         return;
       }
       if (!alive || !slot.isConnected) return;
+      try {
+        buildMap(L, slot);
+      } catch (error) {
+        mapFailed(mapBox || slot);
+      }
+    }
+
+    function buildMap(L, slot) {
       const route = model.sections.find((s) => s.id === "route");
       const line = payload.itinerary.route.points.filter((p) => Number.isFinite(p.latitude) && Number.isFinite(p.longitude)).map((p) => [p.latitude, p.longitude]);
       map = L.map(slot, {
@@ -503,17 +584,40 @@ git commit -m "feat(pack): charter-pack.css, the pack pages, themes and print ru
         const icon = L.divIcon({ className: "pack-marker", html: `<span>${R().esc(g.label)}</span>`, iconSize: null });
         L.marker(map.containerPointToLatLng([g.x, g.y]), { icon, interactive: false, keyboard: false }).addTo(map);
       });
-      // "load" fires once every tile in view has finished, failed tiles included; no network at all is the timeout.
+      // "load" fires once every tile in view has finished, failed ones included: a few missing tiles are fine, none at
+      // all (no internet) is a failure (review M1). The timeout covers tiles that never answer.
       const tiles = L.tileLayer(TILE_URL, { attribution: TILE_ATTRIBUTION, maxZoom: 16 });
-      tiles.once("load", () => { window.clearTimeout(mapTimer); if (alive) setMapReady(true); });
+      let tilesLoaded = 0;
+      tiles.on("tileload", () => { tilesLoaded += 1; });
+      tiles.once("load", () => {
+        window.clearTimeout(mapTimer);
+        if (!alive) return;
+        if (tilesLoaded) setMapReady(true);
+        else mapFailed(mapBox);
+      });
       tiles.addTo(map);
       mapTimer = window.setTimeout(() => { if (!mapReady) mapFailed(mapBox); }, MAP_TIMEOUT_MS);
     }
 
     // ---- saving ------------------------------------------------------------------------------------------------
-    async function save() {
+    function save() {
       window.clearTimeout(saveTimer);
       saveTimer = 0;
+      if (saving) {
+        saveAgain = true;
+        return saving;
+      }
+      saving = sendPack().finally(() => {
+        saving = null;
+        if (saveAgain) {
+          saveAgain = false;
+          save();
+        }
+      });
+      return saving;
+    }
+
+    async function sendPack() {
       try {
         const saved = await A().api(packPath, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pack, base_revision: revision }) });
         revision = saved.revision;
@@ -555,13 +659,19 @@ git commit -m "feat(pack): charter-pack.css, the pack pages, themes and print ru
     }
 
     // ---- printing ----------------------------------------------------------------------------------------------
-    // Prints a copy of the pages placed straight in <body>; charter-pack.css hides everything else while printing.
+    // Moves the live pages (loaded images and map included) straight into <body> for printing and back afterwards;
+    // charter-pack.css hides everything else while printing (review M3: a copy could print before its images load).
     function printPack() {
       if (!mapReady) return;
       removePrintHost();
-      const printHost = el("div", { id: "pack-print-host", class: `pack-theme-${pack.theme}` }, ...pages().map((p) => p.cloneNode(true)));
+      const printHost = el("div", { id: "pack-print-host", class: `pack-theme-${pack.theme}` }, ...pages());
       document.body.append(printHost);
       document.body.classList.add("pack-printing");
+      restorePrinted = () => {
+        scaler.append(...printHost.children);
+        showPage(pageIndex);
+        if (map) map.invalidateSize();
+      };
       window.addEventListener("afterprint", removePrintHost, { once: true });
       window.print();
     }
@@ -734,7 +844,7 @@ with
 - [ ] **Step 3: Bump every `?v=`.** `sed -i -E 's/\?v=[A-Za-z0-9-]+/?v=admin-charter-pack/g' index.html`, then
   `grep -c "?v=admin-charter-pack" index.html` → `30` and `grep -c "?v=" index.html` → `30`.
 
-- [ ] **Step 4: Check.** `node --check admin.js` (no output); `node --test` → `ℹ pass 168`.
+- [ ] **Step 4: Check.** `node --check admin.js` (no output); `node --test` → `ℹ pass 169`.
 
 - [ ] **Step 5: Commit.**
 
@@ -792,7 +902,7 @@ with
 with
 
 ```md
-- `node --test` runs the tests in `test/` (168 tests), which cover `routes-core`, `itinerary-core`, `charters-core`, `guest-preview-core`, `pack-core` and `pack-render`
+- `node --test` runs the tests in `test/` (169 tests), which cover `routes-core`, `itinerary-core`, `charters-core`, `guest-preview-core`, `pack-core` and `pack-render`
 ```
 
 - [ ] **Step 2: Commit.**
@@ -810,7 +920,7 @@ On a scratch server (plan P-1's worktree as the server, this worktree as `ADMIN_
 as `DATA_DIR`, its own port 8010+), log in as Charter Admin and open Charter → Charter Pack. Use a 1280-wide viewport
 and screenshots at scale 0.6.
 
-- [ ] csaba: 7 pages; the map loads (Save as PDF enabled, no "Loading map…"), markers carry day numbers, close stops merge.
+- [ ] csaba: 7 pages (11 with the stress day below); the map loads (Save as PDF enabled, no "Loading map…"), markers carry day numbers, close stops merge.
 - [ ] Themes A, B and C each render the cover and an inner page as in `pack-style.html`; A's stamp is cream on navy.
 - [ ] IOLANTHE (5 %) and the line art (20 %) show behind every inner page and not on the cover.
 - [ ] Proposal adds "Proposal — subject to change" to the footer; Charter Brief removes it.
@@ -820,6 +930,9 @@ and screenshots at scale 0.6.
 - [ ] Untick sections down to one → the last box is locked; untick Route → no map, Save as PDF enabled at once.
 - [ ] Reload → the preset comes back.
 - [ ] A charter with no stops (make one on the scratch copy) → no map page, no error.
+- [ ] Stress: give a scratch day 90 activities → the day splits over pages with "(continued)" headings, nothing clipped.
+- [ ] Offline: block the tile host (or override `L.TileLayer.prototype.getTileUrl` to a dead URL before opening the
+  page) → "Map couldn't load — the route is listed below.", Save as PDF enabled; change a setting → no retry.
 - [ ] **Save as PDF** to a file: A4 portrait pages, one per preview page, no admin UI, colours and watermark printed
   (turn off the browser's headers and footers in the dialog). Send David the PDF.
 - [ ] No console errors other than cancelled map tiles.

@@ -38,9 +38,9 @@ released on the vessel. Plans P-2 and P-3 share the admin worktree and branch `f
 
 | # | Plan | Repo | What lands | Verified while planning |
 |---|---|---|---|---|
-| P-1 | [p-01-server.md](p-01-server.md) | `iolanthe-server` (branch `feat/charter-pack-server`) | `lib/charter-pack.js` (presets, 409 on a stale revision, cover upload rules and clean-up), `GET/PUT …/pack`, `POST …/pack/cover`, `GET …/pack/cover/<file>` | Plan text applied to `main` f8939ab: 116 tests pass; endpoints exercised on a scratch server |
-| P-2 | [p-02-admin-core.md](p-02-admin-core.md) | `iolanthe-admin` (branch `feat/charter-pack`) | `pack-core.js` (preset rules, dates, markers, merge, `buildPackModel`), `pack-render.js` (cover and block HTML), csaba fixture | Plan text applied to `main` e108e7e: 168 tests pass |
-| P-3 | [p-03-admin-page.md](p-03-admin-page.md) | `iolanthe-admin` (branch `feat/charter-pack`) | `charter-pack.js` / `.css` (settings, A4 pagination, map, auto-save, cover upload, Save as PDF), menu entry, `apiUrl` export, `?v=admin-charter-pack` | Plan text applied after P-2: 168 tests pass, `node --check` clean; page exercised in the browser on a scratch server (all but a real print, which is Task 6) |
+| P-1 | [p-01-server.md](p-01-server.md) | `iolanthe-server` (branch `feat/charter-pack-server`) | `lib/charter-pack.js` (presets, 409 on a stale revision, cover upload rules and clean-up), `GET/PUT …/pack`, `POST …/pack/cover`, `GET …/pack/cover/<file>` | Plan text applied to `main` f8939ab: 117 tests pass; endpoints exercised on a scratch server |
+| P-2 | [p-02-admin-core.md](p-02-admin-core.md) | `iolanthe-admin` (branch `feat/charter-pack`) | `pack-core.js` (preset rules, dates, markers, merge, `buildPackModel`), `pack-render.js` (cover and block HTML), csaba fixture | Plan text applied to `main` e108e7e: 169 tests pass |
+| P-3 | [p-03-admin-page.md](p-03-admin-page.md) | `iolanthe-admin` (branch `feat/charter-pack`) | `charter-pack.js` / `.css` (settings, A4 pagination, map, auto-save, cover upload, Save as PDF), menu entry, `apiUrl` export, `?v=admin-charter-pack` | Plan text applied after P-2: 169 tests pass, `node --check` clean; page exercised in the browser on a scratch server; print output checked with headless Chrome `printToPDF` (11 A4 pages, no blank page, map and branding printed) |
 
 The assets in `assets/pack/` (default hero placeholder, David's stamp, the line art) are committed with the spec PR, so
 the plans only check them.
