@@ -8212,7 +8212,7 @@
     if (kind === "purchase" || kind === "confirm" || kind === "save") {
       return "success";
     }
-    if (kind === "add" || kind === "import" || kind === "edit" || kind === "promote" || kind === "clone" || kind === "move-up" || kind === "move-down" || kind === "prev" || kind === "next" || kind === "camera" || kind === "map" || kind === "refresh" || kind === "retry-primary" || kind === "restart-route" || kind === "notes" || kind === "invoice" || kind === "reverse" || kind === "hide") {
+    if (kind === "add" || kind === "import" || kind === "edit" || kind === "promote" || kind === "clone" || kind === "move-up" || kind === "move-down" || kind === "prev" || kind === "next" || kind === "camera" || kind === "map" || kind === "refresh" || kind === "retry-primary" || kind === "restart-route" || kind === "notes" || kind === "invoice" || kind === "reverse" || kind === "hide" || kind === "print") {
       return "secondary";
     }
     return "danger";
@@ -8732,8 +8732,8 @@
         <div class="card-header">
           <h2>Drink Stocks</h2>
           <div class="button-row list-add-actions">
+            ${iconButtonHtml("print", canGenerateReport ? "Generate printable drink stock report" : "No drink stock items recorded.", ` id="drink-stock-report-action"${canGenerateReport ? "" : " disabled"}`)}
             ${iconButtonHtml("add", "Add drink stock item", ` id="add-drink-stock"`)}
-            <button type="button" id="drink-stock-report-action" class="purchased-alcohol-print-button" title="${escapeAttribute(canGenerateReport ? "Generate printable drink stock report" : "No drink stock items recorded.")}" aria-label="${escapeAttribute(canGenerateReport ? "Generate printable drink stock report" : "No drink stock items recorded.")}"${canGenerateReport ? "" : " disabled"}>Print Stock Report</button>
           </div>
         </div>
         <div class="drink-stock-controls">
@@ -8776,7 +8776,7 @@
           </label>
         </div>
         <div id="drink-stock-list-shell" class="drink-stock-list-shell">
-          <div id="drink-stock-list-header" class="drink-stock-list-header record-row drink-stock-row" hidden>
+          <div id="drink-stock-list-header" class="drink-stock-list-header" hidden>
             <span>Name</span>
             <span>Category</span>
             <span>Remaining</span>
@@ -9904,31 +9904,8 @@
     return Math.min(Math.max(longest + 1, min), max);
   }
 
-  function updateDrinkStockListSizing(listShell, displayRows) {
-    if (!listShell) {
-      return;
-    }
-    const rows = Array.isArray(displayRows) ? displayRows : [];
-    if (!rows.length) {
-      [
-        "--drink-stock-name-width",
-        "--drink-stock-category-width",
-        "--drink-stock-remaining-width",
-        "--drink-stock-status-width",
-        "--drink-stock-charter-width"
-      ].forEach(property => listShell.style.removeProperty(property));
-      return;
-    }
-    listShell.style.setProperty("--drink-stock-name-width", `${drinkStockColumnWidthCh(rows.map(({ item, index }) => drinkStockDisplayName(item, index)).concat("Name"), 16, 32)}ch`);
-    listShell.style.setProperty("--drink-stock-category-width", `${drinkStockColumnWidthCh(rows.map(({ item }) => item.category || "Uncategorized").concat("Category"), 12, 18)}ch`);
-    listShell.style.setProperty("--drink-stock-remaining-width", `${drinkStockColumnWidthCh(rows.map(({ item, quantity, isGrouped }) => isGrouped ? drinkStockGroupedCountText(quantity, item) : drinkStockRemainingText(item)).concat("Remaining", "Case Remaining"), 12, 20)}ch`);
-    listShell.style.setProperty("--drink-stock-status-width", `${drinkStockColumnWidthCh(rows.map(({ item }) => drinkStockStatusText(item)).concat("Stock"), 9, 12)}ch`);
-    listShell.style.setProperty("--drink-stock-charter-width", `${drinkStockColumnWidthCh(rows.map(({ item }) => drinkStockCharterText(item)).concat("Charter"), 12, 28)}ch`);
-  }
-
   function drawDrinkStockRows(drinkStocks) {
     const container = document.getElementById("drink-stock-list");
-    const listShell = document.getElementById("drink-stock-list-shell");
     const listHeader = document.getElementById("drink-stock-list-header");
     if (!container) {
       return;
@@ -9937,65 +9914,89 @@
     container.innerHTML = "";
     const rows = filteredDrinkStockItems(drinkStocks);
     if (!rows.length) {
-      updateDrinkStockListSizing(listShell, []);
       if (listHeader) {
         listHeader.hidden = true;
       }
       container.innerHTML = `<p class="muted">No drink stock items found.</p>`;
       return;
     }
-    const displayRows = aggregateDrinkStockRows(rows);
-    updateDrinkStockListSizing(listShell, displayRows);
     if (listHeader) {
       listHeader.hidden = false;
     }
-    displayRows.forEach(displayRow => {
+    // Style rollout B: tap a row to edit (delete lives in the dialog); Remaining as a level bar or bottles × count
+    aggregateDrinkStockRows(rows).forEach(displayRow => {
       const { item, index, quantity, isGrouped } = displayRow;
-      const row = document.createElement("section");
-      row.className = "record-row drink-stock-row";
+      const row = document.createElement("div");
+      row.className = "drink-stock-row";
       row.innerHTML = `
-        <div class="record-summary drink-stock-summary">
-          <strong class="drink-stock-cell drink-stock-cell--name" data-label="Name">${escapeHtml(drinkStockDisplayName(item, index))}</strong>
-          <span class="drink-stock-cell" data-label="Category">${escapeHtml(item.category || "Uncategorized")}</span>
-          <span class="drink-stock-cell" data-label="${escapeAttribute(getStockUnitLabels(item).remainingLabel)}">${escapeHtml(isGrouped ? drinkStockGroupedCountText(quantity, item) : drinkStockRemainingText(item))}</span>
-          <span class="drink-stock-cell" data-label="Stock">${escapeHtml(drinkStockStatusText(item))}</span>
-          <span class="drink-stock-cell" data-label="Charter">${escapeHtml(drinkStockCharterText(item))}</span>
-        </div>
-        <div class="button-row record-actions">
-          ${iconButtonHtml("edit", isGrouped ? "Edit drink stock group" : "Edit drink stock item", ` data-action="edit-stock"`)}
-          ${iconButtonHtml("remove", isGrouped ? "Delete unopened drink stock group" : "Delete drink stock item", ` data-action="delete-stock"`)}
-        </div>
+        <strong class="drink-stock-cell drink-stock-cell--name" data-label="Name">${escapeHtml(drinkStockDisplayName(item, index))}</strong>
+        <span class="drink-stock-cell drink-stock-cell--category" data-label="Category">${escapeHtml(item.category || "Uncategorized")}</span>
+        <span class="drink-stock-cell" data-label="${escapeAttribute(getStockUnitLabels(item).remainingLabel)}">${drinkStockRemainingHtml(item, quantity, isGrouped)}</span>
+        <span class="drink-stock-cell" data-label="Stock"><span class="stock-pill stock-pill--${drinkStockStatusTone(item)}">${escapeHtml(drinkStockStatusText(item))}</span></span>
+        <span class="drink-stock-cell" data-label="Charter"><span class="stock-pill stock-pill--${drinkStockCharterTone(item)}" title="${escapeAttribute(drinkStockCharterText(item))}">${escapeHtml(drinkStockCharterText(item))}</span></span>
+        ${rowChevronHtml()}
       `;
-      row.querySelector("[data-action='edit-stock']").addEventListener("click", () => {
-        openDrinkStockModal(drinkStocks, item, index, isGrouped ? { group: displayRow } : {});
-      });
-      row.querySelector("[data-action='delete-stock']").addEventListener("click", async () => {
-        const deleteCount = isGrouped ? quantity : 1;
-        if (!await showAdminConfirm({
-          title: "Delete Drink Stock",
-          message: isGrouped
-            ? `Delete all ${deleteCount} unopened ${getStockUnitLabels(item).plural} of ${item.name || "this drink stock item"}?`
-            : `Delete ${item.name || "this drink stock item"}?`,
-          confirmLabel: "Delete",
-          cancelLabel: "Cancel",
-          tone: "danger"
-        })) {
-          return;
-        }
-        if (isGrouped) {
-          displayRow.indexes.slice().sort((left, right) => right - left).forEach(removeIndex => {
-            drinkStocks.items.splice(removeIndex, 1);
-          });
-        } else {
-          drinkStocks.items.splice(index, 1);
-        }
-        const saved = await saveDrinkStocks(drinkStocks, isGrouped ? "Drink stock group deleted." : "Drink stock item deleted.");
-        if (saved) {
-          drawDrinkStockRows(drinkStocks);
-        }
+      bindTapRow(row, isGrouped ? "Edit drink stock group" : "Edit drink stock item", () => {
+        const name = item.name || "this drink stock item";
+        openDrinkStockModal(drinkStocks, item, index, {
+          ...(isGrouped ? { group: displayRow } : {}),
+          deleteLabel: isGrouped ? "Delete unopened drink stock group" : "Delete drink stock item",
+          deleteMessage: isGrouped
+            ? `Delete all ${quantity} unopened ${getStockUnitLabels(item).plural} of ${name}?`
+            : `Delete ${name}?`,
+          onDelete: () => deleteDrinkStockRow(drinkStocks, displayRow)
+        });
       });
       container.appendChild(row);
     });
+  }
+
+  // Removes a row's stock (every unopened item of a group, or the one item) once the dialog has confirmed it
+  async function deleteDrinkStockRow(drinkStocks, displayRow) {
+    const { index, isGrouped } = displayRow;
+    if (isGrouped) {
+      displayRow.indexes.slice().sort((left, right) => right - left).forEach(removeIndex => {
+        drinkStocks.items.splice(removeIndex, 1);
+      });
+    } else {
+      drinkStocks.items.splice(index, 1);
+    }
+    const saved = await saveDrinkStocks(drinkStocks, isGrouped ? "Drink stock group deleted." : "Drink stock item deleted.");
+    if (saved) {
+      drawDrinkStockRows(drinkStocks);
+    }
+  }
+
+  // An open bottle: a level bar (amber at 25 % or less); unopened stock: a bottle × count; none: a dash.
+  // The full wording stays in the tooltip.
+  function drinkStockRemainingHtml(item, quantity, isGrouped) {
+    const text = isGrouped ? drinkStockGroupedCountText(quantity, item) : drinkStockRemainingText(item);
+    if (!isGrouped && item.opened) {
+      const percent = Math.max(0, Math.min(100, Number(drinkStockRemainingPercent(item.remaining, true, { round: true })) || 0));
+      return `<span class="stock-gauge${percent <= 25 ? " is-low" : ""}" title="${escapeAttribute(text)}"><span class="stock-gauge-bar"><i style="width: ${percent}%"></i></span>${percent}%</span>`;
+    }
+    const count = isGrouped ? Math.max(0, Math.trunc(Number(quantity) || 0)) : (item.in_stock ? 1 : 0);
+    if (!count) {
+      return `<span class="stock-none" title="${escapeAttribute(text)}">—</span>`;
+    }
+    return `<span class="stock-bottles" title="${escapeAttribute(text)}"><svg viewBox="0 0 14 16" aria-hidden="true"><path d="M5 0h4v4l2 3v9H3V7l2-3z"></path></svg>× ${count}</span>`;
+  }
+
+  function drinkStockStatusTone(item) {
+    if (isSoldToCharterDrinkStock(item)) {
+      return "sold";
+    }
+    return item.in_stock ? "in" : "out";
+  }
+
+  function drinkStockCharterTone(item) {
+    if (isInternalUseDrinkStock(item)) {
+      return "internal";
+    }
+    if (isSoldToCharterDrinkStock(item)) {
+      return "sold";
+    }
+    return item.charter_specific ? "charter" : "available";
   }
 
   function bindDrinkStocksPanel(drinkStocks, charterInfo) {
@@ -11395,6 +11396,7 @@
       <div class="button-row modal-title-actions">
         ${iconSubmitButtonHtml("save", "Save drink stock item", ` form="drink-stock-form"`)}
         ${iconButtonHtml("cancel", "Cancel", ` ${closeAttribute}`)}
+        ${typeof options.onDelete === "function" ? `<span class="header-sep"></span>${iconButtonHtml("remove", options.deleteLabel || "Delete drink stock item", ` data-action="delete-stock"`)}` : ""}
       </div>
     `;
     const modalBody = `
@@ -11439,6 +11441,27 @@
     const modal = stacked
       ? openStackedDialogModal(modalTitle, modalBody, { cardClass: "modal-wide", headerActionsHtml })
       : openDialogModal(modalTitle, modalBody, { cardClass: "modal-wide", hideClose: true, headerActionsHtml });
+    const deleteStockButton = modal.querySelector("[data-action='delete-stock']");
+    if (deleteStockButton) {
+      deleteStockButton.addEventListener("click", async () => {
+        if (!await showAdminConfirm({
+          title: "Delete Drink Stock",
+          message: options.deleteMessage || "Delete this drink stock item?",
+          confirmLabel: "Delete",
+          cancelLabel: "Cancel",
+          tone: "danger"
+        })) {
+          return;
+        }
+        markModalSaved(modal);
+        if (stacked) {
+          closeStackedDialogModal(modal);
+        } else {
+          closeDialogModal();
+        }
+        options.onDelete();
+      });
+    }
     const categorySelect = modal.querySelector("#drink-stock-category");
     const charterSelect = modal.querySelector("#drink-stock-charter");
     const openedInput = modal.querySelector("#drink-stock-opened");

@@ -175,3 +175,30 @@ and restored afterwards: chips as designed (Oliver's "Diving: None" dropped, Sar
 a real mouse drag of Emma onto the principal stopped just below him; ArrowDown twice moved her back with focus kept;
 ArrowUp on the first movable guest did nothing; Promote on Liam demoted Emma; Emma's dialog showed delete (Cancel kept
 the dialog), Oliver's none; 820 and 390 px with no sideways scroll.
+
+**2026-10-09 LIVE:** PR iolanthe-admin#28 merged (`c727ed6`) and pulled onto the boat.
+
+## Drink Stocks (2026-10-09)
+
+Mockup `drink-stocks-b.html`; David chose **B, Remaining as a picture**. Found while surveying: the six filters
+(minimum widths) and the fixed-width columns made the page scroll sideways below ~1230 px, i.e. on the bridge tablet in
+landscape (1180 px).
+
+- **SB-D1 Tap a row to edit.** The pencil and red trash on every row are gone; delete is in the dialog after a
+  separator, with the same wording ("Delete all 3 unopened bottles of …?" for a group).
+- **SB-D2 Remaining as a picture:** an open bottle is a level bar with its percentage (amber at 25 % or less); unopened
+  stock is a bottle × count; none is a dash. The full wording ("3 unopened bottles", "Open 80%") is the tooltip.
+- **SB-D3 Pills:** Stock (green in stock, red out of stock, grey sold) and Charter (grey available or sold, teal
+  charter, amber internal use).
+- **SB-D4 Header:** print as an icon before +; the printable report itself (a paper layout) is unchanged.
+- **SB-D5 Layout:** the filters wrap (`auto-fill`, search two tracks wide, 36 px controls) and the columns flex (the
+  per-column width measuring is gone), so nothing scrolls sideways; at ≤ 860 px a row is two compact lines (name and
+  remaining; category and the pills) instead of the old labelled stack.
+
+**2026-10-09 EXECUTED** on `feat/drink-stocks-b` (assets `admin-drink-stocks-b`): `drawDrinkStockRows` rewritten with
+`deleteDrinkStockRow`, `drinkStockRemainingHtml`, `drinkStockStatusTone`, `drinkStockCharterTone`;
+`updateDrinkStockListSizing` removed; `openDrinkStockModal` takes `onDelete` / `deleteLabel` / `deleteMessage`; print
+icon tone secondary. 177 tests. Browser pass: at 1180 × 820 the six filters sit on one line, no sideways scroll, rows
+46 px; Peach 80 % bar, Citron bottle × 3 (tooltip "3 unopened bottles"); a temporary item added, opened and deleted
+from its dialog (back to 54); the group dialog's delete reads "Delete all 3 unopened bottles of Absolut?" (cancelled);
+print opens the unchanged report; 820 px rows 62 px, 390 px 71 px, no sideways scroll.
