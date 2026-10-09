@@ -4130,9 +4130,11 @@
     });
   }
 
-  function openCrewMemberModal(crewList, memberOrOnSave, maybeOnSave) {
+  function openCrewMemberModal(crewList, memberOrOnSave, maybeOnSave, onDelete) {
     const existing = memberOrOnSave && typeof memberOrOnSave === "object" ? memberOrOnSave : null;
     const saveHandler = typeof maybeOnSave === "function" ? maybeOnSave : memberOrOnSave;
+    // Style rollout B: delete lives in the Edit dialog, not on every row
+    const canDelete = Boolean(existing && typeof onDelete === "function");
     const draft = {
       ...blankCrewMember(),
       ...(existing ? cloneData(existing) : {})
@@ -4144,6 +4146,7 @@
       <div class="button-row modal-title-actions">
         ${iconSubmitButtonHtml("save", "Save crew member", ` form="crew-add-form"`)}
         ${iconButtonHtml("cancel", "Cancel", ` data-modal-close`)}
+        ${canDelete ? `<span class="header-sep"></span>${iconButtonHtml("remove", "Delete crew member", ` data-action="delete-crew"`)}` : ""}
       </div>
     `;
     const modal = openDialogModal(existing ? "Edit Crew Member" : "Add Crew Member", `
@@ -4186,6 +4189,23 @@
       markModalSaved(modal);
       closeDialogModal();
     });
+    const deleteButton = modal.querySelector("[data-action='delete-crew']");
+    if (deleteButton) {
+      deleteButton.addEventListener("click", async () => {
+        if (!await showAdminConfirm({
+          title: "Delete Crew Member",
+          message: `Delete ${existing.name || "this crew member"}?`,
+          confirmLabel: "Delete",
+          cancelLabel: "Cancel",
+          tone: "danger"
+        })) {
+          return;
+        }
+        markModalSaved(modal);
+        closeDialogModal();
+        onDelete();
+      });
+    }
   }
 
   function importedCrewMembers(destinationCrewList, sourceCrewList) {
@@ -4860,8 +4880,8 @@
           <h2>Crew</h2>
           ${canEditCrew ? `
             <div class="button-row list-add-actions">
-              ${iconButtonHtml("add", "Add crew member", ` id="add-crew-member"`)}
               ${iconButtonHtml("import", "Import crew list", ` id="import-crew-list"`)}
+              ${iconButtonHtml("add", "Add crew member", ` id="add-crew-member"`)}
             </div>
           ` : ""}
         </div>
@@ -6168,75 +6188,68 @@
     const longestNameLength = crewEntries.reduce((longest, { member, index }) => {
       return Math.max(longest, String(member.name || `Crew ${index + 1}`).length);
     }, 10);
-    const longestPositionLength = crewEntries.reduce((longest, { member }) => {
-      return Math.max(longest, crewPositionLabel(member).length);
-    }, 16);
     container.style.setProperty("--crew-name-column-width", `${longestNameLength + 1}ch`);
-    container.style.setProperty("--crew-position-column-width", `${longestPositionLength + 1}ch`);
-    crewEntries.forEach(({ member, index }) => {
-      const row = document.createElement("section");
-      row.className = "record-row crew-record-row";
-      row.innerHTML = `
-        <div class="record-summary crew-record-summary">
-          <strong>${escapeHtml(member.name || `Crew ${index + 1}`)}</strong>
-          <span class="crew-position">${escapeHtml(crewPositionLabel(member))}</span>
-          <span class="crew-department">${escapeHtml(crewDepartmentLabel(member))}</span>
-          ${member.description || member.note ? `<span class="multiline-text">${escapeHtml(member.description || member.note)}</span>` : ""}
-        </div>
-        ${canEditCrew ? `
-          <div class="button-row record-actions">
-            ${iconButtonHtml("edit", "Edit crew member", ` data-action="edit-crew"`)}
-            ${iconButtonHtml("remove", "Delete crew member", ` data-action="delete-crew"`)}
-          </div>
-        ` : ""}
-      `;
-      const editButton = row.querySelector("[data-action='edit-crew']");
-      if (editButton) {
-        editButton.addEventListener("click", () => {
-          openCrewMemberModal(crewList, member, async updatedMember => {
-            const nextCrewList = {
-              ...crewList,
-              crew: crewList.crew.map((entry, entryIndex) => entryIndex === index ? updatedMember : entry)
-            };
-            const saved = await saveCharterFile("crew_list.json", nextCrewList, "Crew member saved.");
-            if (!saved) {
-              return;
-            }
-            crewList.crew = normalizeCrewEditorList(saved).crew;
-            drawCrewEditors(crewList);
-          });
-        });
+    // Style rollout B: crew grouped under their department (sortedCrewEntries already orders by department)
+    const groups = [];
+    crewEntries.forEach(entry => {
+      const department = crewDepartmentLabel(entry.member);
+      const last = groups[groups.length - 1];
+      if (last && last.department.toLowerCase() === department.toLowerCase()) {
+        last.entries.push(entry);
+      } else {
+        groups.push({ department, entries: [entry] });
       }
-      const deleteButton = row.querySelector("[data-action='delete-crew']");
-      if (deleteButton) {
-        deleteButton.addEventListener("click", async () => {
-          if (!await showAdminConfirm({
-            title: "Delete Crew Member",
-            message: `Delete ${member.name || `Crew ${index + 1}`}?`,
-            confirmLabel: "Delete",
-            cancelLabel: "Cancel",
-            tone: "danger"
-          })) {
-            return;
-          }
-          try {
-            const nextCrewList = {
-              ...crewList,
-              crew: crewList.crew.filter((entry, entryIndex) => entryIndex !== index)
-            };
-            const saved = await saveCharterFile("crew_list.json", nextCrewList, "Crew member deleted.");
-            if (!saved) {
-              return;
-            }
-            crewList.crew = normalizeCrewEditorList(saved).crew;
-            drawCrewEditors(crewList);
-          } catch (error) {
-            setStatus(error.message, "error");
-          }
-        });
-      }
-      container.appendChild(row);
     });
+    groups.forEach(({ department, entries }) => {
+      const group = document.createElement("section");
+      group.className = "crew-group";
+      group.innerHTML = `<h3 class="crew-group-title">${escapeHtml(department)}<span class="crew-group-count">${entries.length}</span></h3>`;
+      entries.forEach(({ member, index }) => {
+        group.appendChild(crewRowElement(crewList, member, index, canEditCrew));
+      });
+      container.appendChild(group);
+    });
+  }
+
+  // One crew member: tap to edit (and delete, inside the dialog) when the session may manage crew
+  function crewRowElement(crewList, member, index, canEditCrew) {
+    const row = document.createElement(canEditCrew ? "button" : "div");
+    row.className = "crew-row";
+    if (canEditCrew) {
+      row.type = "button";
+      row.title = "Edit crew member";
+    }
+    const note = member.description || member.note || "";
+    row.innerHTML = `
+      <strong class="crew-row-name">${escapeHtml(member.name || `Crew ${index + 1}`)}</strong>
+      <span class="crew-row-position">${escapeHtml(crewPositionLabel(member))}</span>
+      <span class="crew-row-note">${escapeHtml(note)}</span>
+      ${canEditCrew ? `<svg class="crew-row-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>` : ""}
+    `;
+    if (!canEditCrew) {
+      return row;
+    }
+    row.addEventListener("click", () => {
+      openCrewMemberModal(crewList, member, updatedMember => {
+        saveCrewEdit(crewList, crewList.crew.map((entry, entryIndex) => entryIndex === index ? updatedMember : entry), "Crew member saved.");
+      }, async () => {
+        try {
+          await saveCrewEdit(crewList, crewList.crew.filter((entry, entryIndex) => entryIndex !== index), "Crew member deleted.");
+        } catch (error) {
+          setStatus(error.message, "error");
+        }
+      });
+    });
+    return row;
+  }
+
+  async function saveCrewEdit(crewList, crew, message) {
+    const saved = await saveCharterFile("crew_list.json", { ...crewList, crew }, message);
+    if (!saved) {
+      return;
+    }
+    crewList.crew = normalizeCrewEditorList(saved).crew;
+    drawCrewEditors(crewList);
   }
 
   function drawSiteEditors(siteLibrary) {
