@@ -2193,8 +2193,9 @@
     }
 
     let savedSignature = settingsStateSignature(readState());
+    let forcedDirty = Boolean(options.startDirty);   // spec C: a form redrawn after a clash starts unsaved
     const guard = {
-      isDirty: () => settingsStateSignature(readState()) !== savedSignature,
+      isDirty: () => forcedDirty || settingsStateSignature(readState()) !== savedSignature,
       confirmOptions: options.confirmOptions || UNSAVED_CHANGES_CONFIRM
     };
     const syncDirtyState = () => {
@@ -2218,6 +2219,7 @@
         if (typeof options.save === "function") {
           await options.save();
         }
+        forcedDirty = false;
         savedSignature = settingsStateSignature(readState());
         clearPageUnsavedGuard(guard);
         await reload();
@@ -2236,6 +2238,7 @@
             return;
           }
         }
+        forcedDirty = false;
         clearPageUnsavedGuard(guard);
         await reload();
       });
@@ -2245,6 +2248,7 @@
     return {
       isDirty: guard.isDirty,
       resetBaseline() {
+        forcedDirty = false;
         savedSignature = settingsStateSignature(readState());
         syncDirtyState();
       },
@@ -6636,6 +6640,25 @@
     return message;
   }
 
+  // Spec C: Charter Admin's input for each charter.json field, for the clash marks
+  const CHARTER_INFO_CLASH_FIELDS = Object.freeze({
+    name: "#charter-info-name",
+    start_date: "#charter-info-start-date",
+    end_date: "#charter-info-end-date",
+    guest_count: "#charter-info-guest-count",
+    diving_guest_count: "#charter-info-diving-guest-count",
+    arrival: "#charter-info-arrival-date",
+    primary_contact: "#charter-info-primary-contact-name",
+    charter_style: "#charter-info-charter-style",
+    non_swimmers_present: "#charter-info-non-swimmers-present",
+    diving_planned: "#charter-info-diving-planned",
+    medical_notes_present: "#charter-info-medical-notes-present",
+    dietary_restrictions_present: "#charter-info-dietary-restrictions-present",
+    charter_preference_notes: "#charter-info-charter-preference-notes",
+    drink_preferences_notes: "#charter-info-drink-preferences-notes",
+    notes: "#charter-info-notes"
+  });
+
   function bindCharterInfoPanel(charterInfo) {
     const form = document.getElementById("charter-info-form");
     if (!form) {
@@ -6669,9 +6692,12 @@
       arrivalHost.replaceChildren(picker.root);
     }
 
+    const infoClash = state.charterInfoClash;
+    state.charterInfoClash = null;
     bindSettingsFormController({
       formId: "charter-info-form",
       cancelButtonId: "cancel-charter-info",
+      startDirty: Boolean(infoClash),
       readState: () => readCharterInfoForm(charterInfo),
       save: async () => {
         if (syncCharterInfoOverlap()) {
@@ -6679,16 +6705,31 @@
         }
         Object.assign(charterInfo, readCharterInfoForm(charterInfo));
         // Not saveCharterFile(): its catch would swallow the server's message, and the controller needs the throw to keep the form dirty.
-        const payload = await api(`/api/admin/charter/${encodeURIComponent(state.selectedCharter)}/save`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ file: "charter.json", data: charterInfo })
+        const result = await saveRevisioned({
+          path: `/api/admin/charter/${encodeURIComponent(state.selectedCharter)}/save`,
+          queue: `${state.selectedCharter}/charter.json`,
+          schema: "charter",
+          base: () => (state.bundle && state.bundle["charter.json"] ? state.bundle["charter.json"] : {}),
+          mine: charterInfo,
+          normalize: normalizeCharterInfo,
+          wrap: (payload, baseRevision) => ({ file: "charter.json", data: payload, base_revision: baseRevision }),
+          unwrap: payload => (payload && typeof payload === "object" && Object.prototype.hasOwnProperty.call(payload, "data") ? payload.data : payload)
         });
-        const saved = payload && typeof payload === "object" && Object.prototype.hasOwnProperty.call(payload, "data") ? payload.data : payload;
+        if (!result.ok) {
+          // Spec C §4.2: redraw on their copy with my changes on top, still unsaved; the throw keeps this save unsaved
+          if (state.bundle) {
+            state.bundle["charter.json"] = cloneData(result.theirs);
+          }
+          state.charterInfoClash = result;
+          await renderCharter();
+          const when = mergeCore().timeLabel(result.savedAt);
+          throw new Error(`${mergeCore().departmentLabel(result.savedBy)} changed the charter info${when ? ` at ${when}` : ""}. Check the marked fields and save again.`);
+        }
+        const saved = result.saved;
         if (state.bundle) {
           state.bundle["charter.json"] = cloneData(saved);
         }
-        setStatus("Charter info saved.", "ok");
+        setStatus(mergeCore().savedStatus("Charter info saved.", result), "ok");
         const normalizedSaved = normalizeCharterInfo(saved);
         Object.assign(charterInfo, normalizedSaved);
         const summary = currentCharterSummary();
@@ -6708,6 +6749,9 @@
         await renderCharter();
       }
     });
+    if (infoClash) {
+      showClashMarks(form.parentElement, pageClash(infoClash, "the charter info"), CHARTER_INFO_CLASH_FIELDS, form);
+    }
 
     const guestViewButton = document.getElementById("charter-guest-view");
     if (guestViewButton) {
@@ -6937,7 +6981,9 @@
         loadSites(),
         loadReservedPeriods()
       ]);
-      const charterInfo = normalizeCharterInfo(bundle["charter.json"]);
+      // Spec C §4.2: after a clash Charter Admin redraws on their copy with my changes on top (bindCharterInfoPanel)
+      const infoClash = activePanel === "info" ? state.charterInfoClash : null;
+      const charterInfo = normalizeCharterInfo(infoClash ? infoClash.rebased : bundle["charter.json"]);
       const itinerary = bundle["itinerary.json"] || {};
       state.charterContext = { charterId: state.selectedCharter, charter: charterInfo, itinerary, siteLibrary };
       const guestList = normalizeGuestList(bundle["guest_list.json"]);
@@ -12442,7 +12488,15 @@
     });
     document.getElementById("save-guest-drinks")?.addEventListener("click", async () => {
       drinks.sections = guestDrinkPresentationFromSections(resolvedGuestDrinksMenu(drinks, drinkStocks, charterId).sections).sections;
-      const saved = await saveCharterFile(GUEST_DRINKS_FILE_NAME, drinks, "Guest Alcohol saved.");
+      const saved = await saveCharterFile(GUEST_DRINKS_FILE_NAME, drinks, "Guest Alcohol saved.", {
+        onClash: result => {
+          // Spec C §4.2: their copy with my changes on top, still unsaved
+          drinks.sections = normalizeGuestDrinks(result.rebased).sections;
+          markDirty();
+          redraw();
+          showListClash(document.getElementById("guest-drinks-sections"), result, "Guest Alcohol", () => null);
+        }
+      });
       if (saved) {
         drinks.sections = normalizeGuestDrinks(saved).sections;
         markClean();
