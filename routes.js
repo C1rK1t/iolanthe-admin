@@ -260,7 +260,8 @@
     const pill = (cls, tip, ...content) => el("span", { class: `pill ${cls}`, tabindex: "0", "aria-label": tip }, ...content, el("span", { class: "pill-tip", "aria-hidden": "true" }, tip));
     const warn = f.state === "short" || f.state === "over";
     const fitPill = pill(`fit-${f.state}`, f.title, warn ? "" : f.label);
-    if (warn) fitPill.insertAdjacentHTML("afterbegin", svg("warn"));
+    if (warn) fitPill.insertAdjacentHTML("afterbegin", svg("warnSign"));   // captain 2026-10-09: the road sign alone, no pill
+    panel.classList.toggle("fit-warn", warn);   // experiment: the page tints light red while the route does not fit
     $("pills").replaceChildren(...[
       fitPill,
       dirty ? pill("check", "Stops whose dates moved under them. Open each card to clear it.", `${dirty} to check`) : null

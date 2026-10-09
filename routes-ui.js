@@ -6,6 +6,9 @@
   const ICONS = {
     check: '<path d="M5 12l5 5 9-10"/>',
     warn: '<path class="tri" d="M12 3.5L21.5 20h-19z"/><path class="mark" d="M12 9.5v4.5M12 17v.01"/>',
+    // The road-sign warning (captain, 2026-10-09): red border, white gap, amber face, white exclamation. Fills are set by
+    // the .ws-* classes in routes.css, not by the icon-button stroke rules.
+    warnSign: '<path class="ws-red" d="M12 2.2 22.6 20.6H1.4z"/><path class="ws-white" d="M12 5.3 19.4 18.4H4.6z"/><path class="ws-amber" d="M12 7.2 17.6 17.1H6.4z"/><path class="ws-mark" d="M12 9.6v4"/><circle class="ws-dot" cx="12" cy="15.9" r="1.05"/>',
     cancel: '<path d="M6 6l12 12M18 6L6 18"/>',
     plus: '<path d="M12 5v14M5 12h14"/>',
     saveAs: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
