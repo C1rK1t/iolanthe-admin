@@ -6024,10 +6024,30 @@
     };
   }
 
-  function openGuestEditModal(guestList, guest, index, options, onSave, onDelete) {
+  // Spec C: the guest dialog's input for each record field, for the clash marks
+  const GUEST_CLASH_FIELDS = Object.freeze({
+    full_name: "#guest-edit-full-name",
+    preferred_name: "#guest-edit-preferred-name",
+    principal: "#guest-edit-principal",
+    cabin: "#guest-edit-cabin",
+    bcd_size: "#guest-edit-bcd-size",
+    wetsuit_size: "#guest-edit-wetsuit-size",
+    fin_size: "#guest-edit-fin-size",
+    allergies: "#guest-edit-allergies",
+    dietary_preferences: "#guest-edit-dietary",
+    drinks_preferences: "#guest-edit-drinks-preferences",
+    diving_ability: "#guest-edit-diving-ability",
+    diving_qualification: "#guest-edit-diving-qualification",
+    date_of_last_dive: "#guest-edit-last-dive-mode",
+    medical_notes: "#guest-edit-medical-notes",
+    notes: "#guest-edit-notes"
+  });
+
+  // clash (spec C §4.1, from recordClash): the dialog opens on clash.record (theirs with my changes on top), marked.
+  function openGuestEditModal(guestList, guest, index, options, onSave, onDelete, clash) {
     const settings = options || {};
     const inactiveGuest = guest.active === false;
-    const draft = normalizeGuestRecord(guest);
+    const draft = normalizeGuestRecord(clash && clash.record ? clash.record : guest);
     const suggestions = guestModalSuggestions(guestList);
     const suggestionIds = Object.fromEntries(Object.keys(suggestions).map(key => [key, `guest-edit-${key}-suggestions`]));
     const lastDiveMode = draft.date_of_last_dive !== "N/A" ? "date" : "na";
@@ -6097,6 +6117,7 @@
         </label>
       </form>
     `, { cardClass: "modal-wide", hideClose: true, headerActionsHtml });
+    showClashMarks(modal, clash, GUEST_CLASH_FIELDS, modal.querySelector("#guest-edit-form"));
     const deleteGuestButton = modal.querySelector("[data-action='delete-guest']");
     if (deleteGuestButton) {
       deleteGuestButton.addEventListener("click", async () => {
@@ -6172,14 +6193,35 @@
     });
   }
 
-  async function saveGuestList(guestList, settings) {
+  // Spec C: on success the list takes the saved copy (it may hold a merged change); on a clash it shows theirs, then
+  // onClash(result) decides what to reopen (without one: the status line).
+  async function saveGuestList(guestList, settings, onClash) {
     if (settings && settings.charterInfo) {
       const normalized = normalizeGuestListForCount(guestList, settings.charterInfo.guest_count);
       guestList.guests = normalized.guests;
     } else {
       guestList.guests = sortAndEnsurePrincipalGuests((guestList.guests || []).map(normalizeGuestRecord));
     }
-    return saveCharterFile("guest_list.json", guestList, settings.saveSuccessMessage || "Guests saved.");
+    const saved = await saveCharterFile("guest_list.json", guestList, settings.saveSuccessMessage || "Guests saved.", {
+      onClash: result => {
+        guestList.guests = (settings && settings.charterInfo
+          ? normalizeGuestListForCount(result.theirs, settings.charterInfo.guest_count)
+          : normalizeGuestList(result.theirs)).guests;
+        drawGuestEditors(guestList, settings);
+        if (typeof onClash === "function") {
+          onClash(result);
+        } else {
+          setStatus(clashMessage(result, "the guest list"), "error");
+        }
+      }
+    });
+    if (saved) {
+      // The saved copy may hold someone else's merged change: never keep editing the copy from before the save
+      guestList.guests = (settings && settings.charterInfo
+        ? normalizeGuestListForCount(saved, settings.charterInfo.guest_count)
+        : normalizeGuestList(saved)).guests;
+    }
+    return saved;
   }
 
   function drawGuestEditors(guestList, options) {
@@ -6260,20 +6302,7 @@
       ${settings.allowEdit ? rowChevronHtml() : `<span></span>`}
     `;
     if (settings.allowEdit) {
-      const canDelete = settings.allowDelete || (settings.allowDeleteInactive && inactive);
-      bindTapRow(row, "Edit guest", () => {
-        openGuestEditModal(guestList, guest, index, settings, async nextGuest => {
-          if (nextGuest.principal && settings.canChangePrincipal) {
-            guestList.guests.forEach(entry => {
-              entry.principal = false;
-            });
-          }
-          guestList.guests[index] = nextGuest;
-          guestList.guests = sortAndEnsurePrincipalGuests(guestList.guests);
-          await saveGuestList(guestList, settings);
-          drawGuestEditors(guestList, settings);
-        }, canDelete ? () => removeGuestFromList(guestList, guest, index, settings) : null);
-      });
+      bindTapRow(row, "Edit guest", () => openGuestEditor(guestList, guest, settings));
     }
     const promoteButton = row.querySelector("[data-action='promote-guest']");
     if (promoteButton) {
@@ -6301,14 +6330,62 @@
 
   // Deletes an inactive guest, or clears an active guest's slot (the slot stays); called from the Edit dialog once
   // the user has confirmed there
-  async function removeGuestFromList(guestList, guest, index, settings) {
-    if (guest.active === false) {
-      guestList.guests.splice(index, 1);
+  // Spec C §4.1, §4.3: edit, clear or delete one guest, found by id (the list re-sorts around them). A clash on this
+  // guest reopens the editor on their version with my changes on top.
+  function openGuestEditor(guestList, guest, settings, clash) {
+    const id = guest.id;
+    const index = Math.max(0, guestList.guests.findIndex(entry => entry.id === id));
+    const name = guestDisplayName(guest, index);
+    const canDelete = settings.allowDelete || (settings.allowDeleteInactive && guest.active === false);
+    openGuestEditModal(guestList, guest, index, settings, async nextGuest => {
+      if (nextGuest.principal && settings.canChangePrincipal) {
+        guestList.guests.forEach(entry => {
+          entry.principal = false;
+        });
+      }
+      const at = guestList.guests.findIndex(entry => entry.id === id);
+      if (at >= 0) {
+        guestList.guests[at] = nextGuest;
+      } else {
+        guestList.guests.push(nextGuest);   // adding back a guest someone else deleted
+      }
+      guestList.guests = sortAndEnsurePrincipalGuests(guestList.guests);
+      await saveGuestList(guestList, settings, result => {
+        const again = recordClash(result, "guests", id, name);
+        if (again) {
+          openGuestEditor(guestList, again.theirsRecord || again.record, settings, again);
+        } else {
+          setStatus(clashMessage(result, "the guest list"), "error");
+        }
+      });
+      drawGuestEditors(guestList, settings);
+    }, canDelete ? () => removeGuestFromList(guestList, guest, settings) : null, clash);
+  }
+
+  // An inactive guest is deleted, an active one's slot cleared. Deleting a guest someone else changed asks first.
+  async function removeGuestFromList(guestList, guest, settings) {
+    const id = guest.id;
+    const name = guestDisplayName(guest, 0);
+    const at = guestList.guests.findIndex(entry => entry.id === id);
+    if (at < 0) {
+      return;
+    }
+    if (guestList.guests[at].active === false) {
+      guestList.guests.splice(at, 1);
     } else {
-      clearGuestSlot(guest);
+      clearGuestSlot(guestList.guests[at]);
     }
     guestList.guests = sortAndEnsurePrincipalGuests(guestList.guests);
-    await saveGuestList(guestList, settings);
+    await saveGuestList(guestList, settings, async result => {
+      const clash = recordClash(result, "guests", id, name);
+      if (clash && clash.deletedByMe) {
+        if (await confirmDeleteAnyway(clash)) {
+          await removeGuestFromList(guestList, clash.theirsRecord, settings);
+        }
+      } else {
+        setStatus(clashMessage(result, "the guest list"), "error");
+      }
+    });
     drawGuestEditors(guestList, settings);
   }
 
