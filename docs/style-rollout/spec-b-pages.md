@@ -33,3 +33,35 @@ Browser pass on the scratch server: 3 groups (Bridge and Deck 7, Engineering 2, 
 dialog shows save, cancel, separator, delete; delete → Cancel keeps the dialog; a temporary member added (new
 "Testing" group, long note truncated), edited ("Tester") and deleted ("Crew member deleted.", back to 14); 820 and
 390 px wide with no sideways scroll; no console errors.
+
+**2026-10-09 LIVE:** PR iolanthe-admin#22 merged (`32e5213`) and pulled onto the boat.
+
+## Site Editor (2026-10-09)
+
+Mockup `sites-b.html`; David chose **B, name first** (like Crew), the dialog as shown, but the media rows' preview and
+remove buttons smaller. Media means images and short clips (mp4, webm, mov).
+
+- **SB-S1 Slim rows, tap to edit.** One 44 px row per site, alphabetical as before: name (bold), position (DMM),
+  the description on one line (ellipsis), a small camera with a count where the site has media, a chevron. The
+  pencil, camera and red trash on every row are gone; the media preview is in the dialog.
+- **SB-S2 Delete in the Edit dialog:** save, cancel, separator, delete (as Crew). The Route page's "Edit site" opens
+  the same dialog with no delete (it passes no `onDelete`).
+- **SB-S3 Position on one line each:** latitude and longitude side by side, each `deg ° min ' N/S`, with the map-pick
+  pin beside them (the "Pick the position on a map…" sentence is gone; the pin has its tooltip). At ≤ 700 px they
+  stack with the pin beside both.
+- **SB-S4 Media:** heading "Media" (was "Media References"); the preview and remove buttons are 32 px (17 px icons),
+  centred in the row.
+- **SB-S5 Header separator** (`.card-header .header-sep`) is `#b9c4ca`: `var(--line)` vanished on the muted card
+  (affects Charter Admin's header and the Crew / Site dialogs).
+
+**2026-10-09 EXECUTED** on `feat/sites-b` (assets `admin-sites-b`): `coordinateFieldsHtml`, `sitePickerButtonHtml`,
+`openSiteEditorModal` (new `onDelete` argument, delete handler, position row, "Media"), `drawSiteEditors` with
+`siteRowElement`; CSS `.site-row*` (sharing the Crew row base), `.site-position-row` / `.coordinate-*`, the media row
+buttons; the old `.site-record-summary`, `.coordinate-card` / `.coordinate-grid`, `.site-map-picker-row` rules removed.
+146 tests. Browser pass: 12 rows, 44 px, camera count on Tubbataha only; dialog 852 → 638 px; media buttons 32 px and
+centred; map picker opens and Escape returns to the dialog; the Route-page call has no delete; a temporary site added
+(10°30.500'N 120°15.000'E), edited (10°45.250'N) and deleted (back to 12); 820 and 390 px wide with no sideways scroll;
+no console errors.
+- **SB-S6 (David, before merge): no position in the list.** The row is name, one-line description, media count and
+  chevron; the position stays in the dialog. `formatSitePosition` and `formatDmmCoordinate` had no other callers and
+  went too.

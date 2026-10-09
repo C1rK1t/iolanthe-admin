@@ -4463,24 +4463,20 @@
   function coordinateFieldsHtml(prefix, label, type, value) {
     const coordinate = decimalToDmm(value, type);
     const hemispheres = type === "latitude" ? ["N", "S"] : ["E", "W"];
+    // Style rollout B: one line per coordinate, degrees ° minutes ' hemisphere
     return `
-      <fieldset class="coordinate-card full">
-        <legend>${escapeHtml(label)}</legend>
-        <div class="coordinate-grid">
-          <label>Degrees
-            <input id="${prefix}-degrees" type="number" min="0" max="${type === "latitude" ? 90 : 180}" step="1" value="${escapeAttribute(coordinate.degrees)}" required>
-          </label>
-          <label>Minutes
-            <input id="${prefix}-minutes" type="number" min="0" max="59.999" step="0.001" value="${escapeAttribute(coordinate.minutes)}" required>
-          </label>
-          <label>Hemisphere
-            <select id="${prefix}-hemisphere" required>
-              <option value="">Choose...</option>
-              ${hemispheres.map(hemisphere => `<option value="${hemisphere}" ${hemisphere === coordinate.hemisphere ? "selected" : ""}>${hemisphere}</option>`).join("")}
-            </select>
-          </label>
-        </div>
-      </fieldset>
+      <label class="coordinate-field">${escapeHtml(label)}
+        <span class="coordinate-inputs">
+          <input id="${prefix}-degrees" class="coordinate-degrees" type="number" min="0" max="${type === "latitude" ? 90 : 180}" step="1" value="${escapeAttribute(coordinate.degrees)}" aria-label="${escapeAttribute(label)} degrees" required>
+          <span class="coordinate-unit">°</span>
+          <input id="${prefix}-minutes" class="coordinate-minutes" type="number" min="0" max="59.999" step="0.001" value="${escapeAttribute(coordinate.minutes)}" aria-label="${escapeAttribute(label)} minutes" required>
+          <span class="coordinate-unit">'</span>
+          <select id="${prefix}-hemisphere" class="coordinate-hemisphere" aria-label="${escapeAttribute(label)} hemisphere" required>
+            <option value="">–</option>
+            ${hemispheres.map(hemisphere => `<option value="${hemisphere}" ${hemisphere === coordinate.hemisphere ? "selected" : ""}>${hemisphere}</option>`).join("")}
+          </select>
+        </span>
+      </label>
     `;
   }
 
@@ -4491,20 +4487,6 @@
       modal.querySelector(`#${prefix}-hemisphere`).value,
       type
     );
-  }
-
-  function formatDmmCoordinate(value, type) {
-    const coordinate = decimalToDmm(value, type);
-    if (!coordinate.degrees || !coordinate.minutes || !coordinate.hemisphere) {
-      return "";
-    }
-    return `${coordinate.degrees}°${coordinate.minutes}'${coordinate.hemisphere}`;
-  }
-
-  function formatSitePosition(site) {
-    const latitude = formatDmmCoordinate(site?.latitude, "latitude");
-    const longitude = formatDmmCoordinate(site?.longitude, "longitude");
-    return latitude && longitude ? `${latitude} ${longitude}` : "Position not set";
   }
 
   function siteDescriptionPreview(site) {
@@ -5278,12 +5260,7 @@
   }
 
   function sitePickerButtonHtml(id) {
-    return `
-      <div class="site-map-picker-row full">
-        <span class="muted">Pick the position on a map instead of typing it.</span>
-        ${iconButtonHtml("map", "Pick position on map", ` id="${id}"`)}
-      </div>
-    `;
+    return iconButtonHtml("map", "Pick position on map", ` id="${id}"`);
   }
 
   // Opens a stacked map dialog seeded from the parent's latitude/longitude DMM
@@ -5437,8 +5414,10 @@
   }
 
   // defaults: optional draft fields for a NEW site (e.g. { title, latitude, longitude } from the Routes map).
-  function openSiteEditorModal(siteLibrary, site, onSave, defaults) {
+  function openSiteEditorModal(siteLibrary, site, onSave, defaults, onDelete) {
     const editing = Boolean(site);
+    // Style rollout B: delete lives in the Edit dialog (the Site Editor passes onDelete; the Route page does not)
+    const canDelete = editing && typeof onDelete === "function";
     const openedLatitude = Number(site?.latitude);
     const openedLongitude = Number(site?.longitude);
     if (editing && Number.isFinite(openedLatitude) && Number.isFinite(openedLongitude) && (openedLatitude || openedLongitude)) {
@@ -5455,6 +5434,7 @@
       <div class="button-row modal-title-actions">
         ${iconSubmitButtonHtml("save", "Save site", ` form="site-editor-form"`)}
         ${iconButtonHtml("cancel", "Cancel", ` data-modal-close`)}
+        ${canDelete ? `<span class="header-sep"></span>${iconButtonHtml("remove", "Delete site", ` data-action="delete-site"`)}` : ""}
       </div>
     `;
     const modal = openDialogModal(editing ? "Edit Site" : "Add Site", `
@@ -5463,9 +5443,11 @@
         <label class="full">Name
           <input id="site-editor-title" required value="${escapeAttribute(draft.title || draft.name || "")}" data-autofocus>
         </label>
-        ${coordinateFieldsHtml("site-editor-latitude", "Latitude", "latitude", draft.latitude)}
-        ${coordinateFieldsHtml("site-editor-longitude", "Longitude", "longitude", draft.longitude)}
-        ${sitePickerButtonHtml("site-editor-pick-on-map")}
+        <div class="site-position-row full">
+          ${coordinateFieldsHtml("site-editor-latitude", "Latitude", "latitude", draft.latitude)}
+          ${coordinateFieldsHtml("site-editor-longitude", "Longitude", "longitude", draft.longitude)}
+          ${sitePickerButtonHtml("site-editor-pick-on-map")}
+        </div>
         <label class="full">Description
           <textarea id="site-editor-description">${escapeHtml(draft.description || "")}</textarea>
         </label>
@@ -5474,7 +5456,7 @@
         </label>
         <div class="clone-panel full">
           <div class="card-header">
-            <h3>Media References</h3>
+            <h3>Media</h3>
             ${iconButtonHtml("add", "Add media", ` id="site-editor-add-image"`)}
           </div>
           <div id="site-image-upload-card" class="image-upload-card hidden">
@@ -5495,6 +5477,23 @@
       </form>
     `, { cardClass: "modal-wide", hideClose: true, headerActionsHtml });
 
+    const deleteSiteButton = modal.querySelector("[data-action='delete-site']");
+    if (deleteSiteButton) {
+      deleteSiteButton.addEventListener("click", async () => {
+        if (!await showAdminConfirm({
+          title: "Delete Site",
+          message: `Delete ${siteDisplayName(site, "this site")}?`,
+          confirmLabel: "Delete",
+          cancelLabel: "Cancel",
+          tone: "danger"
+        })) {
+          return;
+        }
+        markModalSaved(modal);
+        closeDialogModal();
+        onDelete();
+      });
+    }
     const titleInput = modal.querySelector("#site-editor-title");
     const imageList = modal.querySelector("#site-editor-images");
     const uploadCard = modal.querySelector("#site-image-upload-card");
@@ -5533,7 +5532,7 @@
     const drawImages = () => {
       imageList.innerHTML = "";
       if (!mediaItems.length && !pendingMedia.length) {
-        imageList.innerHTML = `<p class="muted">No media references yet.</p>`;
+        imageList.innerHTML = `<p class="muted">No media yet.</p>`;
         return;
       }
       mediaItems.forEach((media, mediaIndex) => {
@@ -6270,46 +6269,34 @@
     }, 12);
     container.style.setProperty("--site-name-column-width", `${longestNameLength + 1}ch`);
     sortedSites.forEach(({ site, index }) => {
-      const row = document.createElement("section");
-      row.className = "record-row site-record-row";
-      const mediaItems = siteMediaEntries(site);
-      row.innerHTML = `
-        <div class="record-summary site-record-summary">
-          <strong>${escapeHtml(siteDisplayName(site, `Site ${index + 1}`))}</strong>
-          <span class="site-position">${escapeHtml(formatSitePosition(site))}</span>
-          <span class="site-description-preview">${escapeHtml(siteDescriptionPreview(site))}</span>
-        </div>
-        <div class="button-row record-actions">
-          ${iconButtonHtml("edit", "Edit site", ` data-action="edit-site"`)}
-          ${iconButtonHtml("camera", "Preview site media", ` data-action="preview-media"${mediaItems.length ? "" : " disabled"}`)}
-          ${iconButtonHtml("remove", "Delete site", ` data-action="delete-site"`)}
-        </div>
-      `;
-      const previewButton = row.querySelector("[data-action='preview-media']");
-      if (previewButton && mediaItems.length) {
-        previewButton.addEventListener("click", () => openSiteMediaLightbox(mediaItems, 0));
-      }
-      row.querySelector("[data-action='edit-site']").addEventListener("click", () => {
-        openSiteEditorModal(siteLibrary, site, async updatedSite => {
-          const nextLibrary = normalizeSiteLibrary({
-            ...siteLibrary,
-            sites: siteLibrary.sites.map((entry, entryIndex) => entryIndex === index ? updatedSite : entry)
-          });
-          const saved = await saveSitesLibrary(nextLibrary, "Site saved.");
-          siteLibrary.sites = saved.sites;
-          drawSiteEditors(siteLibrary);
+      container.appendChild(siteRowElement(siteLibrary, site, index));
+    });
+  }
+
+  // Style rollout B: one slim row per site (name, one-line description, media count); tap to edit,
+  // delete inside the dialog
+  function siteRowElement(siteLibrary, site, index) {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "site-row";
+    row.title = "Edit site";
+    const mediaCount = siteMediaEntries(site).length;
+    row.innerHTML = `
+      <strong class="site-row-name">${escapeHtml(siteDisplayName(site, `Site ${index + 1}`))}</strong>
+      <span class="site-row-description">${escapeHtml(siteDescriptionPreview(site))}</span>
+      <span class="site-row-media"${mediaCount ? ` title="${mediaCount} media"` : ""}>${mediaCount ? `${buttonIconSvg("camera")}${mediaCount}` : ""}</span>
+      <svg class="row-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+    `;
+    row.addEventListener("click", () => {
+      openSiteEditorModal(siteLibrary, site, async updatedSite => {
+        const nextLibrary = normalizeSiteLibrary({
+          ...siteLibrary,
+          sites: siteLibrary.sites.map((entry, entryIndex) => entryIndex === index ? updatedSite : entry)
         });
-      });
-      row.querySelector("[data-action='delete-site']").addEventListener("click", async () => {
-        if (!await showAdminConfirm({
-          title: "Delete Site",
-          message: `Delete ${siteDisplayName(site, `Site ${index + 1}`)}?`,
-          confirmLabel: "Delete",
-          cancelLabel: "Cancel",
-          tone: "danger"
-        })) {
-          return;
-        }
+        const saved = await saveSitesLibrary(nextLibrary, "Site saved.");
+        siteLibrary.sites = saved.sites;
+        drawSiteEditors(siteLibrary);
+      }, null, async () => {
         try {
           const nextLibrary = normalizeSiteLibrary({
             ...siteLibrary,
@@ -6322,8 +6309,8 @@
           setStatus(error.message, "error");
         }
       });
-      container.appendChild(row);
     });
+    return row;
   }
 
   function cloneCharterInfo(charterInfo) {
