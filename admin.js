@@ -10546,36 +10546,6 @@
     return formatAvailableAlcoholName(left || {}).localeCompare(formatAvailableAlcoholName(right || {}), undefined, { sensitivity: "base" });
   }
 
-  function availableAlcoholColumnWidthCh(values, min, max) {
-    const longest = (Array.isArray(values) ? values : [])
-      .map(value => String(value || "").trim().length)
-      .reduce((result, length) => Math.max(result, length), 0);
-    return Math.min(Math.max(longest + 1, min), max);
-  }
-
-  function updateAvailableAlcoholListSizing(listShell, displayRows) {
-    if (!listShell) {
-      return;
-    }
-    const rows = Array.isArray(displayRows) ? displayRows : [];
-    if (!rows.length) {
-      [
-        "--available-alcohol-name-width",
-        "--available-alcohol-category-width",
-        "--available-alcohol-quantity-width",
-        "--available-alcohol-price-width"
-      ].forEach(property => listShell.style.removeProperty(property));
-      return;
-    }
-    listShell.style.setProperty("--available-alcohol-name-width", `${availableAlcoholColumnWidthCh(rows.map(({ display_item, item, index }) => formatAvailableAlcoholName(display_item || item, `Drink ${index + 1}`)).concat("Name"), 16, 34)}ch`);
-    listShell.style.setProperty("--available-alcohol-category-width", `${availableAlcoholColumnWidthCh(rows.map(({ display_item, item }) => availableAlcoholCategoryText(display_item || item)).concat("Category"), 10, 24)}ch`);
-    listShell.style.setProperty("--available-alcohol-quantity-width", `${availableAlcoholColumnWidthCh(rows.map(({ item, quantity }) => quantity > 1 ? drinkStockBottleCountText(quantity, item) : "").concat("Quantity"), 8, 18)}ch`);
-    listShell.style.setProperty("--available-alcohol-price-width", `${availableAlcoholColumnWidthCh(rows.map(({ display_item, item }) => {
-      const source = display_item || item;
-      return `${availableAlcoholPriceInputValue(source?.price_per_bottle) || "POR"} ${source?.currency === "USD" ? "USD" : "PHP"}`;
-    }).concat("Price"), 25, 32)}ch`);
-  }
-
   function normalizeAvailableAlcoholPrice(value) {
     if (value === null || value === undefined || value === "") {
       return null;
@@ -12997,23 +12967,24 @@
         <div class="card-header available-alcohol-header">
           <h2>Available Alcohol</h2>
           <label class="inline-check available-alcohol-guest-price-toggle">
-            <input id="available-alcohol-show-prices-to-guests" type="checkbox"${showPricesToGuests ? " checked" : ""}>
-            <span>Show prices to guests</span>
+            <span>Prices to guests</span>
+            <input id="available-alcohol-show-prices-to-guests" type="checkbox" role="switch"${showPricesToGuests ? " checked" : ""} aria-label="Show prices to guests">
           </label>
           <div class="button-row list-add-actions">
             ${iconButtonHtml("add", "Add available alcohol from stock", ` id="add-available-alcohol"`)}
             ${iconButtonHtml("preview", "Preview Available Alcohol", ` id="preview-available-alcohol"`)}
+            <span class="header-sep"></span>
             ${iconButtonHtml("confirm", "Commit Available Alcohol", ` id="commit-available-alcohol"`)}
             ${iconButtonHtml("cancel", "Cancel Available Alcohol changes", ` id="cancel-available-alcohol"`)}
           </div>
         </div>
-        <p class="muted">Unopened available stock eligible for guest purchase.</p>
+        <p class="guest-order-hint">Unopened available stock eligible for guest purchase. Type a price, or leave it empty for POR (price on request).</p>
         <div id="available-alcohol-list-shell" class="available-alcohol-list-shell">
-          <div id="available-alcohol-list-header" class="available-alcohol-list-header record-row available-alcohol-row" hidden>
+          <div id="available-alcohol-list-header" class="available-alcohol-list-header" hidden>
             <span>Name</span>
-            <span>Category</span>
             <span>Quantity</span>
             <span>Price</span>
+            <span class="available-alcohol-list-header-spacer" aria-hidden="true"></span>
             <span class="available-alcohol-list-header-spacer" aria-hidden="true"></span>
           </div>
           <div id="available-alcohol-list" class="editor-list available-alcohol-list"></div>
@@ -13024,14 +12995,12 @@
 
   function drawAvailableAlcoholItems(availableAlcohol, drinkStocks, charterId, markDirty, redraw) {
     const container = document.getElementById("available-alcohol-list");
-    const listShell = document.getElementById("available-alcohol-list-shell");
     const listHeader = document.getElementById("available-alcohol-list-header");
     if (!container) {
       return;
     }
     container.innerHTML = "";
     if (!availableAlcohol.items.length) {
-      updateAvailableAlcoholListSizing(listShell, []);
       if (listHeader) {
         listHeader.hidden = true;
       }
@@ -13039,34 +13008,38 @@
       return;
     }
     const displayRows = aggregateAvailableAlcoholRows(availableAlcohol.items, drinkStocks);
-    updateAvailableAlcoholListSizing(listShell, displayRows);
     if (listHeader) {
       listHeader.hidden = !displayRows.length;
     }
+    // Style rollout B: rows grouped under their category (the rows are already sorted by category); the price is typed
+    // in the row; Mark as purchased stays on the row, Edit stock item and Remove are behind a tap on the row
+    let lastCategory = null;
     displayRows.forEach(({ item, index, indexes, all_indexes, quantity, stock, display_item, linked_stock_item_ids, linked_stock_items }) => {
       const displayItem = display_item || availableAlcoholDisplayItem(item, stock);
       const groupIndexes = Array.isArray(all_indexes) && all_indexes.length ? all_indexes : [index];
       const displayName = formatAvailableAlcoholName(displayItem, `Drink ${index + 1}`);
+      const category = availableAlcoholCategoryText(item);
+      if (category !== lastCategory) {
+        container.insertAdjacentHTML("beforeend", `<h3 class="available-alcohol-group-title">${escapeHtml(category)}</h3>`);
+        lastCategory = category;
+      }
+      const countText = drinkStockBottleCountText(quantity, item);
       const row = document.createElement("div");
-      row.className = "record-row available-alcohol-row";
+      row.className = "available-alcohol-row";
       row.innerHTML = `
-        <div class="record-summary available-alcohol-summary">
-          <strong class="available-alcohol-cell available-alcohol-name-cell" data-label="Name">${escapeHtml(displayName)}</strong>
-          <span class="available-alcohol-cell available-alcohol-category-cell" data-label="Category">${escapeHtml(availableAlcoholCategoryText(item))}</span>
-          <span class="available-alcohol-cell" data-label="Quantity">${quantity > 1 ? escapeHtml(drinkStockBottleCountText(quantity, item)) : ""}</span>
-          <span class="available-alcohol-cell available-alcohol-price-cell" data-label="Price">
-            <input class="available-alcohol-price-input" data-price-index="${index}" type="text" inputmode="numeric" pattern="[0-9]{0,6}" maxlength="6" placeholder="POR" value="${escapeAttribute(availableAlcoholPriceInputValue(displayItem.price_per_bottle))}" aria-label="Price for ${escapeAttribute(displayName)}">
-            <select data-currency-index="${index}" aria-label="Currency for ${escapeAttribute(displayName)}">
-              <option value="PHP"${displayItem.currency === "PHP" ? " selected" : ""}>PHP</option>
-              <option value="USD"${displayItem.currency === "USD" ? " selected" : ""}>USD</option>
-            </select>
-          </span>
-        </div>
-        <div class="button-row record-actions">
+        <strong class="available-alcohol-cell available-alcohol-name-cell">${escapeHtml(displayName)}</strong>
+        <span class="available-alcohol-cell available-alcohol-quantity-cell">${quantity > 1 ? `<span class="stock-bottles" title="${escapeAttribute(countText)}"><svg viewBox="0 0 14 16" aria-hidden="true"><path d="M5 0h4v4l2 3v9H3V7l2-3z"></path></svg>× ${escapeHtml(quantity)}</span>` : ""}</span>
+        <span class="available-alcohol-cell available-alcohol-price-cell">
+          <select data-currency-index="${index}" aria-label="Currency for ${escapeAttribute(displayName)}">
+            <option value="PHP"${displayItem.currency === "PHP" ? " selected" : ""}>PHP</option>
+            <option value="USD"${displayItem.currency === "USD" ? " selected" : ""}>USD</option>
+          </select>
+          <input class="available-alcohol-price-input" data-price-index="${index}" type="text" inputmode="numeric" pattern="[0-9]{0,6}" maxlength="6" placeholder="POR" value="${escapeAttribute(availableAlcoholPriceInputValue(displayItem.price_per_bottle))}" aria-label="Price for ${escapeAttribute(displayName)}">
+        </span>
+        <span class="available-alcohol-cell available-alcohol-actions">
           ${iconButtonHtml("purchase", "Mark as purchased by charter", ` data-action="purchase-drink"`)}
-          ${iconButtonHtml("edit", "Edit stock item", ` data-action="edit-stock"`)}
-          ${iconButtonHtml("remove", "Remove from Available Alcohol", ` data-action="remove-drink"`)}
-        </div>
+        </span>
+        ${rowChevronHtml()}
       `;
       const priceInput = row.querySelector("[data-price-index]");
       priceInput?.addEventListener("input", event => {
@@ -13155,7 +13128,7 @@
           setStatus(error.message, "error");
         }
       });
-      row.querySelector("[data-action='edit-stock']").addEventListener("click", () => {
+      const editStock = () => {
         const stockIndex = drinkStocks.items.findIndex(stock => stock.id && stock.id === item.stock_id);
         if (stockIndex < 0) {
           setStatus("The source stock item could not be found.", "error");
@@ -13168,24 +13141,51 @@
             redraw();
           }
         });
-      });
-      row.querySelector("[data-action='remove-drink']").addEventListener("click", async () => {
-        if (!await showAdminConfirm({
-          title: "Remove Available Alcohol",
-          message: `Remove ${displayName || "this item"} from this charter's Available Alcohol list?`,
-          confirmLabel: "Remove",
-          cancelLabel: "Cancel",
-          tone: "danger"
-        })) {
-          return;
-        }
+      };
+      const removeDrink = () => {
         indexes.slice().sort((left, right) => right - left).forEach(removeIndex => {
           availableAlcohol.items.splice(removeIndex, 1);
         });
         markDirty();
         redraw();
+      };
+      bindTapRow(row, "Edit stock item or remove", () => {
+        openAvailableAlcoholItemDialog(displayName, `${category}${quantity > 1 ? ` · ${countText}` : ""}`, editStock, removeDrink);
       });
       container.appendChild(row);
+    });
+  }
+
+  // Style rollout B: a drink's less frequent actions (edit its stock item, remove it from the list), opened by a tap
+  function openAvailableAlcoholItemDialog(displayName, summary, onEditStock, onRemove) {
+    const modal = openDialogModal(displayName, `<p class="muted">${escapeHtml(summary)}</p>`, {
+      hideClose: true,
+      headerActionsHtml: `
+        <div class="button-row modal-title-actions">
+          ${iconButtonHtml("edit", "Edit stock item", ` data-action="edit-stock"`)}
+          ${iconButtonHtml("cancel", "Close", ` data-modal-close`)}
+          <span class="header-sep"></span>
+          ${iconButtonHtml("remove", "Remove from Available Alcohol", ` data-action="remove-drink"`)}
+        </div>
+      `
+    });
+    // closeDialogModal is async: wait for it, or it would clear the stock editor that opens in the same dialog
+    modal.querySelector("[data-action='edit-stock']").addEventListener("click", async () => {
+      await closeDialogModal();
+      onEditStock();
+    });
+    modal.querySelector("[data-action='remove-drink']").addEventListener("click", async () => {
+      if (!await showAdminConfirm({
+        title: "Remove Available Alcohol",
+        message: `Remove ${displayName || "this item"} from this charter's Available Alcohol list?`,
+        confirmLabel: "Remove",
+        cancelLabel: "Cancel",
+        tone: "danger"
+      })) {
+        return;
+      }
+      await closeDialogModal();
+      onRemove();
     });
   }
 
