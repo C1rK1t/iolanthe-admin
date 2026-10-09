@@ -4,8 +4,9 @@
 designed with David in the visual companion and steered by the captain's feedback. Spec A:
 `spec-a-reskin.md`.*
 
-Order (David, 2026-10-09: start with Crew): Crew → Site Editor → Galley Menus → Galley Guests → Drink Stocks → the
-other Hotel alcohol pages → Cocktails → Settings → login screen.
+Order (David, 2026-10-09: start with Crew): Crew → Site Editor → Galley Menus → Galley Guests → Hotel Guests (added
+2026-10-09: it holds the guest-order arrows) → Drink Stocks → the other Hotel alcohol pages → Cocktails → Settings →
+login screen.
 
 Patterns carried from the Route page and Charter Admin: header actions top right (save green, cancel red, a separator,
 delete last); icons over text; tap targets of at least 40 px; no per-row clutter.
@@ -105,3 +106,42 @@ drag of Day 1's menu onto Day 3 (Days 2-3 moved up), back with ArrowUp twice (fo
 neighbour in the dialog; Snacks added, moved up two places by keyboard, deleted from its editor; Cancel → Discard kept
 the saved order; Clear on an empty Day 2 confirmed and saved; 820 and 390 px with no sideways scroll; no console
 errors. Not tried: a real finger on the bridge tablet.
+
+**2026-10-09 LIVE:** PR iolanthe-admin#25 merged (`92577fe`, after merging main: the charter-pack PR #24 had landed;
+assets `admin-menus-b2`, 31 `?v=` strings, 177 tests) and pulled onto the boat.
+
+## Galley Guests (2026-10-09)
+
+Mockup `galley-guests-b.html`. Read-only: the chef's view of allergies and preferences (editing is on Hotel → Guests).
+Before choosing, David asked what already alerts the chef and how Hotel orders guests:
+
+- **Already there:** the Galley menu's Guests button turns red with a yellow border when an active guest has anything in
+  Allergies, and the allergy text was red and bold. Charter Notes' "Dietary restrictions present" is a manual Charter
+  Admin tick box, not linked to the guests. Nothing on Menus mentions allergies.
+- **Hotel guest order** (`normalizeGuestListForCount`, `findGuestDemotionTargetIndex`, `demoteGuestAtIndex`,
+  `moveGuest`, `promoteInactiveGuest`): the principal is always first and cannot be moved past; active guests, then
+  inactive. When the charter's guest count drops, blank slots go first (from the bottom), then the last active
+  non-principal guest becomes inactive (details kept); when it rises, inactive guests come back first, then blank slots.
+  Promoting an inactive guest demotes the last active one. Hotel applies this when Guests opens and saves it with the
+  next save there. So the order decides who goes inactive first.
+
+Decisions (David chose **B-lite**, fix both loose ends, add the hint):
+- **SB-G1 B-lite.** A red edge and a warning pill on a guest with allergies; a quiet dash for no allergies / no
+  preferences (was "No Allergies" / "No Preferences"). No count banner (the red menu button already alerts). Order
+  unchanged; inactive guests keep the INACTIVE label and still show their allergies.
+- **SB-G2 "None" is not an allergy.** `meaningfulGuestText` treats none, no, nil, nothing, n/a, nka, nkda, "no (known)
+  (food) allergies", "no preference(s)", dashes and 0 (trailing . or ! ignored) as empty, for the menu alert and the
+  Galley list (allergies and preferences).
+- **SB-G3 Galley follows the guest count.** Galley now applies the same `normalizeGuestListForCount` as Hotel, so both
+  show the same active guests (before, Galley showed the saved list until Hotel saved).
+- **SB-G4 Hotel → Guests hint:** "If the guest count drops, the bottom of the list goes inactive first." under the
+  title. The drag that replaces Hotel's arrows comes with its own phase B pass, next, and must keep every rule above
+  (principal fixed with no grip, only active non-principal guests draggable, no drop above the principal, inactive
+  guests keep Promote, each drop = `moveGuest` steps).
+
+**2026-10-09 EXECUTED** on `feat/galley-guests-b` (assets `admin-galley-guests-b`). Browser pass on the scratch server,
+Larry's charter temporarily seeded (4 guests: allergies "Shellfish, tree nuts", "None", "N/A.", "Gluten (coeliac)";
+preferences including "no preferences"; guest count 4 → 3) and restored afterwards: Galley showed James (principal)
+and Emma with red edges and pills, Sarah and Oliver with dashes, Emma inactive (count 3, last non-principal), the menu
+button red; with James's allergy set to "none" the button turned off (Emma is inactive). Hotel → Guests showed the
+hint and the same active guests. 177 tests; no console errors from this change.

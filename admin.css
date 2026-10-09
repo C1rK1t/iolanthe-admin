@@ -1613,9 +1613,42 @@ button.site-row:focus-visible {
   color: var(--ink);
 }
 
-.galley-guest-allergies.has-allergies {
-  color: #b42318;
-  font-weight: 800;
+/* Galley Guests (style rollout B): allergies stand out; "nothing" is a quiet dash */
+.galley-guest-row.has-allergy {
+  box-shadow: inset 4px 0 0 var(--danger);
+}
+
+.allergy-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid #f0b8b1;
+  border-radius: 999px;
+  background: #fbe4e1;
+  color: var(--danger);
+  font-weight: 700;
+  padding: 0.15rem 0.6rem;
+}
+
+.allergy-pill svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.guest-nothing {
+  color: #9aa6ad;
+}
+
+.guest-order-hint {
+  margin: -0.4rem 0 0.8rem;
+  color: var(--muted);
+  font-size: 0.85rem;
 }
 
 .galley-guest-row.inactive {
@@ -1625,10 +1658,6 @@ button.site-row:focus-visible {
 
 .galley-guest-row.inactive .galley-guest-name strong {
   color: var(--muted);
-}
-
-.galley-guest-row.inactive .galley-guest-allergies.has-allergies {
-  color: #b42318;
 }
 
 .galley-guest-row .principal-crown {

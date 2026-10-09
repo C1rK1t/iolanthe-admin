@@ -2219,9 +2219,16 @@
     };
   }
 
+  // "None", "N/A", "nil", "no allergies"... typed into a guest field mean there is nothing to flag (style rollout B)
+  function meaningfulGuestText(value) {
+    const text = (Array.isArray(value) ? value.map(item => String(item || "").trim()).filter(Boolean).join(", ") : String(value || "")).trim();
+    const bare = text.replace(/[.!]+$/, "").trim();
+    return /^(none|no|nil|nothing|n\/?a|nka|nkda|no known (food )?allergies|no allergies|no preferences?|-+|—|–|0)$/i.test(bare) ? "" : text;
+  }
+
   function activeGuestAllergyCount(guestList) {
     const guests = Array.isArray(guestList?.guests) ? guestList.guests : [];
-    return guests.filter(guest => guest && guest.active !== false && String(guest.allergies || "").trim()).length;
+    return guests.filter(guest => guest && guest.active !== false && meaningfulGuestText(guest.allergies)).length;
   }
 
   function galleyPanelsForGuestList(guestList) {
@@ -4732,6 +4739,7 @@
         <div class="card-header">
           <h2>${escapeHtml(settings.title)}</h2>
         </div>
+        ${settings.hint ? `<p class="guest-order-hint">${escapeHtml(settings.hint)}</p>` : ""}
         <div id="guest-editor-list" class="editor-list"></div>
       </section>
     `;
@@ -5780,8 +5788,8 @@
         : (typeof source.name === "string" ? source.name.trim() : "");
       return {
         preferred_name: preferredName,
-        allergies: galleyGuestFieldText(source.allergies),
-        dietary_preferences: galleyGuestFieldText(source.dietary_preferences),
+        allergies: meaningfulGuestText(galleyGuestFieldText(source.allergies)),
+        dietary_preferences: meaningfulGuestText(galleyGuestFieldText(source.dietary_preferences)),
         active: source.active === undefined ? true : Boolean(source.active),
         principal: Boolean(source.principal || source[legacyPrincipalField])
       };
@@ -5815,17 +5823,18 @@
           </div>
           ${guests.map((guest, index) => {
             const displayName = displayNames[index];
-            const allergies = guest.allergies || "No Allergies";
-            const preferences = guest.dietary_preferences || "No Preferences";
+            const nothing = label => `<span class="guest-nothing" title="${label}">—</span>`;
             return `
-              <div class="galley-guest-row${guest.active === false ? " inactive" : ""}">
+              <div class="galley-guest-row${guest.active === false ? " inactive" : ""}${guest.allergies ? " has-allergy" : ""}">
                 <div class="galley-guest-name">
                   <strong>${escapeHtml(displayName)}</strong>
                   ${guest.principal ? `<span class="principal-crown" title="Principal guest" aria-label="Principal guest">&#x265B;</span>` : ""}
                   ${guest.active === false ? `<span class="inactive-label">Inactive</span>` : ""}
                 </div>
-                <div class="galley-guest-cell galley-guest-allergies${guest.allergies ? " has-allergies" : ""}">${escapeHtml(allergies)}</div>
-                <div class="galley-guest-cell">${escapeHtml(preferences)}</div>
+                <div class="galley-guest-cell galley-guest-allergies">${guest.allergies
+                  ? `<span class="allergy-pill"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l10 18H2z"></path><path d="M12 10v5M12 18v.01"></path></svg>${escapeHtml(guest.allergies)}</span>`
+                  : nothing("No allergies")}</div>
+                <div class="galley-guest-cell">${guest.dietary_preferences ? escapeHtml(guest.dietary_preferences) : nothing("No preferences")}</div>
               </div>
             `;
           }).join("")}
@@ -6707,8 +6716,9 @@
     try {
       const bundle = await loadCharter(state.selectedCharter);
       const menus = normalizeMenus(bundle["menus.json"]);
-      const guestList = bundle["guest_list.json"] || {};
       const charterInfo = normalizeCharterInfo(bundle["charter.json"]);
+      // The same guest-count adjustment as Hotel → Guests, so both show the same active guests
+      const guestList = normalizeGuestListForCount(bundle["guest_list.json"], charterInfo.guest_count);
       const itinerary = bundle["itinerary.json"] || {};
       const activeItineraryDayCount = window.IolantheItineraryCore
         ? window.IolantheItineraryCore.charterDayCount(charterInfo)
@@ -13661,7 +13671,8 @@
       let content = "";
       if (activePanel === "guests") {
         content = renderGuestsPanel({
-          title: "Guests"
+          title: "Guests",
+          hint: "If the guest count drops, the bottom of the list goes inactive first."
         });
       } else if (activePanel === "drink-stocks") {
         content = renderDrinkStocksPanel(drinkStocks);
