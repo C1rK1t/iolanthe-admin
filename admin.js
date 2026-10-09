@@ -4738,6 +4738,7 @@
       <section class="card full">
         <div class="card-header">
           <h2>${escapeHtml(settings.title)}</h2>
+          ${Number.isInteger(settings.count) ? `<span class="status-pill guest-count-pill">${settings.count} ${settings.count === 1 ? "guest" : "guests"}</span>` : ""}
         </div>
         ${settings.hint ? `<p class="guest-order-hint">${escapeHtml(settings.hint)}</p>` : ""}
         <div id="guest-editor-list" class="editor-list"></div>
@@ -5907,8 +5908,9 @@
     };
   }
 
-  function openGuestEditModal(guestList, guest, index, options, onSave) {
+  function openGuestEditModal(guestList, guest, index, options, onSave, onDelete) {
     const settings = options || {};
+    const inactiveGuest = guest.active === false;
     const draft = normalizeGuestRecord(guest);
     const suggestions = guestModalSuggestions(guestList);
     const suggestionIds = Object.fromEntries(Object.keys(suggestions).map(key => [key, `guest-edit-${key}-suggestions`]));
@@ -5917,6 +5919,7 @@
       <div class="button-row modal-title-actions">
         ${iconSubmitButtonHtml("save", "Save guest", ` form="guest-edit-form"`)}
         ${iconButtonHtml("cancel", "Cancel", ` data-modal-close`)}
+        ${typeof onDelete === "function" ? `<span class="header-sep"></span>${iconButtonHtml("remove", inactiveGuest ? "Delete inactive guest" : "Clear guest slot", ` data-action="delete-guest"`)}` : ""}
       </div>
     `;
     const modal = openDialogModal(`Edit ${guestDisplayName(draft, index)}`, `
@@ -5978,6 +5981,23 @@
         </label>
       </form>
     `, { cardClass: "modal-wide", hideClose: true, headerActionsHtml });
+    const deleteGuestButton = modal.querySelector("[data-action='delete-guest']");
+    if (deleteGuestButton) {
+      deleteGuestButton.addEventListener("click", async () => {
+        if (!await showAdminConfirm({
+          title: inactiveGuest ? "Delete Inactive Guest" : "Clear Guest Slot",
+          message: inactiveGuest ? "Delete this inactive guest? This cannot be undone." : `Clear ${guestDisplayName(guest, index)}? The guest slot will remain.`,
+          confirmLabel: inactiveGuest ? "Delete" : "Clear",
+          cancelLabel: "Cancel",
+          tone: "danger"
+        })) {
+          return;
+        }
+        markModalSaved(modal);
+        closeDialogModal();
+        onDelete();
+      });
+    }
     const fullNameInput = modal.querySelector("#guest-edit-full-name");
     const preferredNameInput = modal.querySelector("#guest-edit-preferred-name");
     let preferredNameEdited = Boolean(preferredNameInput.value.trim());
@@ -6068,117 +6088,138 @@
       container.innerHTML += `<p class="muted">${escapeHtml(settings.emptyMessage)}</p>`;
       return;
     }
+    // Style rollout B: tap a guest to edit (clear / delete live in the dialog); the principal stays first with no grip;
+    // other active guests drag to reorder, which decides who goes inactive first if the guest count drops
+    let inactiveHeadingShown = false;
     guestList.guests.forEach((guest, index) => {
-      const activeGuests = guestList.guests.filter(entry => entry.active !== false);
-      const activeIndex = activeGuests.indexOf(guest);
-      const canMoveUp = settings.allowReorder && guest.active !== false && !guest.principal && activeIndex > 1;
-      const canMoveDown = settings.allowReorder && guest.active !== false && !guest.principal && activeIndex >= 1 && activeIndex < activeGuests.length - 1;
-      const canDeleteGuest = settings.allowDelete || (settings.allowDeleteInactive && guest.active === false);
-      const summaryLines = guestAdminSummaryLines(guest);
-      const section = document.createElement("section");
-      section.className = `record-row guest-record-row${guest.active === false ? " inactive" : ""}`;
-      section.innerHTML = `
-        <div class="record-summary guest-record-summary">
-          <strong>${escapeHtml(guestDisplayName(guest, index))}${guest.principal ? `<span class="principal-crown" title="Principal guest" aria-label="Principal guest">&#x265B;</span>` : ""}</strong>
-          ${summaryLines.map(line => `<span class="multiline-text">${escapeHtml(line)}</span>`).join("")}
-          ${guest.active === false ? `<span class="inactive-label">Inactive</span>` : ""}
-        </div>
-        <div class="button-row record-actions">
-          ${settings.allowEdit ? iconButtonHtml("edit", "Edit guest", ` data-action="edit-guest"`) : ""}
-          ${settings.allowPromoteInactive && guest.active === false ? iconButtonHtml("promote", "Promote to active", ` data-action="promote-guest"`) : ""}
-          ${settings.allowReorder && guest.active !== false ? iconButtonHtml("move-up", "Move guest up", ` data-action="move-up"${canMoveUp ? "" : " disabled"}`) : ""}
-          ${settings.allowReorder && guest.active !== false ? iconButtonHtml("move-down", "Move guest down", ` data-action="move-down"${canMoveDown ? "" : " disabled"}`) : ""}
-          ${canDeleteGuest ? iconButtonHtml("remove", guest.active === false ? "Delete inactive guest" : "Clear guest slot", ` data-action="delete-guest"`) : ""}
-        </div>
-      `;
-      const editButton = section.querySelector("[data-action='edit-guest']");
-      if (editButton) {
-        editButton.addEventListener("click", () => {
-          openGuestEditModal(guestList, guest, index, settings, async nextGuest => {
-            if (nextGuest.principal && settings.canChangePrincipal) {
-              guestList.guests.forEach(entry => {
-                entry.principal = false;
-              });
-            }
-            guestList.guests[index] = nextGuest;
-            guestList.guests = sortAndEnsurePrincipalGuests(guestList.guests);
-            await saveGuestList(guestList, settings);
-            drawGuestEditors(guestList, settings);
-          });
-        });
+      const inactive = guest.active === false;
+      if (inactive && !inactiveHeadingShown) {
+        container.insertAdjacentHTML("beforeend", `<h3 class="guest-group-title">Inactive</h3>`);
+        inactiveHeadingShown = true;
       }
-      const promoteButton = section.querySelector("[data-action='promote-guest']");
-      if (promoteButton) {
-        promoteButton.addEventListener("click", async () => {
-          if (!await showAdminConfirm({
-            title: "Promote Guest to Active",
-            message: `Move ${guestDisplayName(guest, index)} to the active guest list?`,
-            confirmLabel: "Promote",
-            cancelLabel: "Cancel",
-            tone: "warning"
-          })) {
-            return;
+      container.appendChild(guestRowElement(guestList, guest, index, settings));
+    });
+    // Only active guests other than the principal move, so nothing can be dropped above the principal
+    const movableIndexes = guestList.guests
+      .map((guest, index) => (guest.active !== false && !guest.principal ? index : -1))
+      .filter(index => index >= 0);
+    window.IolantheDragReorder.attach(container, {
+      items: () => [...container.querySelectorAll(":scope > .guest-row.is-movable")],
+      handleSelector: ".guest-grip",
+      onMove: async (from, to) => {
+        const direction = to > from ? 1 : -1;
+        for (let position = from; position !== to; position += direction) {
+          if (!moveGuest(guestList, movableIndexes[position], direction)) {
+            break;
           }
-          const result = promoteInactiveGuest(guestList, index);
-          if (!result.ok) {
-            setStatus(result.message || "Unable to move guest to active.", "error");
-            return;
-          }
-          await saveGuestList(guestList, settings);
-          drawGuestEditors(guestList, settings);
-        });
+        }
+        await saveGuestList(guestList, settings);
+        drawGuestEditors(guestList, settings);
+      },
+      afterMove: to => {
+        container.querySelectorAll(":scope > .guest-row.is-movable .guest-grip")[to]?.focus();
       }
-      const moveUpButton = section.querySelector("[data-action='move-up']");
-      if (moveUpButton) {
-        moveUpButton.addEventListener("click", async () => {
-          if (moveGuest(guestList, index, -1)) {
-            await saveGuestList(guestList, settings);
-            drawGuestEditors(guestList, settings);
+    });
+  }
+
+  function guestRowElement(guestList, guest, index, settings) {
+    const inactive = guest.active === false;
+    const movable = settings.allowReorder && !inactive && !guest.principal;
+    const fullName = String(guest.full_name || "").trim();
+    const displayName = guestDisplayName(guest, index);
+    const cabin = meaningfulGuestText(guestAdminFieldText(guest.cabin));
+    const row = document.createElement("div");
+    row.className = `guest-row${inactive ? " inactive" : ""}${movable ? " is-movable" : ""}`;
+    row.innerHTML = `
+      ${movable ? dragHandleHtml(`Move ${displayName}`, "guest-grip") : `<span class="drag-handle-spacer"></span>`}
+      <span class="guest-row-name">
+        <b>${escapeHtml(displayName)}${guest.principal ? `<span class="principal-crown" title="Principal guest" aria-label="Principal guest">&#x265B;</span>` : ""}</b>
+        ${fullName && fullName !== displayName ? `<small>${escapeHtml(fullName)}</small>` : ""}
+      </span>
+      <span class="guest-cabin${cabin ? "" : " is-empty"}">${cabin ? escapeHtml(cabin) : ""}</span>
+      <span class="guest-chips">${guestDetailChipsHtml(guest)}</span>
+      <span class="guest-row-actions">
+        ${settings.allowPromoteInactive && inactive ? iconButtonHtml("promote", "Promote to active", ` data-action="promote-guest"`) : ""}
+      </span>
+      ${settings.allowEdit ? rowChevronHtml() : `<span></span>`}
+    `;
+    if (settings.allowEdit) {
+      const canDelete = settings.allowDelete || (settings.allowDeleteInactive && inactive);
+      bindTapRow(row, "Edit guest", () => {
+        openGuestEditModal(guestList, guest, index, settings, async nextGuest => {
+          if (nextGuest.principal && settings.canChangePrincipal) {
+            guestList.guests.forEach(entry => {
+              entry.principal = false;
+            });
           }
-        });
-      }
-      const moveDownButton = section.querySelector("[data-action='move-down']");
-      if (moveDownButton) {
-        moveDownButton.addEventListener("click", async () => {
-          if (moveGuest(guestList, index, 1)) {
-            await saveGuestList(guestList, settings);
-            drawGuestEditors(guestList, settings);
-          }
-        });
-      }
-      const deleteButton = section.querySelector("[data-action='delete-guest']");
-      if (deleteButton) {
-        deleteButton.addEventListener("click", async () => {
-          const inactive = guest.active === false;
-          if (!inactive && !settings.allowDelete) {
-            setStatus("Active guests cannot be deleted from Hotel.", "error");
-            return;
-          }
-          if (inactive && !settings.allowDelete && !settings.allowDeleteInactive) {
-            setStatus("Inactive guest deletion is not allowed here.", "error");
-            return;
-          }
-          if (!await showAdminConfirm({
-            title: inactive ? "Delete Inactive Guest" : "Clear Guest Slot",
-            message: inactive ? "Delete this inactive guest? This cannot be undone." : `Clear ${guestDisplayName(guest, index)}? The guest slot will remain.`,
-            confirmLabel: inactive ? "Delete" : "Clear",
-            cancelLabel: "Cancel",
-            tone: "danger"
-          })) {
-            return;
-          }
-          if (inactive) {
-            guestList.guests.splice(index, 1);
-          } else {
-            clearGuestSlot(guest);
-          }
+          guestList.guests[index] = nextGuest;
           guestList.guests = sortAndEnsurePrincipalGuests(guestList.guests);
           await saveGuestList(guestList, settings);
           drawGuestEditors(guestList, settings);
-        });
-      }
-      container.appendChild(section);
-    });
+        }, canDelete ? () => removeGuestFromList(guestList, guest, index, settings) : null);
+      });
+    }
+    const promoteButton = row.querySelector("[data-action='promote-guest']");
+    if (promoteButton) {
+      promoteButton.addEventListener("click", async () => {
+        if (!await showAdminConfirm({
+          title: "Promote Guest to Active",
+          message: `Move ${displayName} to the active guest list?`,
+          confirmLabel: "Promote",
+          cancelLabel: "Cancel",
+          tone: "warning"
+        })) {
+          return;
+        }
+        const result = promoteInactiveGuest(guestList, index);
+        if (!result.ok) {
+          setStatus(result.message || "Unable to move guest to active.", "error");
+          return;
+        }
+        await saveGuestList(guestList, settings);
+        drawGuestEditors(guestList, settings);
+      });
+    }
+    return row;
+  }
+
+  // Deletes an inactive guest, or clears an active guest's slot (the slot stays); called from the Edit dialog once
+  // the user has confirmed there
+  async function removeGuestFromList(guestList, guest, index, settings) {
+    if (guest.active === false) {
+      guestList.guests.splice(index, 1);
+    } else {
+      clearGuestSlot(guest);
+    }
+    guestList.guests = sortAndEnsurePrincipalGuests(guestList.guests);
+    await saveGuestList(guestList, settings);
+    drawGuestEditors(guestList, settings);
+  }
+
+  // Medical first (amber), then drinks, diving and notes; "None", "N/A" and the like are left out
+  function guestDetailChipsHtml(guest) {
+    const icons = {
+      medical: `<path d="M12 5v14M5 12h14"></path>`,
+      drinks: `<path d="M7 3h10l-1 7a4 4 0 0 1-8 0zM12 14v6M8 21h8"></path>`,
+      diving: `<rect x="3" y="7" width="18" height="9" rx="3"></rect><path d="M12 10v3"></path>`,
+      notes: `<path d="M5 4h10l4 4v12H5zM9 12h6M9 16h4"></path>`
+    };
+    const details = [
+      ["medical", "Medical notes", guestAdminFieldText(guest?.medical_notes, false)],
+      ["drinks", "Drinks", guestAdminFieldText(guest?.drinks_preferences, false)],
+      ["diving", "Diving", guestDivingSummaryText(guest).split(" | ").join(", ")],
+      ["notes", "Notes", guestAdminFieldText(guest?.notes, false)]
+    ];
+    return details
+      .map(([kind, label, value]) => [kind, label, meaningfulGuestText(value)])
+      .filter(([, , value]) => value)
+      .map(([kind, label, value]) => `
+        <span class="guest-chip guest-chip--${kind}" title="${escapeAttribute(`${label}: ${value}`)}">
+          <svg viewBox="0 0 24 24" aria-hidden="true">${icons[kind]}</svg>
+          <span>${escapeHtml(value)}</span>
+        </span>
+      `)
+      .join("");
   }
 
   function drawCrewEditors(crewList) {
@@ -13672,6 +13713,7 @@
       if (activePanel === "guests") {
         content = renderGuestsPanel({
           title: "Guests",
+          count: normalizeGuestCount(charterInfo.guest_count),
           hint: "If the guest count drops, the bottom of the list goes inactive first."
         });
       } else if (activePanel === "drink-stocks") {
