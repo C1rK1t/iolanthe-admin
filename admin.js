@@ -4220,14 +4220,26 @@
     });
   }
 
-  function openCrewMemberModal(crewList, memberOrOnSave, maybeOnSave, onDelete) {
+  // Spec C: the crew dialog's input for each record field, for the clash marks
+  const CREW_CLASH_FIELDS = Object.freeze({
+    name: "#crew-add-name",
+    position: "#crew-add-position",
+    role: "#crew-add-position",
+    department: "#crew-add-department",
+    position_order: "#crew-add-position-order",
+    description: "#crew-add-description",
+    note: "#crew-add-description"
+  });
+
+  // clash (spec C §4.1, from recordClash): the dialog opens on clash.record (theirs with my changes on top), marked.
+  function openCrewMemberModal(crewList, memberOrOnSave, maybeOnSave, onDelete, clash) {
     const existing = memberOrOnSave && typeof memberOrOnSave === "object" ? memberOrOnSave : null;
     const saveHandler = typeof maybeOnSave === "function" ? maybeOnSave : memberOrOnSave;
     // Style rollout B: delete lives in the Edit dialog, not on every row
     const canDelete = Boolean(existing && typeof onDelete === "function");
     const draft = {
       ...blankCrewMember(),
-      ...(existing ? cloneData(existing) : {})
+      ...(existing ? cloneData(clash && clash.record ? clash.record : existing) : {})
     };
     const source = { crewList };
     const positionSuggestions = getSuggestionList("position", source);
@@ -4260,6 +4272,7 @@
         </label>
       </form>
     `, { cardClass: "modal-welcome-message", hideClose: true, headerActionsHtml });
+    showClashMarks(modal, clash, CREW_CLASH_FIELDS, modal.querySelector("#crew-add-form"));
     modal.querySelector("#crew-add-form").addEventListener("submit", event => {
       event.preventDefault();
       const position = modal.querySelector("#crew-add-position").value;
@@ -4302,6 +4315,7 @@
     const existingNames = new Set((destinationCrewList.crew || [])
       .map(normalizedCrewName)
       .filter(Boolean));
+    const takenIds = new Set((destinationCrewList.crew || []).map(member => member.id).filter(Boolean));
     const imported = [];
     (sourceCrewList.crew || []).forEach(member => {
       const name = normalizedCrewName(member);
@@ -4309,7 +4323,10 @@
         return;
       }
       existingNames.add(name);
-      imported.push(cloneData(member));
+      // Spec C: a fresh id, so a member imported from another charter is a new record here
+      const id = mergeCore().newId("c", takenIds);
+      takenIds.add(id);
+      imported.push({ ...cloneData(member), id });
     });
     return imported;
   }
@@ -6377,27 +6394,55 @@
     if (!canEditCrew) {
       return row;
     }
-    row.addEventListener("click", () => {
-      openCrewMemberModal(crewList, member, updatedMember => {
-        saveCrewEdit(crewList, crewList.crew.map((entry, entryIndex) => entryIndex === index ? updatedMember : entry), "Crew member saved.");
-      }, async () => {
-        try {
-          await saveCrewEdit(crewList, crewList.crew.filter((entry, entryIndex) => entryIndex !== index), "Crew member deleted.");
-        } catch (error) {
-          setStatus(error.message, "error");
-        }
-      });
-    });
+    row.addEventListener("click", () => openCrewMemberEditor(crewList, member));
     return row;
   }
 
-  async function saveCrewEdit(crewList, crew, message) {
-    const saved = await saveCharterFile("crew_list.json", { ...crewList, crew }, message);
+  // Spec C: on a clash the list shows theirs, then onClash(result) decides what to reopen.
+  async function saveCrewEdit(crewList, crew, message, onClash) {
+    const saved = await saveCharterFile("crew_list.json", { ...crewList, crew }, message, {
+      onClash: result => {
+        crewList.crew = normalizeCrewEditorList(result.theirs).crew;
+        drawCrewEditors(crewList);
+        onClash(result);
+      }
+    });
     if (!saved) {
       return;
     }
     crewList.crew = normalizeCrewEditorList(saved).crew;
     drawCrewEditors(crewList);
+  }
+
+  // Spec C §4.1, §4.3: edit or delete one crew member, found by id. A clash on this member reopens the editor on their
+  // version with my changes on top; deleting a member they changed asks first.
+  function openCrewMemberEditor(crewList, member, clash) {
+    const id = member.id;
+    const name = member.name || "this crew member";
+    openCrewMemberModal(crewList, member, updatedMember => {
+      const crew = crewList.crew.some(entry => entry.id === id)
+        ? crewList.crew.map(entry => (entry.id === id ? updatedMember : entry))
+        : [...crewList.crew, updatedMember];   // adding back a member someone else deleted
+      saveCrewEdit(crewList, crew, "Crew member saved.", result => {
+        const again = recordClash(result, "crew", id, updatedMember.name || name);
+        if (again) {
+          openCrewMemberEditor(crewList, again.theirsRecord || again.record, again);
+        } else {
+          setStatus(clashMessage(result, "the crew list"), "error");
+        }
+      });
+    }, () => deleteCrewMember(crewList, id, name), clash);
+  }
+
+  async function deleteCrewMember(crewList, id, name) {
+    await saveCrewEdit(crewList, crewList.crew.filter(entry => entry.id !== id), "Crew member deleted.", async result => {
+      const clash = recordClash(result, "crew", id, name);
+      if (!clash) {
+        setStatus(clashMessage(result, "the crew list"), "error");
+      } else if (clash.deletedByMe && await confirmDeleteAnyway(clash)) {
+        await deleteCrewMember(crewList, id, name);
+      }
+    });
   }
 
   function drawSiteEditors(siteLibrary) {
@@ -6635,9 +6680,10 @@
     if (addButton) {
       addButton.addEventListener("click", () => {
         openCrewMemberModal(crewList, async member => {
+          const id = mergeCore().newId("c", new Set(crewList.crew.map(entry => entry.id)));
           const nextCrewList = {
             ...crewList,
-            crew: [...crewList.crew, member]
+            crew: [...crewList.crew, { ...member, id }]
           };
           const saved = await saveCharterFile("crew_list.json", nextCrewList, "Crew member added.");
           if (!saved) {
