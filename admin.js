@@ -4489,20 +4489,6 @@
     );
   }
 
-  function formatDmmCoordinate(value, type) {
-    const coordinate = decimalToDmm(value, type);
-    if (!coordinate.degrees || !coordinate.minutes || !coordinate.hemisphere) {
-      return "";
-    }
-    return `${coordinate.degrees}°${coordinate.minutes}'${coordinate.hemisphere}`;
-  }
-
-  function formatSitePosition(site) {
-    const latitude = formatDmmCoordinate(site?.latitude, "latitude");
-    const longitude = formatDmmCoordinate(site?.longitude, "longitude");
-    return latitude && longitude ? `${latitude} ${longitude}` : "Position not set";
-  }
-
   function siteDescriptionPreview(site) {
     return String(site?.description || "").trim() || "No description yet.";
   }
@@ -6287,7 +6273,7 @@
     });
   }
 
-  // Style rollout B: one slim row per site (name, position, one-line description, media count); tap to edit,
+  // Style rollout B: one slim row per site (name, one-line description, media count); tap to edit,
   // delete inside the dialog
   function siteRowElement(siteLibrary, site, index) {
     const row = document.createElement("button");
@@ -6297,7 +6283,6 @@
     const mediaCount = siteMediaEntries(site).length;
     row.innerHTML = `
       <strong class="site-row-name">${escapeHtml(siteDisplayName(site, `Site ${index + 1}`))}</strong>
-      <span class="site-row-position">${escapeHtml(formatSitePosition(site))}</span>
       <span class="site-row-description">${escapeHtml(siteDescriptionPreview(site))}</span>
       <span class="site-row-media"${mediaCount ? ` title="${mediaCount} media"` : ""}>${mediaCount ? `${buttonIconSvg("camera")}${mediaCount}` : ""}</span>
       <svg class="row-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>

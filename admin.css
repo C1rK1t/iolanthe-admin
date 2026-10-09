@@ -1494,19 +1494,13 @@ button.site-row:focus-visible {
   }
 }
 
-/* Site Editor (style rollout B): name, position, one-line description, media count */
+/* Site Editor (style rollout B): name, one-line description, media count (no position: David, 2026-10-09) */
 .site-row {
-  grid-template-columns: minmax(var(--site-name-column-width, 14ch), max-content) max-content minmax(0, 1fr) 2.6rem 20px;
+  grid-template-columns: minmax(var(--site-name-column-width, 14ch), max-content) minmax(0, 1fr) 2.6rem 20px;
 }
 
 .site-row-name {
   font-weight: 700;
-}
-
-.site-row-position {
-  color: var(--muted);
-  font-size: 0.82rem;
-  font-variant-numeric: tabular-nums;
 }
 
 .site-row-description {
@@ -1538,7 +1532,6 @@ button.site-row:focus-visible {
   }
 
   .site-row > .site-row-name,
-  .site-row > .site-row-position,
   .site-row > .site-row-description {
     grid-column: 1;
   }
@@ -1550,7 +1543,7 @@ button.site-row:focus-visible {
 
   .site-row > .row-chevron {
     grid-column: 3;
-    grid-row: 1 / span 3;
+    grid-row: 1 / span 2;
   }
 }
 

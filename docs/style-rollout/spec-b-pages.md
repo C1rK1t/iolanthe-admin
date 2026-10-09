@@ -62,3 +62,6 @@ buttons; the old `.site-record-summary`, `.coordinate-card` / `.coordinate-grid`
 centred; map picker opens and Escape returns to the dialog; the Route-page call has no delete; a temporary site added
 (10°30.500'N 120°15.000'E), edited (10°45.250'N) and deleted (back to 12); 820 and 390 px wide with no sideways scroll;
 no console errors.
+- **SB-S6 (David, before merge): no position in the list.** The row is name, one-line description, media count and
+  chevron; the position stays in the dialog. `formatSitePosition` and `formatDmmCoordinate` had no other callers and
+  went too.
