@@ -333,6 +333,9 @@ Mockup `login-b.html`; David chose **B, a clear "Log in" button**. The three dep
 Admin" with its icon, focus in the field; the eye shows the password ("Hide password"); a wrong password ("xx") shows
 "Access denied" and keeps the dialog; Cancel closes and hides the password again; the Hotel tile → "Hotel" with its icon.
 
+**2026-10-09 LIVE:** PR iolanthe-admin#36 merged (`8a4f204`) and pulled onto the boat: the style rollout is live on
+every page.
+
 ## Phase B complete (2026-10-09)
 
 Every Admin page has had its pass: Crew, Site Editor, Galley Menus, Galley Guests, Hotel Guests, Drink Stocks, Guest
