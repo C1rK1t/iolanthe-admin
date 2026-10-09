@@ -2127,12 +2127,12 @@
     const refresh = options.refreshId
       ? iconButtonHtml("refresh", options.refreshLabel || "Refresh", ` id="${escapeAttribute(options.refreshId)}"`)
       : "";
+    const extras = `${refresh}${options.extraActionsHtml || ""}`;
     return `
       <div class="button-row settings-action-buttons">
+        ${extras ? `${extras}<span class="header-sep"></span>` : ""}
         ${iconSubmitButtonHtml("confirm", options.saveLabel || "Save settings", formAttribute)}
         ${iconButtonHtml("cancel", options.cancelLabel || "Discard changes", cancelId)}
-        ${refresh}
-        ${options.extraActionsHtml || ""}
       </div>
     `;
   }
@@ -2405,7 +2405,7 @@
         </div>
         <form id="navigation-feed-form" class="form-grid">
           <div class="full">
-            <label class="inline-check">
+            <label class="inline-check switch-row">
               <input id="navigation-feed-enabled" type="checkbox" ${navigation.obsFeedEnabled ? "checked" : ""}>
               Show OBS Feed
             </label>
@@ -2455,7 +2455,7 @@
     return `
       <div class="telemetry-picker" role="group" aria-label="Telemetry items">
         ${TELEMETRY_FIELD_OPTIONS.map(option => `
-          <label class="telemetry-picker__option">
+          <label class="telemetry-picker__option"${option.unit ? ` title="${escapeAttribute(option.unit)}"` : ""}>
             <input type="checkbox" data-telemetry-key="${escapeAttribute(option.key)}" ${selected.has(option.key) ? "checked" : ""}>
             <span>
               <strong>${escapeHtml(option.label)}</strong>
@@ -2483,7 +2483,7 @@
           <div class="settings-subsection full">
             <h3>Idle Screen</h3>
             <div class="form-grid">
-              <label class="inline-check full">
+              <label class="inline-check full switch-row">
                 <input id="idle-enabled" type="checkbox" ${settings.enabled ? "checked" : ""}>
                 Enable idle screen
               </label>
@@ -2505,15 +2505,13 @@
               <label>OBS Ratio
                 <input id="idle-obs-ratio" value="${escapeAttribute(settings.obs_ratio)}">
               </label>
-              <div class="check-grid full">
-                <label><input id="idle-show-weather" type="checkbox" ${settings.show_weather ? "checked" : ""}> Show weather</label>
-                <label><input id="idle-show-itinerary" type="checkbox" ${settings.show_itinerary ? "checked" : ""}> Show itinerary</label>
-              </div>
+              <label class="switch-row"><input id="idle-show-weather" type="checkbox" ${settings.show_weather ? "checked" : ""}> Show weather</label>
+              <label class="switch-row"><input id="idle-show-itinerary" type="checkbox" ${settings.show_itinerary ? "checked" : ""}> Show itinerary</label>
             </div>
           </div>
           <div class="settings-subsection full">
             <h3>Telemetry</h3>
-            <label class="inline-check">
+            <label class="inline-check switch-row">
               <input id="idle-show-telemetry" type="checkbox" ${settings.show_telemetry ? "checked" : ""}>
               Show telemetry
             </label>
@@ -2755,11 +2753,18 @@
   }
 
   function weatherAdminTime(value) {
-    if (!value) {
-      return "Never";
-    }
+    return value ? adminDateTimeText(value) : "Never";
+  }
+
+  // The captain's rule: 24-hour times everywhere, e.g. "Fri 9 Oct, 10:13" (not the device's 12-hour locale)
+  function adminDateTimeText(value) {
     const date = new Date(value);
-    return Number.isFinite(date.getTime()) ? date.toLocaleString() : value;
+    if (!Number.isFinite(date.getTime())) {
+      return String(value);
+    }
+    const day = date.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+    const time = date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
+    return `${day}, ${time}`;
   }
 
   function normalizeWeatherAdminPayload(payload) {
@@ -2853,49 +2858,67 @@
         </div>
         ${runtime.last_error ? `<p class="muted full">Last error: ${escapeHtml(runtime.last_error)}</p>` : ""}
         <form id="weather-settings-form" class="form-grid">
-          <label class="inline-check full">
-            <input id="weather-enabled" type="checkbox" ${weather.enabled ? "checked" : ""}>
-            Enable weather
-          </label>
-          <label class="inline-check full">
-            <input id="weather-show-moon-phase-images" type="checkbox" ${weather.show_moon_phase_images ? "checked" : ""}>
-            Show moon phase images on guest weather displays
-          </label>
-          <label>Primary Provider
-            <select id="weather-primary-provider">
-              ${renderWeatherProviderOptions(runtime.providers, weather.primary_provider)}
-            </select>
-          </label>
-          <label>Backup Provider
-            <select id="weather-backup-provider" required data-selected-backup="${escapeAttribute(weather.backup_providers[0] || "")}">
-              ${renderWeatherBackupProviderOptions(runtime.providers, weather.primary_provider, weather.backup_providers[0] || "")}
-            </select>
-          </label>
-          <label>Cache TTL Minutes
-            <input id="weather-cache-ttl" type="number" min="5" step="1" value="${escapeAttribute(weather.cache_ttl_minutes)}">
-          </label>
-          <label>Failover Hours
-            <input id="weather-failover-hours" type="number" min="1" step="1" value="${escapeAttribute(weather.failover_hours)}">
-          </label>
-          <label>Request Timeout Seconds
-            <input id="weather-timeout" type="number" min="2" step="1" value="${escapeAttribute(weather.request_timeout_seconds)}">
-          </label>
-          <label>Max Requests Per Hour
-            <input id="weather-max-requests" type="number" min="1" step="1" value="${escapeAttribute(weather.max_requests_per_hour)}">
-          </label>
-          <label>Fallback Latitude
-            <input id="weather-fallback-latitude" type="number" min="-90" max="90" step="0.000001" value="${escapeAttribute(weather.fallback_location.latitude === null || weather.fallback_location.latitude === undefined ? "" : weather.fallback_location.latitude)}">
-          </label>
-          <label>Fallback Longitude
-            <input id="weather-fallback-longitude" type="number" min="-180" max="180" step="0.000001" value="${escapeAttribute(weather.fallback_location.longitude === null || weather.fallback_location.longitude === undefined ? "" : weather.fallback_location.longitude)}">
-          </label>
-          <label class="full">Fallback Label
-            <input id="weather-fallback-label" value="${escapeAttribute(weather.fallback_location.label)}">
-          </label>
-          <label class="inline-check full">
-            <input id="weather-use-last-known-good" type="checkbox" ${weather.use_last_known_good ? "checked" : ""}>
-            Use last known good weather when providers fail
-          </label>
+          <div class="settings-subsection full">
+            <h3>Weather</h3>
+            <label class="inline-check full switch-row">
+              <input id="weather-enabled" type="checkbox" ${weather.enabled ? "checked" : ""}>
+              Enable weather
+            </label>
+            <label class="inline-check full switch-row">
+              <input id="weather-show-moon-phase-images" type="checkbox" ${weather.show_moon_phase_images ? "checked" : ""}>
+              Show moon phase images on guest weather displays
+            </label>
+            <label class="inline-check full switch-row">
+              <input id="weather-use-last-known-good" type="checkbox" ${weather.use_last_known_good ? "checked" : ""}>
+              Use last known good weather when providers fail
+            </label>
+          </div>
+          <div class="settings-subsection full">
+            <h3>Providers</h3>
+            <div class="form-grid">
+              <label>Primary Provider
+                <select id="weather-primary-provider">
+                  ${renderWeatherProviderOptions(runtime.providers, weather.primary_provider)}
+                </select>
+              </label>
+              <label>Backup Provider
+                <select id="weather-backup-provider" required data-selected-backup="${escapeAttribute(weather.backup_providers[0] || "")}">
+                  ${renderWeatherBackupProviderOptions(runtime.providers, weather.primary_provider, weather.backup_providers[0] || "")}
+                </select>
+              </label>
+            </div>
+          </div>
+          <div class="settings-subsection full">
+            <h3>Limits</h3>
+            <div class="form-grid">
+              <label>Cache TTL Minutes
+                <input id="weather-cache-ttl" type="number" min="5" step="1" value="${escapeAttribute(weather.cache_ttl_minutes)}">
+              </label>
+              <label>Failover Hours
+                <input id="weather-failover-hours" type="number" min="1" step="1" value="${escapeAttribute(weather.failover_hours)}">
+              </label>
+              <label>Request Timeout Seconds
+                <input id="weather-timeout" type="number" min="2" step="1" value="${escapeAttribute(weather.request_timeout_seconds)}">
+              </label>
+              <label>Max Requests Per Hour
+                <input id="weather-max-requests" type="number" min="1" step="1" value="${escapeAttribute(weather.max_requests_per_hour)}">
+              </label>
+            </div>
+          </div>
+          <div class="settings-subsection full">
+            <h3>Fallback position</h3>
+            <div class="form-grid">
+              <label>Latitude
+                <input id="weather-fallback-latitude" type="number" min="-90" max="90" step="0.000001" value="${escapeAttribute(weather.fallback_location.latitude === null || weather.fallback_location.latitude === undefined ? "" : weather.fallback_location.latitude)}">
+              </label>
+              <label>Longitude
+                <input id="weather-fallback-longitude" type="number" min="-180" max="180" step="0.000001" value="${escapeAttribute(weather.fallback_location.longitude === null || weather.fallback_location.longitude === undefined ? "" : weather.fallback_location.longitude)}">
+              </label>
+              <label class="full">Label
+                <input id="weather-fallback-label" value="${escapeAttribute(weather.fallback_location.label)}">
+              </label>
+            </div>
+          </div>
         </form>
       </section>
     `;
@@ -12323,13 +12346,7 @@
     if (!value) {
       return "Unknown";
     }
-    const date = new Date(value);
-    if (!Number.isFinite(date.getTime())) {
-      return value;
-    }
-    const day = date.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
-    const time = date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
-    return `${day}, ${time}`;
+    return adminDateTimeText(value);
   }
 
   function purchasedAlcoholAmountText(value, currency) {

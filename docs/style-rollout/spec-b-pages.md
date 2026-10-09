@@ -287,3 +287,28 @@ admin were here.
 **2026-10-09 EXECUTED** on `feat/cocktails-b` (assets `admin-cocktails-b`). 177 tests. Browser pass (14 cocktails): keyboard
 move of a cocktail and of an ingredient with focus kept; dialog save renamed a cocktail in the list; delete and
 ingredient delete ask first (cancelled); Cancel on the page discarded everything; 390 px without sideways scroll.
+
+**2026-10-09 LIVE:** PR iolanthe-admin#34 merged (`0e9e653`) and pulled onto the boat.
+
+## Settings (2026-10-09)
+
+Mockup `settings-b.html`; David chose **B, telemetry as tap chips**. Settings already used icons and the new look.
+
+- **SB-S1 Switches** for the on/off settings (Show OBS Feed; Enable idle screen, Show weather, Show itinerary, Show
+  telemetry; Enable weather, moon phase images, last known good): `label.switch-row`, the text left and the switch
+  right, sharing Available Alcohol's switch style.
+- **SB-S2 Telemetry chips:** the 26 telemetry values as chips, teal = shown on the display; the unit is the tooltip;
+  the checkboxes stay (hidden) so the form logic is unchanged; keyboard focus shows a ring.
+- **SB-S3 Sections:** teal uppercase sub-section headings; Weather grouped as Weather (switches), Providers, Limits and
+  Fallback position.
+- **SB-S4 Header order** on every Settings page: extra actions (refresh, retry primary, restart route), separator,
+  save, cancel (`settingsActionButtonsHtml`).
+- **SB-S5 Status tiles:** Weather's and Route Track's status boxes read like stat tiles (value large, label small).
+- **SB-S6 24-hour timestamps:** `adminDateTimeText` ("Fri 9 Oct, 10:13", `en-GB`, `hour12: false`) for Weather, Route
+  Track and Purchased Alcohol (was `toLocaleString()`, e.g. the ambiguous "09/10/2026, 10:13:41").
+
+**2026-10-09 EXECUTED** on `feat/settings-b` (assets `admin-settings-b`). 177 tests. Browser pass: Weather header
+refresh, retry | save, cancel; four sections; tiles "Fri 9 Oct, 10:13"; switches 38 × 22 teal when on; Display
+Settings: 26 chips (7 on), a tap turns a chip teal, a switch toggles, leaving the page asks to discard, Discard restores;
+OBS Feed switch; Route Track restart | save, cancel and 24-hour tiles; Passwords unchanged; 390 px without sideways
+scroll.
