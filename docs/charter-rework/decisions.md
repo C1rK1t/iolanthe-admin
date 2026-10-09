@@ -629,3 +629,38 @@ suggested zenvue.app. Spec: [spec-pack.md](spec-pack.md). Mockups in `.superpowe
   print path covers both (assuming Chrome or Edge on the laptop); the iPad/Safari question is closed. Pinned for later
   in `docs/BACKLOG.md` → *Charter pack*: a dedicated Save / Download PDF button, the charter name as the cover title,
   and yacht information written for on board (General Notes mention the safety brief "included in this pack").
+
+
+## Spec C brainstorm (2026-10-09): conflict-safe saves
+
+Two people editing the same charter file must not silently overwrite each other. Survey: the generic
+`charter/<id>/save` overwrites `charter.json`, `crew_list.json`, `guest_list.json`, `menus.json` and `guest_drinks.json`
+whole; Available Alcohol, Drink Stocks, Cocktails and Sites have their own whole-file saves; most admin saves are a
+one-record edit sent as the whole file; a bar purchase writes `drink-stocks.json` on the server, so a stale Drink Stocks
+save could undo it. Spec: [spec-c.md](spec-c.md). Mockup `.superpowers/brainstorm/451783-1791520463/content/clash-dialog.html`.
+
+- **SC-D1 Scope: nine files** (David ticked every option): the brief's four charter files (crew, guests, menus, Guest
+  Alcohol) plus `charter.json`, `available-alcohol.json`, the shared `drink-stocks.json` and `cocktails.json`, and
+  `sites.json`.
+- **SC-D2 Revision + auto-rebase** over a plain reload prompt (false alarms on edits to different records) and over
+  per-record endpoints (too much server work): on a 409 the admin merges its change into the stored copy and saves
+  again; it asks only when both changed the same field of the same record.
+- **SC-D3 Stable ids by migration v6** for crew members, guests, menus and cocktails (over matching by content, which
+  cannot tell identical rows apart). Drink stocks and sites already have ids; Guest Alcohol and Available Alcohol key on
+  category / `stock_id`. Blank guest slots made on read get deterministic `g-slot-<n>` ids (the bundle normalises
+  without writing).
+- **SC-D4 Old tabs refused:** no `base_revision` = 409, like a stale one (over accepting it for one release).
+- **SC-D5 Both reordered: mine wins, with a note** (over treating it as a clash).
+- **SC-D6 Clash UI = mockup B, "your edit reopened on their version"** (over A, compare and pick, and C, a two-button
+  question): their record with my changes on top (teal edge), "↳ Hotel wrote: …" under each field we both changed, an
+  amber banner; Save again or Cancel to keep theirs. Whole-page saves redraw merged and unsaved with the same marks.
+- **SC-D7 Delete against change asks; the change wins by default** (over "delete always wins").
+- **SC-D8 Freshness on page open and tab focus** through `GET /api/admin/revisions` (over polling every 30 s, and over
+  save time only); never redraws over unsaved edits or an open dialog.
+- **SC-D9 The server stamps `saved_by` (department or `system`) and `saved_at`** so messages say "Hotel … 14:02".
+- **SC-D10 Merge in the admin:** pure `merge-core.js` (`merge3` field by field with a per-file schema) and one
+  `saveRevisioned` helper for every save path.
+- **SC-D11 Server-side writers bump revisions:** purchase / reverse, the guest-count sync, charter create / clone,
+  migration v6.
+- **SC-D12 No wait on style rollout B:** every page spec C touches has had its phase B pass (only Settings and login
+  remain). Plans next: `c-01-server.md`, `c-02-admin-core.md`, `c-03-admin-pages.md`, dry-run, Fable review.
