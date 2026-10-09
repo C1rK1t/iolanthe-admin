@@ -64,15 +64,24 @@
       </section>
 
       <div id="login-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="login-modal-title">
-        <form id="login-form" class="modal-card">
-          <h2 id="login-modal-title">Department Login</h2>
+        <form id="login-form" class="modal-card login-card">
+          <div class="login-card-header">
+            <img id="login-modal-icon" class="login-modal-icon" src="" alt="" width="40" height="40" hidden>
+            <h2 id="login-modal-title">Department Login</h2>
+          </div>
           <input id="admin-department" type="hidden" value="">
-          <label for="admin-password">Password</label>
-          <input id="admin-password" type="password" autocomplete="current-password" required>
+          <label class="login-password-field">Password
+            <span class="password-input">
+              <input id="admin-password" type="password" autocomplete="current-password" required>
+              <button id="toggle-password-visibility" class="password-eye" type="button" aria-label="Show password" aria-pressed="false">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+              </button>
+            </span>
+          </label>
           <p id="login-error" class="modal-error" role="alert"></p>
-          <div class="button-row">
-            <button type="submit">Login</button>
+          <div class="button-row align-right">
             <button id="cancel-login-button" class="secondary" type="button">Cancel</button>
+            <button type="submit" class="success">Log in</button>
           </div>
         </form>
       </div>

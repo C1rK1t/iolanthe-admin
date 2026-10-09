@@ -1914,10 +1914,21 @@
     }
   }
 
+  // Style rollout B: the dialog carries the tapped department's name and tile icon; the password can be shown
   function openLoginModal(department, title) {
     state.loginDepartmentTitle = title || departmentLabel(department);
     els.department.value = department;
     els.loginModalTitle.textContent = state.loginDepartmentTitle;
+    const tileIcon = document.querySelector(`.login-department[data-department="${department}"] .onboarding-icon`);
+    const modalIcon = document.getElementById("login-modal-icon");
+    if (modalIcon) {
+      modalIcon.hidden = !tileIcon;
+      if (tileIcon) {
+        modalIcon.src = tileIcon.getAttribute("src");
+      }
+    }
+    bindPasswordVisibilityToggle();
+    setPasswordVisible(false);
     els.password.value = "";
     els.loginError.textContent = "";
     els.loginModal.classList.remove("hidden");
@@ -1925,8 +1936,30 @@
     window.setTimeout(() => els.password.focus(), 0);
   }
 
+  function setPasswordVisible(visible) {
+    const toggle = document.getElementById("toggle-password-visibility");
+    els.password.type = visible ? "text" : "password";
+    if (toggle) {
+      toggle.setAttribute("aria-pressed", String(visible));
+      toggle.setAttribute("aria-label", visible ? "Hide password" : "Show password");
+    }
+  }
+
+  function bindPasswordVisibilityToggle() {
+    const toggle = document.getElementById("toggle-password-visibility");
+    if (!toggle || toggle.dataset.bound) {
+      return;
+    }
+    toggle.dataset.bound = "true";
+    toggle.addEventListener("click", () => {
+      setPasswordVisible(els.password.type === "password");
+      els.password.focus();
+    });
+  }
+
   function closeLoginModal() {
     els.loginModal.classList.add("hidden");
+    setPasswordVisible(false);
     els.password.value = "";
     els.loginError.textContent = "";
     els.loginButton.disabled = false;
@@ -2128,12 +2161,12 @@
     const refresh = options.refreshId
       ? iconButtonHtml("refresh", options.refreshLabel || "Refresh", ` id="${escapeAttribute(options.refreshId)}"`)
       : "";
+    const extras = `${refresh}${options.extraActionsHtml || ""}`;
     return `
       <div class="button-row settings-action-buttons">
+        ${extras ? `${extras}<span class="header-sep"></span>` : ""}
         ${iconSubmitButtonHtml("confirm", options.saveLabel || "Save settings", formAttribute)}
         ${iconButtonHtml("cancel", options.cancelLabel || "Discard changes", cancelId)}
-        ${refresh}
-        ${options.extraActionsHtml || ""}
       </div>
     `;
   }
@@ -2406,7 +2439,7 @@
         </div>
         <form id="navigation-feed-form" class="form-grid">
           <div class="full">
-            <label class="inline-check">
+            <label class="inline-check switch-row">
               <input id="navigation-feed-enabled" type="checkbox" ${navigation.obsFeedEnabled ? "checked" : ""}>
               Show OBS Feed
             </label>
@@ -2456,7 +2489,7 @@
     return `
       <div class="telemetry-picker" role="group" aria-label="Telemetry items">
         ${TELEMETRY_FIELD_OPTIONS.map(option => `
-          <label class="telemetry-picker__option">
+          <label class="telemetry-picker__option"${option.unit ? ` title="${escapeAttribute(option.unit)}"` : ""}>
             <input type="checkbox" data-telemetry-key="${escapeAttribute(option.key)}" ${selected.has(option.key) ? "checked" : ""}>
             <span>
               <strong>${escapeHtml(option.label)}</strong>
@@ -2484,7 +2517,7 @@
           <div class="settings-subsection full">
             <h3>Idle Screen</h3>
             <div class="form-grid">
-              <label class="inline-check full">
+              <label class="inline-check full switch-row">
                 <input id="idle-enabled" type="checkbox" ${settings.enabled ? "checked" : ""}>
                 Enable idle screen
               </label>
@@ -2506,15 +2539,13 @@
               <label>OBS Ratio
                 <input id="idle-obs-ratio" value="${escapeAttribute(settings.obs_ratio)}">
               </label>
-              <div class="check-grid full">
-                <label><input id="idle-show-weather" type="checkbox" ${settings.show_weather ? "checked" : ""}> Show weather</label>
-                <label><input id="idle-show-itinerary" type="checkbox" ${settings.show_itinerary ? "checked" : ""}> Show itinerary</label>
-              </div>
+              <label class="switch-row"><input id="idle-show-weather" type="checkbox" ${settings.show_weather ? "checked" : ""}> Show weather</label>
+              <label class="switch-row"><input id="idle-show-itinerary" type="checkbox" ${settings.show_itinerary ? "checked" : ""}> Show itinerary</label>
             </div>
           </div>
           <div class="settings-subsection full">
             <h3>Telemetry</h3>
-            <label class="inline-check">
+            <label class="inline-check switch-row">
               <input id="idle-show-telemetry" type="checkbox" ${settings.show_telemetry ? "checked" : ""}>
               Show telemetry
             </label>
@@ -2756,11 +2787,18 @@
   }
 
   function weatherAdminTime(value) {
-    if (!value) {
-      return "Never";
-    }
+    return value ? adminDateTimeText(value) : "Never";
+  }
+
+  // The captain's rule: 24-hour times everywhere, e.g. "Fri 9 Oct, 10:13" (not the device's 12-hour locale)
+  function adminDateTimeText(value) {
     const date = new Date(value);
-    return Number.isFinite(date.getTime()) ? date.toLocaleString() : value;
+    if (!Number.isFinite(date.getTime())) {
+      return String(value);
+    }
+    const day = date.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+    const time = date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
+    return `${day}, ${time}`;
   }
 
   function normalizeWeatherAdminPayload(payload) {
@@ -2854,49 +2892,67 @@
         </div>
         ${runtime.last_error ? `<p class="muted full">Last error: ${escapeHtml(runtime.last_error)}</p>` : ""}
         <form id="weather-settings-form" class="form-grid">
-          <label class="inline-check full">
-            <input id="weather-enabled" type="checkbox" ${weather.enabled ? "checked" : ""}>
-            Enable weather
-          </label>
-          <label class="inline-check full">
-            <input id="weather-show-moon-phase-images" type="checkbox" ${weather.show_moon_phase_images ? "checked" : ""}>
-            Show moon phase images on guest weather displays
-          </label>
-          <label>Primary Provider
-            <select id="weather-primary-provider">
-              ${renderWeatherProviderOptions(runtime.providers, weather.primary_provider)}
-            </select>
-          </label>
-          <label>Backup Provider
-            <select id="weather-backup-provider" required data-selected-backup="${escapeAttribute(weather.backup_providers[0] || "")}">
-              ${renderWeatherBackupProviderOptions(runtime.providers, weather.primary_provider, weather.backup_providers[0] || "")}
-            </select>
-          </label>
-          <label>Cache TTL Minutes
-            <input id="weather-cache-ttl" type="number" min="5" step="1" value="${escapeAttribute(weather.cache_ttl_minutes)}">
-          </label>
-          <label>Failover Hours
-            <input id="weather-failover-hours" type="number" min="1" step="1" value="${escapeAttribute(weather.failover_hours)}">
-          </label>
-          <label>Request Timeout Seconds
-            <input id="weather-timeout" type="number" min="2" step="1" value="${escapeAttribute(weather.request_timeout_seconds)}">
-          </label>
-          <label>Max Requests Per Hour
-            <input id="weather-max-requests" type="number" min="1" step="1" value="${escapeAttribute(weather.max_requests_per_hour)}">
-          </label>
-          <label>Fallback Latitude
-            <input id="weather-fallback-latitude" type="number" min="-90" max="90" step="0.000001" value="${escapeAttribute(weather.fallback_location.latitude === null || weather.fallback_location.latitude === undefined ? "" : weather.fallback_location.latitude)}">
-          </label>
-          <label>Fallback Longitude
-            <input id="weather-fallback-longitude" type="number" min="-180" max="180" step="0.000001" value="${escapeAttribute(weather.fallback_location.longitude === null || weather.fallback_location.longitude === undefined ? "" : weather.fallback_location.longitude)}">
-          </label>
-          <label class="full">Fallback Label
-            <input id="weather-fallback-label" value="${escapeAttribute(weather.fallback_location.label)}">
-          </label>
-          <label class="inline-check full">
-            <input id="weather-use-last-known-good" type="checkbox" ${weather.use_last_known_good ? "checked" : ""}>
-            Use last known good weather when providers fail
-          </label>
+          <div class="settings-subsection full">
+            <h3>Weather</h3>
+            <label class="inline-check full switch-row">
+              <input id="weather-enabled" type="checkbox" ${weather.enabled ? "checked" : ""}>
+              Enable weather
+            </label>
+            <label class="inline-check full switch-row">
+              <input id="weather-show-moon-phase-images" type="checkbox" ${weather.show_moon_phase_images ? "checked" : ""}>
+              Show moon phase images on guest weather displays
+            </label>
+            <label class="inline-check full switch-row">
+              <input id="weather-use-last-known-good" type="checkbox" ${weather.use_last_known_good ? "checked" : ""}>
+              Use last known good weather when providers fail
+            </label>
+          </div>
+          <div class="settings-subsection full">
+            <h3>Providers</h3>
+            <div class="form-grid">
+              <label>Primary Provider
+                <select id="weather-primary-provider">
+                  ${renderWeatherProviderOptions(runtime.providers, weather.primary_provider)}
+                </select>
+              </label>
+              <label>Backup Provider
+                <select id="weather-backup-provider" required data-selected-backup="${escapeAttribute(weather.backup_providers[0] || "")}">
+                  ${renderWeatherBackupProviderOptions(runtime.providers, weather.primary_provider, weather.backup_providers[0] || "")}
+                </select>
+              </label>
+            </div>
+          </div>
+          <div class="settings-subsection full">
+            <h3>Limits</h3>
+            <div class="form-grid">
+              <label>Cache TTL Minutes
+                <input id="weather-cache-ttl" type="number" min="5" step="1" value="${escapeAttribute(weather.cache_ttl_minutes)}">
+              </label>
+              <label>Failover Hours
+                <input id="weather-failover-hours" type="number" min="1" step="1" value="${escapeAttribute(weather.failover_hours)}">
+              </label>
+              <label>Request Timeout Seconds
+                <input id="weather-timeout" type="number" min="2" step="1" value="${escapeAttribute(weather.request_timeout_seconds)}">
+              </label>
+              <label>Max Requests Per Hour
+                <input id="weather-max-requests" type="number" min="1" step="1" value="${escapeAttribute(weather.max_requests_per_hour)}">
+              </label>
+            </div>
+          </div>
+          <div class="settings-subsection full">
+            <h3>Fallback position</h3>
+            <div class="form-grid">
+              <label>Latitude
+                <input id="weather-fallback-latitude" type="number" min="-90" max="90" step="0.000001" value="${escapeAttribute(weather.fallback_location.latitude === null || weather.fallback_location.latitude === undefined ? "" : weather.fallback_location.latitude)}">
+              </label>
+              <label>Longitude
+                <input id="weather-fallback-longitude" type="number" min="-180" max="180" step="0.000001" value="${escapeAttribute(weather.fallback_location.longitude === null || weather.fallback_location.longitude === undefined ? "" : weather.fallback_location.longitude)}">
+              </label>
+              <label class="full">Label
+                <input id="weather-fallback-label" value="${escapeAttribute(weather.fallback_location.label)}">
+              </label>
+            </div>
+          </div>
         </form>
       </section>
     `;
@@ -8236,13 +8292,6 @@
     `;
   }
 
-  function orderingButtonsHtml(label, index, total) {
-    return `
-      ${iconButtonHtml("move-up", `Move ${label} up`, ` data-action="move-up"${index === 0 ? " disabled" : ""}`)}
-      ${iconButtonHtml("move-down", `Move ${label} down`, ` data-action="move-down"${index === total - 1 ? " disabled" : ""}`)}
-    `;
-  }
-
   // Style rollout B: a grip for IolantheDragReorder (drag-reorder.js), replacing a Move up / Move down pair
   function dragHandleHtml(label, className) {
     return `<button type="button" class="drag-handle ${className}" aria-label="${escapeAttribute(label)} (drag, or use the arrow keys)" title="Drag to move">${buttonIconSvg("grip")}</button>`;
@@ -8268,17 +8317,6 @@
         open();
       }
     });
-  }
-
-  function moveListItem(items, index, direction) {
-    const nextIndex = index + direction;
-    if (!Array.isArray(items) || nextIndex < 0 || nextIndex >= items.length) {
-      return false;
-    }
-    const current = items[index];
-    items[index] = items[nextIndex];
-    items[nextIndex] = current;
-    return true;
   }
 
   function mealLabel(meal) {
@@ -12342,8 +12380,7 @@
     if (!value) {
       return "Unknown";
     }
-    const date = new Date(value);
-    return Number.isFinite(date.getTime()) ? date.toLocaleString() : value;
+    return adminDateTimeText(value);
   }
 
   function purchasedAlcoholAmountText(value, currency) {
@@ -13292,17 +13329,18 @@
       <section class="card full">
         <div class="card-header">
           <h2>Purchased Alcohol</h2>
+          <div class="button-row list-add-actions">
+            ${iconButtonHtml("invoice", "Generate Customer Bill", ` id="purchased-alcohol-invoice-action"`)}
+          </div>
         </div>
-        <p class="muted">Charter purchase log with reversals and running bar bill.</p>
-        <div class="purchased-alcohol-summary-bar">
-          <div id="purchased-alcohol-total" class="purchased-alcohol-total"></div>
-          <button type="button" id="purchased-alcohol-invoice-action" class="purchased-alcohol-print-button" title="Generate Customer Bill" aria-label="Generate Customer Bill">Print Bill</button>
+        <div class="stat-tiles purchased-alcohol-tiles">
+          <div class="stat-tile"><b id="purchased-alcohol-total">0</b><span>Running bar bill</span></div>
+          <div class="stat-tile"><b id="purchased-alcohol-count">0</b><span>Bottles purchased</span></div>
         </div>
+        <p class="guest-order-hint">The charter's purchases, newest first. Reverse one to return it to available stock.</p>
         <div id="purchased-alcohol-list-shell" class="purchased-alcohol-list-shell">
-          <div id="purchased-alcohol-list-header" class="purchased-alcohol-list-header record-row purchased-alcohol-row" hidden>
+          <div id="purchased-alcohol-list-header" class="purchased-alcohol-list-header" hidden>
             <span>Name</span>
-            <span>Category</span>
-            <span>Sub-category</span>
             <span>Price</span>
             <span>Purchased</span>
             <span class="purchased-alcohol-list-header-spacer" aria-hidden="true"></span>
@@ -13322,7 +13360,11 @@
       return;
     }
     const activeItems = activeCharterAlcoholPurchases(purchases).slice().sort(compareCharterAlcoholPurchase);
-    total.textContent = `Running Bar Bill: ${purchasedAlcoholTotalText(purchases)}`;
+    total.textContent = purchasedAlcoholTotalText(purchases);
+    const count = document.getElementById("purchased-alcohol-count");
+    if (count) {
+      count.textContent = String(activeItems.length);
+    }
     if (invoiceButton) {
       const canGenerateInvoice = activeItems.length > 0;
       invoiceButton.disabled = !canGenerateInvoice;
@@ -13344,19 +13386,19 @@
     }
     activeItems.forEach(purchase => {
       const displayName = formatAvailableAlcoholName(purchase, "Selection");
+      const kind = [availableAlcoholCategoryText(purchase), availableAlcoholSubCategoryText(purchase)].filter(Boolean).join(" · ");
       const row = document.createElement("div");
-      row.className = "record-row purchased-alcohol-row";
+      row.className = "purchased-alcohol-row";
       row.innerHTML = `
-        <div class="record-summary purchased-alcohol-summary">
-          <strong class="purchased-alcohol-cell purchased-alcohol-name-cell" data-label="Name">${escapeHtml(displayName)}</strong>
-          <span class="purchased-alcohol-cell" data-label="Category">${escapeHtml(availableAlcoholCategoryText(purchase))}</span>
-          <span class="purchased-alcohol-cell" data-label="Sub-category">${escapeHtml(availableAlcoholSubCategoryText(purchase))}</span>
-          <span class="purchased-alcohol-cell" data-label="Price">${escapeHtml(purchasedAlcoholPriceText(purchase))}</span>
-          <span class="purchased-alcohol-cell" data-label="Purchased">${escapeHtml(purchasedAlcoholTimeText(purchase.purchased_at))}</span>
-        </div>
-        <div class="button-row record-actions">
+        <span class="purchased-alcohol-cell purchased-alcohol-name-cell">
+          <strong>${escapeHtml(displayName)}</strong>
+          ${kind ? `<small>${escapeHtml(kind)}</small>` : ""}
+        </span>
+        <span class="purchased-alcohol-cell purchased-alcohol-price-cell">${escapeHtml(purchasedAlcoholPriceText(purchase))}</span>
+        <span class="purchased-alcohol-cell purchased-alcohol-time-cell">${escapeHtml(purchasedAlcoholTimeText(purchase.purchased_at))}</span>
+        <span class="purchased-alcohol-actions">
           ${iconButtonHtml("reverse", "Reverse purchase", ` data-action="reverse-purchase"`)}
-        </div>
+        </span>
       `;
       row.querySelector("[data-action='reverse-purchase']")?.addEventListener("click", async () => {
         if (!await showAdminConfirm({
@@ -13466,20 +13508,22 @@
         <div class="card-header">
           <h2>Cocktails</h2>
           <div class="button-row list-add-actions">
-            ${iconButtonHtml("preview", "Preview Cocktails", ` id="preview-cocktails"`)}
             ${iconButtonHtml("add", "Add Cocktail", ` id="add-cocktail"`)}
+            ${iconButtonHtml("preview", "Preview Cocktails", ` id="preview-cocktails"`)}
+            <span class="header-sep"></span>
             ${iconButtonHtml("save", "Save Cocktails", ` id="save-cocktails"`)}
             ${iconButtonHtml("cancel", "Cancel Cocktails changes", ` id="cancel-cocktails"`)}
           </div>
         </div>
-        <p class="muted">Global cocktail recipes managed as a simple standalone list.</p>
+        <p class="guest-order-hint">The cocktail list guests see, in this order (the same for every charter). Drag a grip to change the order, then save.</p>
         <div id="cocktails-list" class="editor-list cocktails-list"></div>
       </section>
     `;
   }
 
-  function openCocktailItemModal(item, onSave) {
+  function openCocktailItemModal(item, onSave, onDelete) {
     const draft = normalizeCocktailItem(item || { name: "", description: "", ingredients: [] });
+    // Style rollout B: save / cancel in the header (delete after a separator); ingredients drag by their grip
     const modal = openDialogModal(item ? "Edit Cocktail" : "Add Cocktail", `
       <form id="cocktail-item-form" class="form-grid">
         <label class="full">Name
@@ -13489,17 +13533,23 @@
           <textarea id="cocktail-item-description">${escapeHtml(draft.description)}</textarea>
         </label>
         <div class="full">
-          <div class="card-header">
-            <h3>Cocktail Ingredients</h3>
-            <div class="button-row">
-              ${iconButtonHtml("add", "Add ingredient", ` id="add-cocktail-ingredient"`)}
-            </div>
+          <div class="cocktail-ingredients-header">
+            <h3>Ingredients</h3>
+            ${iconButtonHtml("add", "Add ingredient", ` id="add-cocktail-ingredient"`)}
           </div>
           <div id="cocktail-item-ingredients-list" class="cocktail-ingredients-list"></div>
         </div>
-        ${modalActionButtonsHtml({ submitLabel: "Save cocktail" })}
       </form>
-    `, { hideClose: true });
+    `, {
+      hideClose: true,
+      headerActionsHtml: `
+        <div class="button-row modal-title-actions">
+          ${iconSubmitButtonHtml("save", "Save cocktail", ` form="cocktail-item-form"`)}
+          ${iconButtonHtml("cancel", "Cancel", ` data-modal-close`)}
+          ${item && typeof onDelete === "function" ? `<span class="header-sep"></span>${iconButtonHtml("remove", "Delete cocktail", ` data-action="delete-cocktail"`)}` : ""}
+        </div>
+      `
+    });
     const ingredientsContainer = modal.querySelector("#cocktail-item-ingredients-list");
     const drawIngredientEditorRows = () => {
       const ingredients = Array.isArray(draft.ingredients) ? draft.ingredients : [];
@@ -13507,37 +13557,18 @@
         ingredientsContainer.innerHTML = `<p class="muted">No ingredients yet.</p>`;
         return;
       }
-      ingredientsContainer.innerHTML = ingredients.map((ingredient, index) => {
-        return `
-          <div class="mini-item cocktail-ingredient-row" data-modal-ingredient-index="${index}">
-            <label>
-              <span>Ingredient ${index + 1}</span>
-              <input data-ingredient-name value="${escapeAttribute(ingredient && ingredient.name ? ingredient.name : "")}" placeholder="Ingredient name">
-            </label>
-            <div class="button-row">
-              ${orderingButtonsHtml("ingredient", index, ingredients.length)}
-              ${iconButtonHtml("remove", `Delete ingredient ${index + 1}`, ` data-action="delete-ingredient"`)}
-            </div>
-          </div>
-        `;
-      }).join("");
+      ingredientsContainer.innerHTML = ingredients.map((ingredient, index) => `
+        <div class="cocktail-ingredient-row" data-modal-ingredient-index="${index}">
+          ${ingredients.length > 1 ? dragHandleHtml(`Move ingredient ${index + 1}`, "ingredient-grip") : `<span class="drag-handle-spacer"></span>`}
+          <input data-ingredient-name value="${escapeAttribute(ingredient && ingredient.name ? ingredient.name : "")}" placeholder="Ingredient name" aria-label="Ingredient ${index + 1}">
+          ${iconButtonHtml("remove", `Delete ingredient ${index + 1}`, ` data-action="delete-ingredient"`)}
+        </div>
+      `).join("");
       ingredientsContainer.querySelectorAll("[data-modal-ingredient-index]").forEach(row => {
         const index = Number(row.dataset.modalIngredientIndex);
         row.querySelector("[data-ingredient-name]")?.addEventListener("input", event => {
           draft.ingredients[index].name = event.target.value;
           markModalDirty(modal);
-        });
-        row.querySelector("[data-action='move-up']").addEventListener("click", () => {
-          if (moveListItem(draft.ingredients, index, -1)) {
-            markModalDirty(modal);
-            drawIngredientEditorRows();
-          }
-        });
-        row.querySelector("[data-action='move-down']").addEventListener("click", () => {
-          if (moveListItem(draft.ingredients, index, 1)) {
-            markModalDirty(modal);
-            drawIngredientEditorRows();
-          }
         });
         row.querySelector("[data-action='delete-ingredient']").addEventListener("click", async () => {
           if (!await showAdminConfirm({
@@ -13555,12 +13586,42 @@
         });
       });
     };
+    window.IolantheDragReorder.attach(ingredientsContainer, {
+      items: () => [...ingredientsContainer.querySelectorAll(":scope > .cocktail-ingredient-row")],
+      handleSelector: ".ingredient-grip",
+      onMove: (from, to) => {
+        draft.ingredients.splice(0, draft.ingredients.length, ...window.IolantheDragReorder.moveItem(draft.ingredients, from, to));
+        markModalDirty(modal);
+        drawIngredientEditorRows();
+      },
+      afterMove: to => {
+        ingredientsContainer.querySelectorAll(".ingredient-grip")[to]?.focus();
+      }
+    });
     modal.querySelector("#add-cocktail-ingredient").addEventListener("click", () => {
       draft.ingredients.push({ name: "" });
       markModalDirty(modal);
       drawIngredientEditorRows();
+      ingredientsContainer.querySelector(".cocktail-ingredient-row:last-child input")?.focus();
     });
     drawIngredientEditorRows();
+    const deleteCocktailButton = modal.querySelector("[data-action='delete-cocktail']");
+    if (deleteCocktailButton) {
+      deleteCocktailButton.addEventListener("click", async () => {
+        if (!await showAdminConfirm({
+          title: "Delete Cocktail",
+          message: `Delete ${item.name || "this cocktail"}?`,
+          confirmLabel: "Delete",
+          cancelLabel: "Cancel",
+          tone: "danger"
+        })) {
+          return;
+        }
+        markModalSaved(modal);
+        await closeDialogModal();
+        onDelete();
+      });
+    }
     modal.querySelector("#cocktail-item-form").addEventListener("submit", event => {
       event.preventDefault();
       onSave({
@@ -13584,55 +13645,46 @@
       container.innerHTML = `<p class="muted">No cocktails yet.</p>`;
       return;
     }
+    // Style rollout B: tap a cocktail to edit it (delete is in the dialog); drag the grip to change the order
+    const movable = cocktails.cocktails.length > 1;
     cocktails.cocktails.forEach((cocktail, index) => {
+      const name = cocktail.name || `Cocktail ${index + 1}`;
+      const ingredients = cocktailIngredientListText(cocktail.ingredients);
       const row = document.createElement("div");
-      row.className = "record-row cocktails-row";
+      row.className = "cocktails-row";
       row.innerHTML = `
-        <div class="record-summary cocktails-summary">
-          <strong>${escapeHtml(cocktail.name || `Cocktail ${index + 1}`)}</strong>
-          ${cocktail.description ? `<span class="full muted multiline-text">${escapeHtml(cocktail.description)}</span>` : ""}
-          ${cocktailIngredientListText(cocktail.ingredients) ? `<span class="full cocktail-ingredient-list-preview">${escapeHtml(cocktailIngredientListText(cocktail.ingredients))}</span>` : ""}
-        </div>
-        <div class="button-row record-actions">
-          ${orderingButtonsHtml("cocktail", index, cocktails.cocktails.length)}
-          ${iconButtonHtml("edit", "Edit cocktail", ` data-action="edit-cocktail"`)}
-          ${iconButtonHtml("remove", "Delete cocktail", ` data-action="delete-cocktail"`)}
-        </div>
+        ${movable ? dragHandleHtml(`Move ${name}`, "cocktail-grip") : `<span class="drag-handle-spacer"></span>`}
+        <span class="cocktails-text">
+          <strong>${escapeHtml(name)}</strong>
+          ${cocktail.description ? `<span class="cocktails-description">${escapeHtml(cocktail.description)}</span>` : ""}
+          ${ingredients ? `<span class="cocktail-ingredient-list-preview">${escapeHtml(ingredients)}</span>` : ""}
+        </span>
+        ${rowChevronHtml()}
       `;
-      row.querySelector("[data-action='move-up']").addEventListener("click", () => {
-        if (moveListItem(cocktails.cocktails, index, -1)) {
-          markDirty();
-          redraw();
-        }
-      });
-      row.querySelector("[data-action='move-down']").addEventListener("click", () => {
-        if (moveListItem(cocktails.cocktails, index, 1)) {
-          markDirty();
-          redraw();
-        }
-      });
-      row.querySelector("[data-action='edit-cocktail']").addEventListener("click", () => {
+      bindTapRow(row, "Edit cocktail", () => {
         openCocktailItemModal(cocktail, updated => {
           cocktails.cocktails[index] = normalizeCocktailItem(updated);
           markDirty();
           redraw();
+        }, () => {
+          cocktails.cocktails.splice(index, 1);
+          markDirty();
+          redraw();
         });
       });
-      row.querySelector("[data-action='delete-cocktail']").addEventListener("click", async () => {
-        if (!await showAdminConfirm({
-          title: "Delete Cocktail",
-          message: `Delete ${cocktail.name || "this cocktail"}?`,
-          confirmLabel: "Delete",
-          cancelLabel: "Cancel",
-          tone: "danger"
-        })) {
-          return;
-        }
-        cocktails.cocktails.splice(index, 1);
+      container.appendChild(row);
+    });
+    window.IolantheDragReorder.attach(container, {
+      items: () => [...container.querySelectorAll(":scope > .cocktails-row")],
+      handleSelector: ".cocktail-grip",
+      onMove: (from, to) => {
+        cocktails.cocktails.splice(0, cocktails.cocktails.length, ...window.IolantheDragReorder.moveItem(cocktails.cocktails, from, to));
         markDirty();
         redraw();
-      });
-      container.appendChild(row);
+      },
+      afterMove: to => {
+        container.querySelectorAll(".cocktail-grip")[to]?.focus();
+      }
     });
   }
 
@@ -14039,5 +14091,8 @@
     getCharterContext
   });
 
-  loadBootstrap();
+  // Start on DOMContentLoaded, once every deferred script has run: the first render reads modules that load after this
+  // file (routes-ui.js, routes.js, itinerary-core.js, guest-preview.js, charter-pack.js). Starting straight away let a
+  // slow one arrive after the render (2026-10-09: "reading 'timeOptions'" on Charter Admin after a reload).
+  document.addEventListener("DOMContentLoaded", () => loadBootstrap());
 })();

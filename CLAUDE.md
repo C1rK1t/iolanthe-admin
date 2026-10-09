@@ -74,8 +74,9 @@ and the console shows "This network cannot access admin." instead of the login.
 - `drag-reorder.js` — drag to reorder with a grip (pointer events, so it works on touch, plus the arrow keys on the
   focused grip), `window.IolantheDragReorder.attach(container, { items, handleSelector, onMove, afterMove })`; it
   replaces the Move up / Move down pairs (style rollout B: Galley Menus first). `moveItem` / `dropIndex` are pure.
-- `node --test` runs the tests in `test/` (177 tests), which cover `routes-core`, `itinerary-core`, `charters-core`,
-  `guest-preview-core`, `pack-core`, `pack-render` and `drag-reorder`
+- `node --test` runs the tests in `test/` (179 tests), which cover `routes-core`, `itinerary-core`, `charters-core`,
+  `guest-preview-core`, `pack-core`, `pack-render`, `drag-reorder` and the startup order (`startup-order.test.js` runs
+  `admin.js` alone in a `vm` sandbox)
 - `routes.js` / `routes.css` — the Route panel (Charter → Route): state, side panel, header, map, saving and wiring. A
   "Working on" selector gives it two subjects: the library routes (the route library, saved through
   `/api/admin/routes/*`) and this charter's route (the route stored in the charter's `itinerary.json`, saved through
@@ -134,6 +135,9 @@ set to in `data-local/settings.json`).
 - Keep all asset paths prefixed with `/admin/` so they resolve correctly
   when served from `ADMIN_STATIC_DIR`.
 - Do not cache `/api/*` responses.
+- Every script in `index.html` is `defer` (never `async`), and `admin.js` starts (`loadBootstrap()`) on
+  `DOMContentLoaded`: the first render reads modules from the scripts after it (routes-ui, routes, itinerary-core,
+  guest-preview, charter-pack). Don't start rendering from a script's top level.
 
 ## Deployment (docker-vm)
 

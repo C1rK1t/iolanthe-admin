@@ -248,3 +248,98 @@ the close. 177 tests. Browser pass on charter "New" (35 drinks): groups Wine / S
 became 35, USD selected; the switch turns teal; tapping a row opens the dialog ("Wine · 10 bottles"), remove asks first
 (cancelled), edit opens "Edit Drink Stock"; a tap in the price field does not open the dialog; purchase still asks
 first (cancelled); 820 px one line, 390 px two lines, no sideways scroll; nothing saved.
+
+**2026-10-09 LIVE:** PR iolanthe-admin#31 merged (`2af0d88`) and pulled onto the boat.
+
+## Purchased Alcohol (2026-10-09)
+
+No mockup (a log with one action per row); built directly and shown in the PR.
+
+- **SB-P1 Header and tiles:** Print Bill becomes an icon in the header; the running bar bill and the number of bottles
+  purchased are stat tiles (the bill pill and the text button went).
+- **SB-P2 Rows:** name with "category · sub-category" under it, price (bold), time, and a small reverse icon (same
+  confirmation). Reversed purchases stay hidden, as before.
+- **SB-P3 24-hour times:** purchase times were `toLocaleString()` (12-hour on some devices); now "Tue 3 Nov, 21:15"
+  (`en-GB`, `hour12: false`), the captain's rule.
+
+**2026-10-09 EXECUTED** on `feat/purchased-alcohol-b` (assets `admin-purchased-alcohol-b`): `renderPurchasedAlcoholPanel`,
+`drawPurchasedAlcoholItems`, `purchasedAlcoholTimeText`; CSS `.purchased-alcohol-*` (the old pill, print-button and
+per-cell label rules removed). 177 tests. Browser pass with a temporary purchases file on charter "New" (3 active, 1
+reversed; deleted afterwards): tiles "7000 PHP + 35 USD" and 3; rows newest first with 24-hour times; reverse asks
+first (cancelled); Print Bill opens the bill; 390 px two lines, no sideways scroll.
+
+**2026-10-09 LIVE:** PR iolanthe-admin#33 merged (`fadffd6`) and pulled onto the boat.
+
+## Cocktails (2026-10-09)
+
+No mockup (the established patterns); built directly and shown in the PR. The last Move up / Move down pairs in the
+admin were here.
+
+- **SB-K1 List:** tap a cocktail to edit; one 52 px row: grip, name, the description and the ingredients on a line each
+  (ellipsis). Drag the grip to change the order (the page still saves as a whole). Header: add, preview, separator,
+  save, cancel; the line under the title says the list is shared by every charter.
+- **SB-K2 Dialog:** save and cancel in the header (were at the bottom), delete after a separator (same confirmation).
+  Ingredients: a grip, the name field and a quieter remove (grey with a red icon, 32 px; same confirmation); "+"
+  focuses the new ingredient.
+- **SB-K3 Clean-up:** `orderingButtonsHtml` and `moveListItem` had no callers left and were removed; the move-up /
+  move-down icons stay in `buttonIconSvg` (unused).
+
+**2026-10-09 EXECUTED** on `feat/cocktails-b` (assets `admin-cocktails-b`). 177 tests. Browser pass (14 cocktails): keyboard
+move of a cocktail and of an ingredient with focus kept; dialog save renamed a cocktail in the list; delete and
+ingredient delete ask first (cancelled); Cancel on the page discarded everything; 390 px without sideways scroll.
+
+**2026-10-09 LIVE:** PR iolanthe-admin#34 merged (`0e9e653`) and pulled onto the boat.
+
+## Settings (2026-10-09)
+
+Mockup `settings-b.html`; David chose **B, telemetry as tap chips**. Settings already used icons and the new look.
+
+- **SB-S1 Switches** for the on/off settings (Show OBS Feed; Enable idle screen, Show weather, Show itinerary, Show
+  telemetry; Enable weather, moon phase images, last known good): `label.switch-row`, the text left and the switch
+  right, sharing Available Alcohol's switch style.
+- **SB-S2 Telemetry chips:** the 26 telemetry values as chips, teal = shown on the display; the unit is the tooltip;
+  the checkboxes stay (hidden) so the form logic is unchanged; keyboard focus shows a ring.
+- **SB-S3 Sections:** teal uppercase sub-section headings; Weather grouped as Weather (switches), Providers, Limits and
+  Fallback position.
+- **SB-S4 Header order** on every Settings page: extra actions (refresh, retry primary, restart route), separator,
+  save, cancel (`settingsActionButtonsHtml`).
+- **SB-S5 Status tiles:** Weather's and Route Track's status boxes read like stat tiles (value large, label small).
+- **SB-S6 24-hour timestamps:** `adminDateTimeText` ("Fri 9 Oct, 10:13", `en-GB`, `hour12: false`) for Weather, Route
+  Track and Purchased Alcohol (was `toLocaleString()`, e.g. the ambiguous "09/10/2026, 10:13:41").
+
+**2026-10-09 EXECUTED** on `feat/settings-b` (assets `admin-settings-b`). 177 tests. Browser pass: Weather header
+refresh, retry | save, cancel; four sections; tiles "Fri 9 Oct, 10:13"; switches 38 × 22 teal when on; Display
+Settings: 26 chips (7 on), a tap turns a chip teal, a switch toggles, leaving the page asks to discard, Discard restores;
+OBS Feed switch; Route Track restart | save, cancel and 24-hour tiles; Passwords unchanged; 390 px without sideways
+scroll.
+
+**2026-10-09 LIVE:** PR iolanthe-admin#35 merged (`8c28842`, after merging main: the startup-race fix #32 had landed;
+assets `admin-settings-b2`, 179 tests) and pulled onto the boat.
+
+## Login screen (2026-10-09)
+
+Mockup `login-b.html`; David chose **B, a clear "Log in" button**. The three department tiles are unchanged.
+
+- **SB-L1 The dialog names the department:** the title is the tapped tile's name ("Charter Admin", "Galley", "Hotel")
+  with its icon (was "Department Login" for all).
+- **SB-L2 Password field:** larger (44 px, 1.1 rem), the label wraps the field (small uppercase like every field), and
+  a show / hide eye (`aria-pressed`, back to hidden on every open and close). Enter still logs in.
+- **SB-L3 Buttons:** Cancel (grey) and Log in (green) at the bottom right: the one place a word beats an icon, for
+  someone new on the bridge.
+
+**2026-10-09 EXECUTED** on `feat/login-b` (assets `admin-login-b`): `index.html` login form, `openLoginModal`,
+`setPasswordVisible`, `bindPasswordVisibilityToggle`, `closeLoginModal`; CSS `.login-card*`, `.password-input`,
+`.password-eye`. 179 tests. Browser pass (scratch, logged out on purpose and back in afterwards): Charter tile → "Charter
+Admin" with its icon, focus in the field; the eye shows the password ("Hide password"); a wrong password ("xx") shows
+"Access denied" and keeps the dialog; Cancel closes and hides the password again; the Hotel tile → "Hotel" with its icon.
+
+**2026-10-09 LIVE:** PR iolanthe-admin#36 merged (`8a4f204`) and pulled onto the boat: the style rollout is live on
+every page.
+
+## Phase B complete (2026-10-09)
+
+Every Admin page has had its pass: Crew, Site Editor, Galley Menus, Galley Guests, Hotel Guests, Drink Stocks, Guest
+Alcohol, Available Alcohol, Purchased Alcohol, Cocktails, Settings and the login screen (Charter Admin and Route &
+Itinerary had the look from the charter rework). No Move up / Move down remains (drag everywhere), times are 24-hour
+throughout, and every dialog follows save · cancel · separator · delete. Open from the rollout: try the drags with a
+finger on the bridge tablet; the Settings → Vessel tab (cabins) is in the backlog.
