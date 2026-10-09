@@ -555,4 +555,6 @@ Brainstormed with the visual companion (`.superpowers/brainstorm/31923-*/content
   (`.routes-panel.fit-warn`, #f1d9d6, with the inputs/tiles a shade lighter) — David/captain to judge. A charter switch
   from the band fades the old panel out (180 ms) and the new one in (220 ms) while the band stays put; nothing under
   prefers-reduced-motion. Measured: 0.53 → 0.24 → 0.04 → 0, then 0.19 → 0.52 → 0.83 → 1. Assets `admin-warn-fade`.
-
+- **2026-10-09 DROPPED: red outline on the last stop card when the route does not fit.** David: the whole Route page
+  background already tints light red while the route does not fit, so the outline adds nothing (red card edges keep
+  meaning "check this stop"). Do not offer it again unless the captain asks for it specifically.
