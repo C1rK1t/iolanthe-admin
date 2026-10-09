@@ -1,0 +1,364 @@
+{
+  "itinerary": {
+    "welcome_message": "We welcome you to your charter.  Starting in Cebu and finishing in Port Caltom, Busuanga.  On this whistle stop tour we hope to see the gracefull Thresher shark, the mighty Whale shark and the loveable Dugong.  The cruise will let you experience some of the most beautiful and stunning landscapes the Philippines has to offer while diving on some of the most famous spots in the world. \n \n Note:  The Itinerary is subject to change, for example due to adverse weather conditions. This will be discussed with you if a change is required.",
+    "charter_name": "New",
+    "guest_count": 1,
+    "start_date": "2026-11-01",
+    "end_date": "2026-11-09",
+    "route": {
+      "points": [
+        {
+          "latitude": 10.329364,
+          "longitude": 123.975839,
+          "stop": true,
+          "name": "Cebu Yacht Club",
+          "id": "stp_rj0hyg",
+          "site_ids": [
+            "cebu-yacht-club"
+          ],
+          "depart": {
+            "day": 2
+          }
+        },
+        {
+          "latitude": 9.463219,
+          "longitude": 123.380808,
+          "stop": true,
+          "name": "Oslob and Apo Island",
+          "id": "stp_m8hxgt",
+          "site_ids": [
+            "oslob",
+            "apo-island"
+          ],
+          "arrive": {
+            "day": 2
+          },
+          "depart": {
+            "day": 3
+          }
+        },
+        {
+          "latitude": 8.847239,
+          "longitude": 119.916011,
+          "stop": true,
+          "name": "Tubbataha Reef",
+          "id": "stp_rq7xt6",
+          "site_ids": [
+            "tubbataha-reef"
+          ],
+          "arrive": {
+            "day": 4
+          },
+          "depart": {
+            "day": 7
+          }
+        },
+        {
+          "latitude": 11.977719,
+          "longitude": 120.043203,
+          "stop": true,
+          "name": "Coron Wrecks",
+          "id": "stp_hnow92",
+          "site_ids": [
+            "coron-wrecks"
+          ],
+          "arrive": {
+            "day": 8
+          },
+          "depart": {
+            "day": 9
+          }
+        },
+        {
+          "latitude": 11.954372,
+          "longitude": 120.213719,
+          "stop": true,
+          "name": "Coron Island",
+          "id": "stp_g3r3vm",
+          "site_ids": [
+            "coron-island"
+          ],
+          "arrive": {
+            "day": 9
+          },
+          "depart": {
+            "day": 10
+          }
+        },
+        {
+          "latitude": 12.325233,
+          "longitude": 119.907272,
+          "stop": true,
+          "name": "North Busuanga",
+          "id": "stp_yjg7kf",
+          "site_ids": [
+            "dugong-sanctury",
+            "black-island",
+            "debotunay-island"
+          ],
+          "arrive": {
+            "day": 10
+          },
+          "depart": {
+            "day": 11
+          }
+        },
+        {
+          "latitude": 12.177978,
+          "longitude": 120.094689,
+          "stop": true,
+          "name": "Port Caltom",
+          "id": "stp_2y25bt",
+          "site_ids": [
+            "port-caltom"
+          ],
+          "arrive": {
+            "day": 11
+          }
+        }
+      ]
+    },
+    "activities": [
+      {
+        "id": "act_cv3gts",
+        "stop_id": "stp_rj0hyg",
+        "day": 1,
+        "order": 0,
+        "title": "Guests arrive for the start of the Charter",
+        "notes": ""
+      },
+      {
+        "id": "act_h0e6fv",
+        "stop_id": "stp_m8hxgt",
+        "day": 2,
+        "order": 0,
+        "title": "Diving with Whale Sharks in the morning and an afternoon dive at Apo Island",
+        "notes": ""
+      },
+      {
+        "id": "act_51eh5f",
+        "stop_id": "stp_m8hxgt",
+        "day": 2,
+        "order": 1,
+        "title": "Oslob",
+        "notes": "Diving with whale sharks at 0800  followed by breakfast aboard",
+        "site_id": "oslob"
+      },
+      {
+        "id": "act_s2flio",
+        "stop_id": "stp_m8hxgt",
+        "day": 2,
+        "order": 2,
+        "title": "Apo Island",
+        "notes": "Afternoon dive around Apo Island",
+        "site_id": "apo-island"
+      },
+      {
+        "id": "act_2i9yfn",
+        "stop_id": "stp_rq7xt6",
+        "day": 4,
+        "order": 0,
+        "title": "Arrival and check-in at the Ranger Station protecting the beautiful Tubbataha Reef. 2 dives scheduled with the option of",
+        "notes": ""
+      },
+      {
+        "id": "act_5yma20",
+        "stop_id": "stp_rq7xt6",
+        "day": 5,
+        "order": 0,
+        "title": "2 to 3 more dives planned on this world heritage.  Departing for Coron Island at the end of the day.",
+        "notes": ""
+      },
+      {
+        "id": "act_yynncs",
+        "stop_id": "stp_hnow92",
+        "day": 8,
+        "order": 0,
+        "title": "Diving on two of the famous WW2 wrecks in Coron",
+        "notes": ""
+      },
+      {
+        "id": "act_9dmbax",
+        "stop_id": "stp_g3r3vm",
+        "day": 9,
+        "order": 0,
+        "title": "Anchored close to the lagoons of the geologically stunning Coron Island.",
+        "notes": ""
+      },
+      {
+        "id": "act_bahw0o",
+        "stop_id": "stp_yjg7kf",
+        "day": 10,
+        "order": 0,
+        "title": "In search of Dugongs, exporing Black Island and relaxing evening BBQ around a bonfire",
+        "notes": ""
+      },
+      {
+        "id": "act_vn5juq",
+        "stop_id": "stp_yjg7kf",
+        "day": 10,
+        "order": 1,
+        "title": "Dugong Sanctury",
+        "notes": "Eary dive with the Dugong brothers.",
+        "site_id": "dugong-sanctury"
+      },
+      {
+        "id": "act_vegbo0",
+        "stop_id": "stp_yjg7kf",
+        "day": 10,
+        "order": 2,
+        "title": "Black Island",
+        "notes": "Explore Black Island beach and it's hidden cave.",
+        "site_id": "black-island"
+      },
+      {
+        "id": "act_m9xlum",
+        "stop_id": "stp_yjg7kf",
+        "day": 10,
+        "order": 3,
+        "title": "Debotunay Island",
+        "notes": "Evening BBQ and bonfire on a beautiful beach.",
+        "site_id": "debotunay-island"
+      },
+      {
+        "id": "act_pg823y",
+        "stop_id": "stp_2y25bt",
+        "day": 11,
+        "order": 0,
+        "title": "Final destination.  Anchored as close to the airport as possible on Busuanga Island",
+        "notes": ""
+      }
+    ]
+  },
+  "menus": {
+    "menus": [
+      {
+        "order": 1,
+        "day": 1,
+        "charter_day": 1,
+        "active": true,
+        "label": "Day 1",
+        "todays_notes": "Mediterranean Lunch / Classic Dinner",
+        "breakfast": [
+          {
+            "name": "Fresh Fruit Plate",
+            "description": "Seasonal tropical fruit selection"
+          },
+          {
+            "name": "Eggs to Order",
+            "description": "Served with toast and breakfast potatoes"
+          }
+        ],
+        "lunch": [
+          {
+            "name": "Grilled Chicken Salad",
+            "description": "Lemon herb dressing"
+          },
+          {
+            "name": "Seafood Pasta",
+            "description": "Light tomato and garlic sauce"
+          }
+        ],
+        "dinner": [
+          {
+            "name": "Beef Tenderloin",
+            "description": "Mash, green beans, red wine jus"
+          },
+          {
+            "name": "Chocolate Tart",
+            "description": "Served with vanilla cream"
+          }
+        ],
+        "snacks": [],
+        "date": null
+      },
+      {
+        "order": 2,
+        "day": 2,
+        "charter_day": 2,
+        "active": true,
+        "label": "Day 2",
+        "todays_notes": "",
+        "breakfast": [],
+        "lunch": [],
+        "dinner": [],
+        "snacks": []
+      }
+    ]
+  },
+  "guest_drinks": {
+    "sections": [
+      {
+        "title": "Wine",
+        "items": [
+          {
+            "name": "Whispering Angel - Rosé 2024",
+            "description": "Provence rosé with pale colour, red fruit and crisp freshness."
+          },
+          {
+            "name": "Calvet - Pomerol 2021",
+            "description": "Right-bank Bordeaux red with Merlot-led dark fruit and soft tannins."
+          }
+        ]
+      }
+    ]
+  },
+  "vessel": {
+    "description": "Captain Allen J. Sutton and all the crew welcome you onboard and hope you have a wonderful cruise. If there is anything you require, please do not hesitate to ask.",
+    "details": [
+      {
+        "label": "Vessel Name",
+        "value": "M/Y Princess Iolanthe"
+      },
+      {
+        "label": "Type",
+        "value": "Motor Yacht"
+      },
+      {
+        "label": "Length",
+        "value": "45.7 m / 149'11\""
+      },
+      {
+        "label": "Beam",
+        "value": "9 m / 29'6\""
+      }
+    ],
+    "sections": [
+      {
+        "title": "General Notes",
+        "items": [
+          "Please read and familiarize yourself with the vessel safety brief included in this pack, including the evacuation route from your cabin.",
+          "Life jackets and fire extinguishers are located in each cabin and around the vessel for use only in an emergency."
+        ]
+      }
+    ],
+    "crew_groups": [
+      {
+        "title": "Bridge and Deck",
+        "members": [
+          {
+            "name": "Allen J. Sutton",
+            "position": "Captain / Master"
+          },
+          {
+            "name": "David",
+            "position": "First Officer / ETO"
+          }
+        ]
+      },
+      {
+        "title": "Interior",
+        "members": [
+          {
+            "name": "Paul",
+            "position": "Chef"
+          },
+          {
+            "name": "Kio",
+            "position": "Sous-chef"
+          }
+        ]
+      }
+    ]
+  }
+}
