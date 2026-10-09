@@ -221,3 +221,30 @@ the guests' Wine & Drinks page; nothing is edited here and the page saves as a w
 `drawGuestDrinkItems` rewritten; CSS `.guest-drinks-section-header`, `.guest-drinks-row`, `.guest-drinks-text`. 177
 tests. Browser pass on charter "New" (one Wine section, 6 drinks): a real mouse drag of Chablis to the top; Cancel asked
 to discard and restored the saved order; ArrowDown / ArrowUp on a grip with focus kept; nothing saved.
+
+**2026-10-09 LIVE:** PR iolanthe-admin#30 merged (`7cfe978`) and pulled onto the boat.
+
+## Available Alcohol (2026-10-09)
+
+Mockup `available-alcohol-b.html`; David chose **A, prices typed in the list**.
+
+- **SB-V1 Grouped by category** (Wine, Spirits, Other… headings; the rows were already sorted by category); the
+  Category column is gone; quantity is bottle × count (tooltip "10 bottles").
+- **SB-V2 One price field per row:** the currency (PHP / USD) as a prefix, then the amount; empty = POR. Typing works
+  as before (digits only, up to 6), and the page saves as a whole (commit / cancel).
+- **SB-V3 Mark as purchased** (green) stays on the row. **Edit stock item** and **Remove from Available Alcohol** moved
+  into a small dialog opened by tapping the row (outside the price field): edit, close, separator, remove (same
+  confirmation). Edit opens the Drink Stock editor without a delete (stock is deleted on Drink Stocks).
+- **SB-V4 Header:** "Prices to guests" as a switch beside the buttons; add, preview, separator, commit, cancel. The
+  line under the title explains POR.
+- **SB-V5 Layout:** flexible columns (the per-column width measuring is gone); one line down to 600 px, two lines on a
+  phone.
+
+**2026-10-09 EXECUTED** on `feat/available-alcohol-b` (assets `admin-available-alcohol-b`): `renderAvailableAlcoholPanel`,
+`drawAvailableAlcoholItems`, new `openAvailableAlcoholItemDialog`; `updateAvailableAlcoholListSizing` and
+`availableAlcoholColumnWidthCh` removed. Bug found and fixed in the browser pass: `closeDialogModal` is async, so
+closing the small dialog and opening the stock editor in the same dialog element wiped the editor; the dialog now awaits
+the close. 177 tests. Browser pass on charter "New" (35 drinks): groups Wine / Spirits / Other, rows 47 px; "35a" typed
+became 35, USD selected; the switch turns teal; tapping a row opens the dialog ("Wine · 10 bottles"), remove asks first
+(cancelled), edit opens "Edit Drink Stock"; a tap in the price field does not open the dialog; purchase still asks
+first (cancelled); 820 px one line, 390 px two lines, no sideways scroll; nothing saved.
