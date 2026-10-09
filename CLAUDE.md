@@ -55,7 +55,8 @@ URL access also requires `?key=<settings.admin.urlKey>`.
   `buildPackModel(guestPayload, pack)`; `pack-render.js` (pure, Node-tested, no admin globals so phase 2 can reuse it)
   turns the model into the cover and per-section blocks; `charter-pack.js` lays the blocks onto pages, draws the Leaflet
   route map (light grey Esri tiles, day-number markers merged under 18 px, a key), auto-saves the preset to
-  `/api/admin/charter/<id>/pack` and prints a copy of the pages placed in `<body>` (`#pack-print-host`). Data:
+  `/api/admin/charter/<id>/pack` and prints by moving the live pages into `<body>` (`#pack-print-host`) and back on
+  `afterprint`. Data:
   `/api/charter?charter=<id>`. Themes A / B / C are classes `.pack-theme-a/b/c`; assets in `assets/pack/`.
 - The Charter section menu reads **Charter Admin** (the info panel, id `info`), **Route & Itinerary** (`routes`), Crew,
   **Charter Pack** (`pack`), Guest view, Site Editor; the two-line wraps are `<br>`s in the labels (`renderCharter`).

@@ -350,7 +350,8 @@
         window.clearTimeout(mapTimer);
         if (!alive) return;
         if (tilesLoaded) setMapReady(true);
-        else mapFailed(mapBox);
+        // Leaflet fires "load" inside its tile callback and reads the map afterwards: remove it on the next tick.
+        else window.setTimeout(() => mapFailed(mapBox), 0);
       });
       tiles.addTo(map);
       mapTimer = window.setTimeout(() => { if (!mapReady) mapFailed(mapBox); }, MAP_TIMEOUT_MS);

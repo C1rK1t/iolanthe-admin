@@ -608,3 +608,12 @@ suggested zenvue.app. Spec: [spec-pack.md](spec-pack.md). Mockups in `.superpowe
   print the live pages not a copy (M3), 413 for an oversize chunked upload (M4), session check before the charter lookup
   (L1), map errors caught (L7). A real print (headless Chrome `printToPDF`) found the stamp's white ground showing as a
   box; fixed with `mix-blend-mode`. Default tiles: Esri World Light Gray Base.
+- **2026-10-09 spec P EXECUTED** on `feat/charter-pack` (admin) and `feat/charter-pack-server` (server PR
+  iolanthe-server#7), one Sonnet implementer per task (Haiku for the CLAUDE.md tasks); every file matched the dry run.
+  Browser pass on a scratch server (port 8013): csaba 7 pages, map and merged markers, themes A/B/C, branding on inner
+  pages only, proposal/brief footers, Prepared for and note, upload → shown and saved, reset → cover file deleted,
+  untick to one section (locked), no Route → no map, reload keeps the preset, a no-stops charter, a 90-activity day
+  split over four pages, offline map note; real print via headless Chrome `printToPDF`: 7 A4 pages in each theme.
+  **Deviation from plan P-3:** with every tile failing, removing the map inside Leaflet's own `load` handler threw an
+  uncaught `_fadeAnimated of null`; `mapFailed` now runs on the next tick (charter-pack.js), and the CLAUDE.md line on
+  printing now says the live pages are moved, not copied.
