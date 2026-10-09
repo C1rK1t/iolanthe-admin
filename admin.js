@@ -1757,7 +1757,13 @@
 
   function applySectionTheme() {
     const section = state.authenticated && state.selectedSection ? state.selectedSection : "";
-    document.body.dataset.adminSection = section;
+    // No section, no attribute: admin.css reads any body[data-admin-section] as a dark section page, so an empty one
+    // turned the signed-out pages' status text white on the light background.
+    if (section) {
+      document.body.dataset.adminSection = section;
+    } else {
+      delete document.body.dataset.adminSection;
+    }
   }
 
   function syncTopbar() {
@@ -1966,6 +1972,15 @@
     syncModalOpenState();
   }
 
+  // A refused page has nothing on it but the message, so the status line shows it as a centred card
+  // (admin.css .status-panel--refused). The next setStatus resets the class.
+  function showAccessRefused(message) {
+    els.loginPanel.classList.add("hidden");
+    els.appPanel.classList.add("hidden");
+    setStatus(message, "error");
+    els.status.classList.add("status-panel--refused");
+  }
+
   async function loadBootstrap() {
     try {
       const data = await api("/api/admin/bootstrap");
@@ -1987,16 +2002,12 @@
       syncTopbar();
 
       if (state.role === "denied") {
-        els.loginPanel.classList.add("hidden");
-        els.appPanel.classList.add("hidden");
-        setStatus("Access denied. Check the admin URL key.", "error");
+        showAccessRefused("Access denied. Check the admin URL key.");
         return;
       }
       // "unknown" is an address in none of the server's network CIDRs; the server refuses it like guest and owner.
       if (state.role === "guest" || state.role === "owner" || state.role === "unknown") {
-        els.loginPanel.classList.add("hidden");
-        els.appPanel.classList.add("hidden");
-        setStatus("This network cannot access admin.", "error");
+        showAccessRefused("This network cannot access admin.");
         return;
       }
       if (!state.authenticated) {

@@ -25,7 +25,11 @@ URL access also requires `?key=<settings.admin.urlKey>`.
 
 The server also checks the network (iolanthe-server `lib/admin-network.js`) and reports it as the bootstrap `role`:
 bridge gets every department, crew Galley and Hotel. Guest, owner and `unknown` (an address in no CIDR) get no admin,
-and the console shows "This network cannot access admin." instead of the login.
+and the console shows "This network cannot access admin." instead of the login, as a centred error card
+(`showAccessRefused`, `.status-panel--refused`); a bootstrap with a wrong key gets "Access denied" the same way. The
+server answers a wrong key at `/admin/` itself (plain 403), so to see that card load `/admin/index.html?key=wrong`.
+`<body data-admin-section>` is set only on a section page, whose background is dark: admin.css makes the status text
+white for any body that has it.
 
 ## Stack
 
@@ -74,9 +78,9 @@ and the console shows "This network cannot access admin." instead of the login.
 - `drag-reorder.js` — drag to reorder with a grip (pointer events, so it works on touch, plus the arrow keys on the
   focused grip), `window.IolantheDragReorder.attach(container, { items, handleSelector, onMove, afterMove })`; it
   replaces the Move up / Move down pairs (style rollout B: Galley Menus first). `moveItem` / `dropIndex` are pure.
-- `node --test` runs the tests in `test/` (179 tests), which cover `routes-core`, `itinerary-core`, `charters-core`,
-  `guest-preview-core`, `pack-core`, `pack-render`, `drag-reorder` and the startup order (`startup-order.test.js` runs
-  `admin.js` alone in a `vm` sandbox)
+- `node --test` runs the tests in `test/` (185 tests), which cover `routes-core`, `itinerary-core`, `charters-core`,
+  `guest-preview-core`, `pack-core`, `pack-render`, `drag-reorder`, the startup order (`startup-order.test.js` runs
+  `admin.js` alone in a `vm` sandbox) and the refused-access card (`refused-access.test.js`, the same sandbox)
 - `routes.js` / `routes.css` — the Route panel (Charter → Route): state, side panel, header, map, saving and wiring. A
   "Working on" selector gives it two subjects: the library routes (the route library, saved through
   `/api/admin/routes/*`) and this charter's route (the route stored in the charter's `itinerary.json`, saved through
