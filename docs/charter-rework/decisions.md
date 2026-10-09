@@ -558,3 +558,53 @@ Brainstormed with the visual companion (`.superpowers/brainstorm/31923-*/content
 - **2026-10-09 DROPPED: red outline on the last stop card when the route does not fit.** David: the whole Route page
   background already tints light red while the route does not fit, so the outline adds nothing (red card edges keep
   meaning "check this stop"). Do not offer it again unless the captain asks for it specifically.
+
+
+## Spec P brainstorm (2026-10-09): the charter pack
+
+The captain wants to package a charter's details for the client or the agent. David thought of a PDF; the captain
+suggested zenvue.app. Spec: [spec-pack.md](spec-pack.md). Mockups in `.superpowers/brainstorm/180653-*/content/`.
+
+- **P-D1 Both, in phases.** Phase 1 = a print-styled pack saved as PDF from the admin (the quick win). Phase 2 = a
+  separate mini-site on a zenvue.app subdomain (for example `charters.zenvue.app`), own spec later. Shoehorning it
+  into the ZenVue app (my.zenvue.app) is ruled out.
+- **P-D2 Purpose.** Pre-booking proposal and confirmed charter brief (not live tracking, not a souvenir).
+- **P-D3 Home.** A Charter Pack page under Charter Admin: settings left, live A4 preview with a pager right (mockup A,
+  over a header-button dialog).
+- **P-D4 Contents.** Charter summary, Route & itinerary, Crew & yacht, Menus & drinks, each a tick-box chosen by the
+  captain per pack.
+- **P-D5 Customising.** Pack type (Proposal / Charter Brief), Prepared for, cover note, and saved presets. No per-day
+  picking.
+- **P-D6 Themes.** The captain picks A Editorial (navy & gold), B Modern (admin teal) or C Paper (guest look). A's navy
+  cover is ink-heavy on paper; accepted.
+- **P-D7 Engine.** A print-styled HTML page and the browser's Save as PDF; no server-side PDF, no PDF library.
+- **P-D8 Branding.** IOLANTHE in Times New Roman, bottom to top, the full page height, behind the content at 5 %; the
+  vessel line art lower right at 20 %. Tinted per theme.
+- **P-D9 Stamp.** The boat stamp (OFF# 739708 / IMO# 1009144 / 498 GRT, supplied by David) appears once, full contrast,
+  on the cover. Random faint stamps on every page were tried and dropped.
+- **P-D10 Cover photo.** One default hero shot, overridable per pack by an upload (a Zenith Superyachts photo set makes
+  no sense in an Iolanthe pack).
+- **P-D11 Map.** Live Leaflet map, low detail: only the charter's route and stops, no track waypoints, anchorages or
+  unrelated sites; day numbers on markers, names in a key, overlapping markers merged.
+- **P-D12 Crew.** Text only (name, position, department); crew photos are a later feature.
+- **P-D13 Presets.** Stored on the server per charter (`charters/<id>/pack.json`), so they follow the captain to any
+  device. Server released first.
+- **P-D14 Review.** No Fable review of the spec (David's choices, not technical risk); a Fable review of the plan after
+  the weekly reset (Sunday 2026-10-11 03:00).
+- Open: stamp says 498 GRT, `vessel.json` says 495 GT. The site-image upload is broken on the boat (Media References
+  show broken images); fix it before planning spec P.
+- **P-D15 Site marker style (David, 2026-10-09).** Use a ring of yellow pips around a small centre as the **site**
+  marker on our Leaflet maps (admin Route page, guest and crew maps, and the pack map if sites ever show there), with
+  the name in white text with a dark halo to its right. Reference: [assets/site-marker-pips.png](assets/site-marker-pips.png).
+  Source: the Apo Reef dive map (`images/sites/map.jpeg`, credited snorkeling-report.com), so we draw our own
+  icon in that spirit (SVG or CSS), not a copy. Today the admin uses a teardrop pin (`.mk-site`, routes.css) and the guest a plain `circleMarker`. Not scheduled;
+  pick it up with the next map work.
+- **P-D16 Plans and review (2026-10-09).** Plans `plans/p-01-server.md`, `p-02-admin-core.md`, `p-03-admin-page.md`,
+  written from a dry run (the plan text rebuilds the tested code exactly: server 117, admin 169 tests). No new data
+  endpoint: the pack reads `/api/charter?charter=<id>`. The route list runs to the longer of the charter and the route
+  (csaba's route goes to day 11 of a 9-day charter); the cover's days tile is the charter's. Fable reviewed the plans
+  (ready after fixes); folded in: saves one at a time (H1), cover clean-up that cannot delete a fresh upload (H2), blocks
+  taller than a page split with "(continued)" headings (H3), no tiles at all = map failed and it stays failed (M1, M2),
+  print the live pages not a copy (M3), 413 for an oversize chunked upload (M4), session check before the charter lookup
+  (L1), map errors caught (L7). A real print (headless Chrome `printToPDF`) found the stamp's white ground showing as a
+  box; fixed with `mix-blend-mode`. Default tiles: Esri World Light Gray Base.
