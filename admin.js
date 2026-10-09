@@ -3547,8 +3547,15 @@
     return state.charters.find(charter => charter.id === state.selectedCharter) || null;
   }
 
+  // Spec C: the last sites.json the server sent, the base of the next sites save. One copy is edited at a time (the
+  // Site Editor, or the Route page's Edit site, both from this load); saves pass a fresh object, so no per-copy base.
+  let sitesBase = {};
+
   async function loadSites() {
-    const siteLibrary = normalizeSiteLibrary(await api("/api/admin/sites"));
+    const served = await api("/api/admin/sites");
+    sitesBase = cloneData(served);
+    seenRevisions["sites.json"] = mergeCore().revisionOf(served);
+    const siteLibrary = normalizeSiteLibrary(served);
     state.sites = siteLibrary.sites;
     return siteLibrary;
   }
@@ -3694,7 +3701,8 @@
   function normalizeGuestList(value) {
     const guestList = value && typeof value === "object" ? cloneData(value) : {};
     guestList.guests = Array.isArray(guestList.guests) ? guestList.guests.map(normalizeGuestRecord) : [];
-    guestList.guests = sortAndEnsurePrincipalGuests(guestList.guests);
+    // Spec C: a guest without an id gets g-slot-<position> (the server's lib/record-ids.js withSlotIds)
+    guestList.guests = mergeCore().withSlotIds(sortAndEnsurePrincipalGuests(guestList.guests));
     return guestList;
   }
 
@@ -3900,7 +3908,7 @@
       }
       activeCount -= 1;
     }
-    normalized.guests = sortAndEnsurePrincipalGuests(normalized.guests);
+    normalized.guests = mergeCore().withSlotIds(sortAndEnsurePrincipalGuests(normalized.guests));
     return normalized;
   }
 
@@ -4660,17 +4668,33 @@
     };
   }
 
-  async function saveSitesLibrary(siteLibrary, successMessage) {
+  // Throws on a failed save. A clash goes to options.onClash(result) (the sites become theirs; returns null); without
+  // one it is thrown as a message and the base stays, so a retry merges again rather than overwriting theirs.
+  async function saveSitesLibrary(siteLibrary, successMessage, options = {}) {
     const normalized = validateSiteLibrary(siteLibrary);
-    const saved = await api("/api/admin/sites/save", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(normalized)
+    const result = await saveRevisioned({
+      path: "/api/admin/sites/save",
+      schema: "sites",
+      base: () => sitesBase,
+      mine: normalized,
+      normalize: normalizeSiteLibrary,
+      wrap: (data, baseRevision) => ({ ...data, base_revision: baseRevision }),
+      unwrap: payload => payload
     });
-    const normalizedSaved = normalizeSiteLibrary(saved);
+    if (!result.ok && typeof options.onClash !== "function") {
+      throw new Error(`${clashMessage(result, "the sites")} Cancel, then open the page again to see their change.`);
+    }
+    const served = result.ok ? result.saved : result.theirs;
+    sitesBase = cloneData(served);
+    seenRevisions["sites.json"] = mergeCore().revisionOf(served);
+    const normalizedSaved = normalizeSiteLibrary(served);
     siteLibrary.sites = normalizedSaved.sites;
     state.sites = normalizedSaved.sites;
-    setStatus(successMessage || "Sites saved.", "ok");
+    if (!result.ok) {
+      options.onClash(result);
+      return null;
+    }
+    setStatus(mergeCore().savedStatus(successMessage || "Sites saved.", result), "ok");
     return normalizedSaved;
   }
 
@@ -8559,20 +8583,56 @@
     };
   }
 
-  async function loadDrinkStocks() {
-    return normalizeDrinkStocks(await api("/api/admin/drink-stocks"));
+  // Spec C: a library save (drink stocks, available alcohol, cocktails). The working copy adopts the copy the save ends
+  // with: the saved one, or theirs after a clash (then options.onClash gets the result). -> the normalised saved copy,
+  // or null after a clash. Other errors are thrown.
+  async function saveLibraryCopy({ path, file, schema, workingCopy, mine, normalize, adopt, label, successMessage, options }) {
+    const result = await saveRevisioned({
+      path,
+      schema,
+      base: () => libraryBases.get(workingCopy) || {},
+      mine,
+      normalize,
+      wrap: (data, baseRevision) => ({ ...data, base_revision: baseRevision }),
+      unwrap: payload => payload
+    });
+    const served = result.ok ? result.saved : result.theirs;
+    rememberLibraryBase(workingCopy, served, file);
+    adopt(normalize(served));
+    if (!result.ok) {
+      if (options && typeof options.onClash === "function") {
+        options.onClash(result);
+      } else {
+        setStatus(clashMessage(result, label), "error");
+      }
+      return null;
+    }
+    setStatus(mergeCore().savedStatus(successMessage, result), "ok");
+    return normalize(served);
   }
 
-  async function saveDrinkStocks(drinkStocks, successMessage) {
+  async function loadDrinkStocks() {
+    const served = await api("/api/admin/drink-stocks");
+    return rememberLibraryBase(normalizeDrinkStocks(served), served, "drink-stocks.json");
+  }
+
+  async function saveDrinkStocks(drinkStocks, successMessage, options = {}) {
+    // Spec C: a bottle added here gets its id before the save, so the merge can tell it from the others
+    const usedIds = new Set(drinkStocks.items.map(item => item.id).filter(Boolean));
+    drinkStocks.items = drinkStocks.items.map(item => (item.id ? item : { ...item, id: uniqueDrinkStockId(drinkStockBaseIdText(item), usedIds) }));
     try {
-      const saved = normalizeDrinkStocks(await api("/api/admin/drink-stocks/save", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: drinkStocks.items })
-      }));
-      drinkStocks.items = saved.items;
-      setStatus(successMessage || "Drink stocks saved.", "ok");
-      return saved;
+      return await saveLibraryCopy({
+        path: "/api/admin/drink-stocks/save",
+        file: "drink-stocks.json",
+        schema: "drinkStocks",
+        workingCopy: drinkStocks,
+        mine: { items: drinkStocks.items },
+        normalize: normalizeDrinkStocks,
+        adopt: copy => { drinkStocks.items = copy.items; },
+        label: "the drink stocks",
+        successMessage: successMessage || "Drink stocks saved.",
+        options
+      });
     } catch (error) {
       setStatus(error.message, "error");
       return null;
@@ -8580,20 +8640,27 @@
   }
 
   async function loadAvailableAlcohol(charterId = syncSelectedCharter()) {
-    return normalizeAvailableAlcohol(await api(`/api/admin/charter/${encodeURIComponent(charterId)}/available-alcohol`));
+    const served = await api(`/api/admin/charter/${encodeURIComponent(charterId)}/available-alcohol`);
+    return rememberLibraryBase(normalizeAvailableAlcohol(served), served, "available-alcohol.json");
   }
 
-  async function saveAvailableAlcohol(charterId, availableAlcohol, successMessage) {
+  async function saveAvailableAlcohol(charterId, availableAlcohol, successMessage, options = {}) {
     try {
-      const saved = normalizeAvailableAlcohol(await api(`/api/admin/charter/${encodeURIComponent(charterId)}/available-alcohol/save`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(availableAlcohol)
-      }));
-      availableAlcohol.items = saved.items;
-      availableAlcohol.show_prices_to_guests = saved.show_prices_to_guests;
-      setStatus(successMessage || "Available Alcohol saved.", "ok");
-      return saved;
+      return await saveLibraryCopy({
+        path: `/api/admin/charter/${encodeURIComponent(charterId)}/available-alcohol/save`,
+        file: "available-alcohol.json",
+        schema: "availableAlcohol",
+        workingCopy: availableAlcohol,
+        mine: { show_prices_to_guests: availableAlcohol.show_prices_to_guests, items: availableAlcohol.items },
+        normalize: normalizeAvailableAlcohol,
+        adopt: copy => {
+          availableAlcohol.items = copy.items;
+          availableAlcohol.show_prices_to_guests = copy.show_prices_to_guests;
+        },
+        label: "Available Alcohol",
+        successMessage: successMessage || "Available Alcohol saved.",
+        options
+      });
     } catch (error) {
       setStatus(error.message, "error");
       return null;
@@ -8621,19 +8688,24 @@
   }
 
   async function loadCocktails() {
-    return normalizeCocktails(await api("/api/admin/cocktails"));
+    const served = await api("/api/admin/cocktails");
+    return rememberLibraryBase(normalizeCocktails(served), served, "cocktails.json");
   }
 
-  async function saveCocktails(cocktails, successMessage) {
+  async function saveCocktails(cocktails, successMessage, options = {}) {
     try {
-      const saved = normalizeCocktails(await api("/api/admin/cocktails/save", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(cocktails)
-      }));
-      cocktails.cocktails = saved.cocktails;
-      setStatus(successMessage || "Cocktails saved.", "ok");
-      return saved;
+      return await saveLibraryCopy({
+        path: "/api/admin/cocktails/save",
+        file: "cocktails.json",
+        schema: "cocktails",
+        workingCopy: cocktails,
+        mine: { cocktails: cocktails.cocktails },
+        normalize: normalizeCocktails,
+        adopt: copy => { cocktails.cocktails = copy.cocktails; },
+        label: "the cocktails",
+        successMessage: successMessage || "Cocktails saved.",
+        options
+      });
     } catch (error) {
       setStatus(error.message, "error");
       return null;
@@ -13482,6 +13554,7 @@
       ? source.ingredients
       : (Array.isArray(source.recipe) ? source.recipe : []);
     return {
+      ...(typeof source.id === "string" && source.id ? { id: source.id } : {}),
       name: typeof source.name === "string" ? source.name.trim() : "",
       description: typeof source.description === "string"
         ? source.description
@@ -13954,21 +14027,251 @@
     return drinks;
   }
 
-  async function saveCharterFile(file, data, successMessage) {
-    try {
-      const payload = await api(`/api/admin/charter/${encodeURIComponent(state.selectedCharter)}/save`, {
+  // ---- Conflict-safe saves (charter rework spec C §3.2, §4) -------------------------------------------------------
+  // Every save of the nine protected files sends base_revision; a 409 is merged (merge-core.js) and sent again. A clash
+  // (both changed the same field of the same record) goes to the caller's onClash, or is reported.
+  // The base of a charter file's merge is state.bundle[file]: only loadCharter replaces it, and every page render calls
+  // loadCharter before it builds its working copies; these saves set it to the copy they end with. A library file's
+  // base is kept per working copy (libraryBases): the drink stock picker loads its own copy while a page holds an older
+  // one. After a clash the working copy holds theirs, so a stale copy is never sent with the new revision.
+  const mergeCore = () => window.IolantheMerge;
+  const CHARTER_FILE_SCHEMAS = Object.freeze({
+    "charter.json": "charter",
+    "crew_list.json": "crew",
+    "guest_list.json": "guests",
+    "menus.json": "menus",
+    [GUEST_DRINKS_FILE_NAME]: "guestDrinks"
+  });
+  const CHARTER_FILE_NORMALIZERS = Object.freeze({
+    "charter.json": normalizeCharterInfo,
+    "crew_list.json": normalizeCrewEditorList,
+    "guest_list.json": normalizeGuestList,
+    "menus.json": normalizeMenus,
+    [GUEST_DRINKS_FILE_NAME]: normalizeGuestDrinks
+  });
+  const CHARTER_FILE_LABELS = Object.freeze({
+    "charter.json": "the charter info",
+    "crew_list.json": "the crew list",
+    "guest_list.json": "the guest list",
+    "menus.json": "the menus",
+    [GUEST_DRINKS_FILE_NAME]: "Guest Alcohol"
+  });
+  const libraryBases = new WeakMap();
+  // The revision of each library file (and available-alcohol.json, which is not in the bundle) last loaded or saved,
+  // for the freshness check on tab focus (§4.4).
+  const seenRevisions = {};
+
+  function rememberLibraryBase(workingCopy, served, file) {
+    libraryBases.set(workingCopy, cloneData(served));
+    seenRevisions[file] = mergeCore().revisionOf(served);
+    return workingCopy;
+  }
+
+  const saveQueues = new Map();
+
+  // -> merge-core's saveWithRebase result: { ok: true, saved, mergedWith, notes } or { ok: false, clashes, theirs,
+  // merged, rebased, savedBy, savedAt }. Any other error is thrown. Saves of one file (queue) run one at a time, so a
+  // second quick save (two drags) starts from the first one's result instead of clashing with it: base is a function,
+  // read when this save's turn comes, and mine is copied now.
+  function saveRevisioned({ path, queue, schema, base, mine, normalize, wrap, unwrap }) {
+    const snapshot = cloneData(mine);
+    const key = queue || path;
+    const run = () => mergeCore().saveWithRebase({
+      send: async (data, baseRevision) => unwrap(await api(path, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ file, data })
-      });
-      const savedData = payload && typeof payload === "object" && Object.prototype.hasOwnProperty.call(payload, "data")
-        ? payload.data
-        : payload;
-      if (state.bundle && file) {
-        state.bundle[file] = cloneData(savedData);
+        body: JSON.stringify(wrap(data, baseRevision))
+      })),
+      base: base(),
+      mine: snapshot,
+      normalize,
+      schema: mergeCore().SCHEMAS[schema]
+    });
+    const next = (saveQueues.get(key) || Promise.resolve()).catch(() => null).then(run);
+    saveQueues.set(key, next);
+    return next;
+  }
+
+  // "Hotel changed the guest list at 14:02. Your change wasn't saved."
+  function clashMessage(result, what) {
+    const when = mergeCore().timeLabel(result.savedAt);
+    return `${mergeCore().departmentLabel(result.savedBy)} changed ${what}${when ? ` at ${when}` : ""}. Your change wasn't saved.`;
+  }
+
+  // Spec C §4.1: one record's clash, for the editor that reopens on their version with my changes on top (record).
+  // null when nothing clashed on that record.
+  function recordClash(result, list, key, name) {
+    const own = result.clashes.filter(clash => clash.list === list && clash.key === key);
+    if (!own.length) {
+      return null;
+    }
+    const find = copy => (Array.isArray(copy && copy[list]) ? copy[list] : []).find(record => record && record.id === key) || null;
+    const theirsRecord = find(result.theirs);
+    const record = find(result.rebased);
+    return {
+      name,
+      record,
+      theirsRecord,
+      savedBy: result.savedBy,
+      savedAt: result.savedAt,
+      deletedByThem: own.some(clash => clash.kind === "deleted-by-them"),
+      deletedByMe: own.some(clash => clash.kind === "deleted-by-me"),
+      changed: mergeCore().changedFields(theirsRecord || {}, record || {}),
+      theirs: mergeCore().clashFields(result.clashes, list, key)
+    };
+  }
+
+  // Spec C §4.2: a clash on a whole page (its top-level fields), in recordClash's shape.
+  function pageClash(result, name) {
+    return {
+      name,
+      record: result.rebased,
+      theirsRecord: result.theirs,
+      savedBy: result.savedBy,
+      savedAt: result.savedAt,
+      deletedByThem: false,
+      deletedByMe: false,
+      changed: mergeCore().changedFields(result.theirs, result.rebased),
+      theirs: mergeCore().clashFields(result.clashes, null, null)
+    };
+  }
+
+  // Mockup B: the amber banner before `before` (or first in the container), a teal edge on each field I changed and
+  // "↳ Hotel wrote: …" under each field we both changed. fields: { field: selector or [selector, label] }; fields that
+  // share an element (a day's meals share the section list) get one edge and one hint each, labelled.
+  function showClashMarks(container, clash, fields, before) {
+    if (!container || !clash) {
+      return;
+    }
+    container.querySelectorAll(":scope > .clash-banner").forEach(old => old.remove());   // a page that clashed again
+    const core = mergeCore();
+    const who = core.departmentLabel(clash.savedBy);
+    const when = core.timeLabel(clash.savedAt);
+    const banner = document.createElement("div");
+    banner.className = "clash-banner";
+    banner.setAttribute("role", "status");
+    banner.innerHTML = `<span class="clash-pill">${escapeHtml(who)}</span><span>${clash.deletedByThem ? "deleted" : "changed"} ${escapeHtml(clash.name)}${when ? ` at ${escapeHtml(when)}` : ""}. ${clash.deletedByThem ? "Save to add it back." : "Your changes are on top; check them and save again."}</span>`;
+    const anchor = before || container.firstElementChild;
+    if (anchor) {
+      anchor.before(banner);
+    } else {
+      container.prepend(banner);
+    }
+    setStatus(`${who} ${clash.deletedByThem ? "deleted" : "changed"} ${clash.name}${when ? ` at ${when}` : ""}. Check the marked fields and save again.`, "error");
+    const hints = new Map();   // selector -> { after: the element the next hint follows, texts: hints already shown }
+    Object.entries(fields || {}).forEach(([field, target]) => {
+      const [selector, label] = Array.isArray(target) ? target : [target, ""];
+      const mine = clash.changed.includes(field);
+      const theirs = Object.prototype.hasOwnProperty.call(clash.theirs, field);
+      const input = mine || theirs ? container.querySelector(selector) : null;
+      if (!input) {
+        return;
       }
-      setStatus(successMessage || `${file} saved.`, "ok");
-      return savedData;
+      if (mine) {
+        input.classList.add("field-mine");
+      }
+      if (!theirs) {
+        return;
+      }
+      const text = `↳ ${who} wrote: ${label ? `${label}: ` : ""}${core.valueSummary(clash.theirs[field])}`;
+      const shown = hints.get(selector) || { after: input, texts: new Set() };
+      if (!shown.texts.has(text)) {
+        const hint = document.createElement("span");
+        hint.className = "field-theirs";
+        hint.textContent = text;
+        shown.after.after(hint);
+        shown.after = hint;
+        shown.texts.add(text);
+        hints.set(selector, shown);
+      }
+    });
+  }
+
+  // Spec C §4.2: a whole-page clash on a list page: the banner before the list, and on each record we both changed a
+  // teal edge with their value as its tooltip. elementFor(key) -> that record's element, or null.
+  function showListClash(list, result, name, elementFor) {
+    if (!list) {
+      return;
+    }
+    showClashMarks(list.parentElement, pageClash(result, name), {}, list);
+    const who = mergeCore().departmentLabel(result.savedBy);
+    result.clashes.forEach(clash => {
+      const element = clash.key === null ? null : elementFor(clash.key);
+      if (!element) {
+        return;
+      }
+      element.classList.add("field-mine");
+      const text = clash.kind === "field" ? `${who} wrote: ${mergeCore().valueSummary(clash.theirs)}` : `${who} deleted this`;
+      element.title = element.title ? `${element.title}
+${text}` : text;
+    });
+  }
+
+  // Spec C SC-D7 on a whole page: records I deleted that they changed are asked about once; Keep puts theirs back (in
+  // their place) with the rest of my changes. -> the page's copy to show. keyOf(record) -> the list's key.
+  async function pageCopyAfterClash(result, list, keyOf) {
+    const deleted = result.clashes.filter(clash => clash.kind === "deleted-by-me" && clash.list === list);
+    if (!deleted.length) {
+      return result.rebased;
+    }
+    const when = mergeCore().timeLabel(result.savedAt);
+    const names = deleted.map(clash => (clash.theirs && (clash.theirs.name || clash.theirs.title)) || "an item").join(", ");
+    if (await showAdminConfirm({
+      title: "Changed Elsewhere",
+      message: `${mergeCore().departmentLabel(result.savedBy)} changed ${names}${when ? ` at ${when}` : ""}, which you deleted. Delete anyway?`,
+      confirmLabel: "Delete",
+      cancelLabel: "Keep",
+      tone: "danger"
+    })) {
+      return result.rebased;
+    }
+    const keep = new Set(deleted.map(clash => clash.key));
+    const mine = new Map((result.rebased[list] || []).map(record => [keyOf(record), record]));
+    const ordered = (result.merged[list] || []).map(record => (keep.has(keyOf(record)) ? record : mine.get(keyOf(record)))).filter(Boolean);
+    const placed = new Set(ordered.map(keyOf));
+    return { ...result.rebased, [list]: ordered.concat((result.rebased[list] || []).filter(record => !placed.has(keyOf(record)))) };
+  }
+
+  // Spec C SC-D7: I deleted what they changed.
+  function confirmDeleteAnyway(clash) {
+    const when = mergeCore().timeLabel(clash.savedAt);
+    return showAdminConfirm({
+      title: "Changed Elsewhere",
+      message: `${mergeCore().departmentLabel(clash.savedBy)} changed ${clash.name}${when ? ` at ${when}` : ""}. Delete anyway?`,
+      confirmLabel: "Delete",
+      cancelLabel: "Cancel",
+      tone: "danger"
+    });
+  }
+
+  // options.onClash(result): a clash. Without one the status line reports it and the section redraws from theirs.
+  async function saveCharterFile(file, data, successMessage, options = {}) {
+    const charterId = state.selectedCharter;
+    try {
+      const result = await saveRevisioned({
+        path: `/api/admin/charter/${encodeURIComponent(charterId)}/save`,
+        queue: `${charterId}/${file}`,
+        schema: CHARTER_FILE_SCHEMAS[file] || "charter",
+        base: () => (state.bundle && state.bundle[file] ? state.bundle[file] : {}),
+        mine: data,
+        normalize: CHARTER_FILE_NORMALIZERS[file],
+        wrap: (payload, baseRevision) => ({ file, data: payload, base_revision: baseRevision }),
+        unwrap: payload => (payload && typeof payload === "object" && Object.prototype.hasOwnProperty.call(payload, "data") ? payload.data : payload)
+      });
+      if (state.bundle && file && state.selectedCharter === charterId) {
+        state.bundle[file] = cloneData(result.ok ? result.saved : result.theirs);
+      }
+      if (!result.ok) {
+        if (typeof options.onClash === "function") {
+          options.onClash(result);
+        } else {
+          setStatus(clashMessage(result, CHARTER_FILE_LABELS[file] || file), "error");
+          renderSection();
+        }
+        return null;
+      }
+      setStatus(mergeCore().savedStatus(successMessage || `${file} saved.`, result), "ok");
+      return result.saved;
     } catch (error) {
       setStatus(error.message, "error");
       return null;
