@@ -2359,7 +2359,7 @@
             ? renderRouteTrackSettings(await loadRouteTrackSettings())
             : (activePanel === "weather"
               ? renderWeatherSettings(await loadWeatherSettings())
-              : renderPasswordSettings((await api("/api/admin/passwords")).passwords || {}))));
+              : renderPasswordSettings())));
       els.workspace.innerHTML = sectionShell("settings", panels, activePanel, content, "");
       bindSectionNav("settings", renderSettings);
       if (activePanel === "navigation-feed") {
@@ -2378,7 +2378,9 @@
     }
   }
 
-  function renderPasswordSettings(passwords) {
+  // The server stores the passwords as hashes and never sends them, so the fields start empty: a blank field keeps
+  // that department's password.
+  function renderPasswordSettings() {
     return `
       <section class="card full">
         <div class="card-header">
@@ -2391,14 +2393,15 @@
           })}
         </div>
         <form id="passwords-form" class="form-grid">
+          <p class="muted full">Saved passwords can't be shown. Type a new password to change it, or leave a field blank to keep the current one.</p>
           <label>Charter Password
-            <input id="password-charter" type="text" value="${escapeAttribute(passwords.charter || "")}" autocomplete="off" required minlength="4">
+            <input id="password-charter" type="text" value="" placeholder="Unchanged" autocomplete="off" minlength="4">
           </label>
           <label>Galley Password
-            <input id="password-galley" type="text" value="${escapeAttribute(passwords.galley || "")}" autocomplete="off" required minlength="4">
+            <input id="password-galley" type="text" value="" placeholder="Unchanged" autocomplete="off" minlength="4">
           </label>
           <label>Hotel Password
-            <input id="password-hotel" type="text" value="${escapeAttribute(passwords.hotel || "")}" autocomplete="off" required minlength="4">
+            <input id="password-hotel" type="text" value="" placeholder="Unchanged" autocomplete="off" minlength="4">
           </label>
         </form>
       </section>
@@ -2576,9 +2579,13 @@
   }
 
   async function savePasswordSettings() {
-    const passwords = readPasswordSettingsForm();
+    const passwords = Object.fromEntries(Object.entries(readPasswordSettingsForm()).filter(([, value]) => value !== ""));
+    const departments = Object.keys(passwords);
+    if (!departments.length) {
+      throw new Error("Type a new password to change one.");
+    }
     if (Object.values(passwords).some(value => value.length < 4)) {
-      throw new Error("All passwords must be at least 4 characters.");
+      throw new Error("Passwords must be at least 4 characters.");
     }
 
     await api("/api/admin/passwords/save", {
@@ -2586,7 +2593,7 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ passwords })
     });
-    setStatus("Passwords updated successfully", "ok");
+    setStatus(`Password updated: ${departments.map(departmentLabel).join(", ")}`, "ok");
   }
 
   function bindPasswordSettingsActions() {

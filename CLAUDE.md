@@ -23,6 +23,13 @@ iolanthe-admin  (index.html, admin.css, admin.js, assets/)
 
 URL access also requires `?key=<settings.admin.urlKey>`.
 
+The server stores the passwords as scrypt hashes and never sends them (iolanthe-server `lib/admin-auth.js`). Settings →
+Passwords (Charter Admin on the bridge) therefore starts with empty fields: it sends only the passwords typed, and a
+blank field keeps that department's password. It needs the server release with the hashing (iolanthe-server#11): an
+older server refuses any save with a blank field (400), so release the server first. On local dev data the passwords
+become hashes on the first start of that server; to log in, type a plain test password into the data folder's
+`settings.json`.
+
 The server also checks the network (iolanthe-server `lib/admin-network.js`) and reports it as the bootstrap `role`:
 bridge gets every department, crew Galley and Hotel. Guest, owner and `unknown` (an address in no CIDR) get no admin,
 and the console shows "This network cannot access admin." instead of the login, as a centred error card
