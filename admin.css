@@ -82,7 +82,7 @@ button:focus {
 
 button.secondary,
 button.admin-icon-button--secondary {
-  background: var(--panel);
+  background: #e8eef0; /* the Route page's .icon-btn grey: shows on both the card and the off-white rows */
   color: var(--ink);
 }
 
@@ -415,23 +415,22 @@ label {
 }
 
 /* Field labels (a label holding a text field, select or textarea) read like the Route page's: small uppercase.
-   Checkbox and radio labels keep sentence case. The field itself does not inherit the label's type. */
-label:has(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+   Checkbox and radio labels keep sentence case. The field itself does not inherit the label's type. The Route page
+   keeps its own label rules (routes.css). */
+label:not(.routes-panel label, .routes-modal label):has(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
-label input,
-label select,
-label textarea {
+label:not(.routes-panel label, .routes-modal label) :is(input, select, textarea) {
   font-size: 0.94rem;
   font-weight: 400;
   text-transform: none;
   letter-spacing: normal;
 }
 
-label .field-hint {
+label:not(.routes-panel label, .routes-modal label) .field-hint {
   text-transform: none;
   letter-spacing: 0;
   font-weight: 400;
@@ -1100,6 +1099,11 @@ body[data-admin-section] .status-panel {
 
 .toolbar-field {
   min-width: min(320px, 100%);
+}
+
+/* The Select Charter label sits on the department colour, not on a card */
+.section-toolbar .toolbar-field {
+  color: rgba(255, 255, 255, 0.82);
 }
 
 .section-grid {

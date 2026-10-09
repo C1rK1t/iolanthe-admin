@@ -537,3 +537,25 @@ NEW
   waits for phase B; SA-2 is this plan being A only.
 - Every OLD block was copied from `admin.css` at main `92efc44` and dry-run: a script applied all 19 blocks plus the
   four per-rule `#fff` edits to a copy; every single-occurrence OLD matched exactly once, the `#fbfcfc` block 11 times.
+
+## Execution notes (2026-10-09)
+
+Applied by script on `feat/style-reskin` (all blocks verbatim), then three fixes from the browser pass:
+- **Label rules kept off the Route page.** The `label:has(…)` and inner-field rules matched the Route page's "Working
+  on" label (its select dropped to 12 px) and the leg-speed label. Both selectors now start
+  `label:not(.routes-panel label, .routes-modal label)`.
+- **Secondary buttons stay `#e8eef0`** (Task 2 Step 2 reverted): at `#f4f6f7` the grey edit buttons vanished into the
+  off-white list rows. `#e8eef0` is the Route page's own `.icon-btn` grey.
+- **Select Charter label** (Galley / Hotel toolbar) sits on the department colour, so `.section-toolbar
+  .toolbar-field` is light (`rgba(255, 255, 255, 0.82)`).
+
+Route page, compared element by element against main's `admin.css` (467 elements): the only remaining differences are
+buttons 48 → 40 px tall (the global `button` min-height had stretched its 40 px `.icon-btn`s to 40 × 48; they are now
+the 40 × 40 squares `routes.css` intended), inputs 46 → 40 px min-height, and 11 white inputs now off-white. No font,
+label or colour change otherwise.
+
+Measured on the scratch server at 1400 × 900: card and dialog `rgb(223, 230, 233)`, radius 10px; icon buttons 40 × 40,
+radius 6px; field labels 12px uppercase; their inputs 15.04px, weight 400, `rgb(244, 246, 247)`, 40px; selected menu
+item `rgb(223, 230, 233)` with the inset teal bar; all 20 panels in the four departments open with no white patches
+outside the Route page and no console errors; Drink Stocks' action column fits; at 820 × 1180 no horizontal scroll.
+146 tests pass.
