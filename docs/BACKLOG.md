@@ -146,3 +146,8 @@ bare codes used today (A1, B2…). Today a guest's cabin is a free pick from the
 (`/api/admin/selections`, read by `guestSelectionLibraryValues("cabin")`): plain strings with no berths or occupancy.
 Needs a server side (where the vessel record lives, migration of existing cabin codes) as well as the admin page; the
 Hotel → Guests cabin tag (style rollout B) would then show the cabin name.
+
+**2026-10-09: specified** in [spec V](vessel/spec-v-vessel-tab.md) after a brainstorm with David: cabins and the vessel
+profile in one tab, standard and on-request cabins (the bridge-deck cabin and the Saloon conversion, switched on per
+charter in Charter Admin), guests stored by cabin id, phases V1 (server) to V3. The boat's cabins turned out to be names
+already (State Room, Port VIP…), not codes.
