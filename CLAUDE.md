@@ -67,7 +67,11 @@ URL access also requires `?key=<settings.admin.urlKey>`.
   in date. Charter Info uses the shared `admin.css` classes (`.stat-tiles`, `.form-section`, `.status-pill`,
   `.segmented`, gold icon tone), the first slice of the admin style rollout. Galley and Hotel keep their "Select
   Charter" dropdowns.
-- `node --test` runs the tests in `test/` (169 tests), which cover `routes-core`, `itinerary-core`, `charters-core`, `guest-preview-core`, `pack-core` and `pack-render`
+- `drag-reorder.js` — drag to reorder with a grip (pointer events, so it works on touch, plus the arrow keys on the
+  focused grip), `window.IolantheDragReorder.attach(container, { items, handleSelector, onMove, afterMove })`; it
+  replaces the Move up / Move down pairs (style rollout B: Galley Menus first). `moveItem` / `dropIndex` are pure.
+- `node --test` runs the tests in `test/` (177 tests), which cover `routes-core`, `itinerary-core`, `charters-core`,
+  `guest-preview-core`, `pack-core`, `pack-render` and `drag-reorder`
 - `routes.js` / `routes.css` — the Route panel (Charter → Route): state, side panel, header, map, saving and wiring. A
   "Working on" selector gives it two subjects: the library routes (the route library, saved through
   `/api/admin/routes/*`) and this charter's route (the route stored in the charter's `itinerary.json`, saved through
