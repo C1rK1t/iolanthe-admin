@@ -645,7 +645,7 @@ save could undo it. Spec: [spec-c.md](spec-c.md). Mockup `.superpowers/brainstor
 - **SC-D2 Revision + auto-rebase** over a plain reload prompt (false alarms on edits to different records) and over
   per-record endpoints (too much server work): on a 409 the admin merges its change into the stored copy and saves
   again; it asks only when both changed the same field of the same record.
-- **SC-D3 Stable ids by migration v6** for crew members, guests, menus and cocktails (over matching by content, which
+- **SC-D3 Stable ids by migration v7** (v6 became the admin password hashing, see SC-D13) for crew members, guests, menus and cocktails (over matching by content, which
   cannot tell identical rows apart). Drink stocks and sites already have ids; Guest Alcohol and Available Alcohol key on
   category / `stock_id`. Blank guest slots made on read get deterministic `g-slot-<n>` ids (the bundle normalises
   without writing).
@@ -661,7 +661,7 @@ save could undo it. Spec: [spec-c.md](spec-c.md). Mockup `.superpowers/brainstor
 - **SC-D10 Merge in the admin:** pure `merge-core.js` (`merge3` field by field with a per-file schema) and one
   `saveRevisioned` helper for every save path.
 - **SC-D11 Server-side writers bump revisions:** purchase / reverse, the guest-count sync, charter create / clone,
-  migration v6.
+  migration v7.
 - **SC-D12 No wait on style rollout B:** every page spec C touches has had its phase B pass (only Settings and login
   remain). Plans next: `c-01-server.md`, `c-02-admin-core.md`, `c-03-admin-pages.md`, dry-run, Fable review.
 - **SC-D13 Planning (2026-10-09): plans c-01 / c-02 / c-03, dry-run on PR #11 (server, `42fefcd`) and PR #39 (admin,
@@ -687,3 +687,21 @@ save could undo it. Spec: [spec-c.md](spec-c.md). Mockup `.superpowers/brainstor
     reloads, so tab focus is the only new moment. The check is a raw `fetch` (not session activity).
   - **`scripts/check-revisions.js`** (Node) instead of a shell script; the revisions endpoint and the stamp fields are
     as specified.
+- **SC-D14 Fable review of the plans (2026-10-09), all folded in and re-verified in the browser:**
+  - **Blocker fixed:** after a silent merge the Guests page kept its old copy and would send it with the new revision
+    (undoing the other person's change); `saveGuestList` now adopts the saved copy, as every other page does.
+  - **A day's `label` is edited by people,** so it is no longer a derived field (it would have lost a title edit to
+    their dish edit); only `order`, `day`, `charter_day`, `date` follow the winning order.
+  - **Saves of one file run one at a time** (a queue per file in `saveRevisioned`, the base read when its turn comes,
+    `mine` copied at the call), so two quick drags no longer 409 against each other ("merged with Galley's change"
+    naming yourself).
+  - **Whole-page saves ask "Delete anyway?"** (Available Alcohol, Cocktails) for records I removed that they changed;
+    Keep puts theirs back in its place (`pageCopyAfterClash`).
+  - **The menu day reopen waits for the page to redraw** and builds the dialog from the latest bundle.
+  - **Records added without a key are adds** in the merge (they no longer turn the list into one clash); repeated keys
+    fall back to the whole list; new drink stocks get their id before the save. `[]` also counts as blank.
+  - **Messages:** a save with no `base_revision` (a tab from before the release) says "This page is out of date. Reload
+    it, then save again."; the Route page's Edit site clash says to cancel and open the page again; freshness sets its
+    status after the redraw. c-01's release check reads `live_version` 7.
+  - Server #11 and admin #39 merged (`5f09377`, `25c117c`); the plans are now based on `main` and say to dry-run again
+    if `main` moves first.

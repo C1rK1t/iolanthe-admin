@@ -12,11 +12,11 @@ data directory). `server.js` wires them into the existing read / save functions;
 admin error handler (`ADMIN_ERROR_DETAIL_KEYS` gains `data`, `saved_by`, `saved_at`). No change to the guest site: the
 public `/api/charter` strips the stamp.
 
-**Tech Stack:** Node ≥ 18, no dependencies, `node --test` (194 tests → 206). **Precondition:** server PR #11
-(`fix/admin-password-hashing`, migration v6 `hash-admin-passwords`) is merged first; this plan's migration is v7 and
-its OLD blocks are written against `main` with #11 in it.
+**Tech Stack:** Node ≥ 18, no dependencies, `node --test` (194 tests → 206). Server repo from `main` at `5f09377` (server PR #11,
+the admin password hashing, merged 2026-10-09: it owns migration v6, so this plan's migration is v7). If `main` has
+moved past `5f09377` when this is built, dry-run the plan again first.
 
-**Dry-run (done while planning):** this plan's text was applied to a `git archive` copy of #11's branch at `42fefcd`:
+**Dry-run (done while planning):** this plan's text was applied to a `git archive` copy of `main` at `5f09377`:
 `node --test` 206/206, `node --check server.js` clean, and `scripts/check-revisions.js` (Task 5) passed every check
 against a scratch server on a copy of `data-scratch`: migration v7 stamped 33 files; for each of the nine files a good
 save (revision + 1, `saved_by` charter), a stale save and a missing `base_revision` (409 with the stored copy); ids on
@@ -119,7 +119,7 @@ test("revisionConflict: stale, missing and non-integer bases are refused with th
     assert.equal(error.saved_by, "hotel");
     assert.equal(error.saved_at, NOW);
     assert.equal(error.data, stored);
-    assert.match(error.message, /revision 5/);
+    assert.match(error.message, Number.isInteger(base) ? /revision 5/ : /out of date/);
   }
 });
 
@@ -194,7 +194,10 @@ function revisionConflict(stored, baseRevision) {
   if (Number.isInteger(baseRevision) && baseRevision === current.revision) {
     return null;
   }
-  const error = new Error(`Someone else saved this (revision ${current.revision}). Reload the page to see their changes.`);
+  // No base_revision at all: a page from before this release, not someone else's save.
+  const error = new Error(Number.isInteger(baseRevision)
+    ? `Someone else saved this (revision ${current.revision}). Reload the page to see their changes.`
+    : "This page is out of date. Reload it, then save again.");
   error.statusCode = 409;
   error.code = "revision";
   error.revision = current.revision;
@@ -1566,6 +1569,7 @@ git commit -m "docs(server): conflict-safe saves, record ids, migration v7 (spec
    log line and a few files, delete the folder).
 2. On the VM: `git -C /opt/projects/vessel/iolanthe-server log -1` must equal `origin/main` before the merge (release
    only this change). Merge the PR, then `cd /opt/projects/vessel && ./update.sh`.
-3. Check `curl http://10.33.2.241/api/schema` → `live_version` 6, and that a save with no `base_revision` gets 409.
+3. Check `curl http://10.33.2.241/api/schema` → `live_version` 7, and that a save with no `base_revision` gets 409
+   ("This page is out of date. Reload it, then save again.").
 4. Merge the admin PR straight after (the live admin before it sends no `base_revision`: its saves fail with the reload
    message until the new admin is pulled).

@@ -13,16 +13,16 @@ the same for list pages, `confirmDeleteAnyway` asks. Each dialog gets a `clash` 
 list order can change under a dialog. The freshness check is a `visibilitychange` listener using a raw `fetch` of
 `GET /api/admin/revisions` (not `api()`, which would count as session activity).
 
-**Tech Stack:** plain JS, no build, `node --test` (207 tests, unchanged: the page code has no unit tests; the
+**Tech Stack:** plain JS, no build, `node --test` (209 tests, unchanged: the page code has no unit tests; the
 browser pass covers it).
 
-**Preconditions:** admin PR #39 (`fix/admin-password-hashing`) is merged: this plan's OLD blocks are written
-against `main` with it. **Release order:** server plan c-01 first, this admin straight after (the new server refuses
-the old admin's saves, which send no `base_revision`, until the tab reloads the new admin). Plan c-02 is done on the same branch.
+**Base:** admin `main` at `25c117c` (PR #39 merged 2026-10-09). If `main` has moved past it when this is
+built, dry-run the plan again first. **Release order:** server plan c-01 first, this admin straight after (the new
+server refuses the old admin's saves, which send no `base_revision`, until the tab reloads the new admin). Plan c-02 is done on the same branch.
 
 **Dry-run (done while planning, for plans c-02 and c-03 together):** the plan text was applied to a `git archive` copy
-of admin PR #39's branch at `10ab701` (it has `main` at `e42f9df` merged in): `node --test` 207/207 and `node --check
-admin.js` clean. The `?v=` step is a `sed` over every tag, so it does not depend on the tag #39 lands with. The result was served by a
+of `main` at `25c117c`: `node --test` 209/209 and `node --check admin.js` clean. The `?v=` step is a `sed` over every
+tag. The result was served by a
 scratch server running plan c-01's code on a copy of `data-scratch`, with a Node script playing the other person
 (saving through the API with its own Charter or Hotel session). Browser pass, every item as designed:
 - **Crew:** a silent merge ("Crew member saved. · merged with Charter Admin's change from 14:54", both edits listed);
@@ -43,6 +43,12 @@ scratch server running plan c-01's code on a copy of `data-scratch`, with a Node
   redrew the page ("Updated with changes saved elsewhere.").
 - No console errors (only the expected 409 responses). The Crew clash was repeated on the final build: only the
   field I changed is edged (blank values compare equal, SC-D13).
+- **After the Fable review (SC-D14), on the final build:** Hotel changed Guest 3 while I edited Guest 1 (silent merge),
+  then I edited Guest 2: Guest 3's change survived (the page adopts the saved copy; the `g-slot` ids matched on both
+  sides); a day's new title survived their dish edit on another day; a day dialog clash on the notes (only the notes
+  edged); two quick moves of menu days saved one after the other with a plain "Menu day moved." (the per-file queue);
+  Cocktails: their change to a cocktail I deleted asked "Hotel changed Mojito at 15:35, which you deleted. Delete
+  anyway?", and Keep put it back in its place with their change.
 
 **Shared checkout hazard:** other Claude sessions may work in the same checkouts. **Never** run `git checkout`,
 `git switch`, `git stash` or `git add -A` in the main checkouts under `S:/Users/David/OneDrive/Maker Space/GitHub`. All
@@ -270,7 +276,7 @@ with
           };
 ```
 
-- [ ] **Step 2: Check.** `node --check admin.js` and `node --test` → `ℹ pass 207`, `ℹ fail 0`.
+- [ ] **Step 2: Check.** `node --check admin.js` and `node --test` → `ℹ pass 209`, `ℹ fail 0`.
 
 - [ ] **Step 3: Commit.**
 
@@ -357,7 +363,8 @@ with
 with
 
 ```js
-  // Spec C: on a clash the list shows theirs, then onClash(result) decides what to reopen (without one: the status line).
+  // Spec C: on success the list takes the saved copy (it may hold a merged change); on a clash it shows theirs, then
+  // onClash(result) decides what to reopen (without one: the status line).
   async function saveGuestList(guestList, settings, onClash) {
     if (settings && settings.charterInfo) {
       const normalized = normalizeGuestListForCount(guestList, settings.charterInfo.guest_count);
@@ -365,7 +372,7 @@ with
     } else {
       guestList.guests = sortAndEnsurePrincipalGuests((guestList.guests || []).map(normalizeGuestRecord));
     }
-    return saveCharterFile("guest_list.json", guestList, settings.saveSuccessMessage || "Guests saved.", {
+    const saved = await saveCharterFile("guest_list.json", guestList, settings.saveSuccessMessage || "Guests saved.", {
       onClash: result => {
         guestList.guests = (settings && settings.charterInfo
           ? normalizeGuestListForCount(result.theirs, settings.charterInfo.guest_count)
@@ -378,6 +385,13 @@ with
         }
       }
     });
+    if (saved) {
+      // The saved copy may hold someone else's merged change: never keep editing the copy from before the save
+      guestList.guests = (settings && settings.charterInfo
+        ? normalizeGuestListForCount(saved, settings.charterInfo.guest_count)
+        : normalizeGuestList(saved)).guests;
+    }
+    return saved;
   }
 ```
 
@@ -488,7 +502,7 @@ with
   }
 ```
 
-- [ ] **Step 2: Check.** `node --check admin.js` and `node --test` → `ℹ pass 207`, `ℹ fail 0`.
+- [ ] **Step 2: Check.** `node --check admin.js` and `node --test` → `ℹ pass 209`, `ℹ fail 0`.
 
 - [ ] **Step 3: Commit.**
 
@@ -617,13 +631,13 @@ with
   // Spec C §4.1: the day dialog reopens on a copy of their menus with my day on top; the page shows theirs.
   async function reopenMenuDayAfterClash(result, id, itinerary, itineraryDayCount, dateLabel) {
     await closeDialogModal({ force: true });
-    renderGalley();
+    await renderGalley();   // the page shows theirs (and may save its sync to the itinerary days) before the dialog opens
     const clash = recordClash(result, "menus", id, "this day's menu");
     if (!clash || !clash.record) {
       setStatus(clashMessage(result, "the menus"), "error");
       return;
     }
-    const menus = normalizeMenus(result.theirs);
+    const menus = normalizeMenus(state.bundle && state.bundle["menus.json"] ? state.bundle["menus.json"] : result.theirs);
     const at = menus.menus.findIndex(day => day.id === id);
     if (at >= 0) {
       menus.menus[at] = normalizeMenuDay(clash.record, at + 1);
@@ -663,7 +677,7 @@ with
     const saved = await saveCharterFile("menus.json", menus, successMessage, options);
 ```
 
-- [ ] **Step 2: Check.** `node --check admin.js` and `node --test` → `ℹ pass 207`, `ℹ fail 0`.
+- [ ] **Step 2: Check.** `node --check admin.js` and `node --test` → `ℹ pass 209`, `ℹ fail 0`.
 
 - [ ] **Step 3: Commit.**
 
@@ -833,8 +847,9 @@ with
         // Not saveCharterFile(): its catch would swallow the server's message, and the controller needs the throw to keep the form dirty.
         const result = await saveRevisioned({
           path: `/api/admin/charter/${encodeURIComponent(state.selectedCharter)}/save`,
+          queue: `${state.selectedCharter}/charter.json`,
           schema: "charter",
-          base: state.bundle && state.bundle["charter.json"] ? state.bundle["charter.json"] : {},
+          base: () => (state.bundle && state.bundle["charter.json"] ? state.bundle["charter.json"] : {}),
           mine: charterInfo,
           normalize: normalizeCharterInfo,
           wrap: (payload, baseRevision) => ({ file: "charter.json", data: payload, base_revision: baseRevision }),
@@ -943,7 +958,7 @@ with
       }
 ```
 
-- [ ] **Step 2: Check.** `node --check admin.js` and `node --test` → `ℹ pass 207`, `ℹ fail 0`.
+- [ ] **Step 2: Check.** `node --check admin.js` and `node --test` → `ℹ pass 209`, `ℹ fail 0`.
 
 - [ ] **Step 3: Commit.**
 
@@ -1124,9 +1139,9 @@ with
 
 ```js
       const saved = await saveAvailableAlcohol(charterId, availableAlcohol, "Available Alcohol saved.", {
-        onClash: result => {
-          // Spec C §4.2: their copy with my changes on top, still unsaved
-          const rebased = normalizeAvailableAlcohol(result.rebased);
+        onClash: async result => {
+          // Spec C §4.2: their copy with my changes on top, still unsaved (a drink I removed that they changed: asked)
+          const rebased = normalizeAvailableAlcohol(await pageCopyAfterClash(result, "items", item => String(item.stock_id || "").trim().toLocaleLowerCase()));
           availableAlcohol.items = rebased.items;
           availableAlcohol.show_prices_to_guests = rebased.show_prices_to_guests;
           if (showPricesToggle) {
@@ -1178,9 +1193,9 @@ with
 
 ```js
       const saved = await saveCocktails(cocktails, "Cocktails saved.", {
-        onClash: result => {
-          // Spec C §4.2: their copy with my changes on top, still unsaved
-          cocktails.cocktails = normalizeCocktails(result.rebased).cocktails;
+        onClash: async result => {
+          // Spec C §4.2: their copy with my changes on top, still unsaved (a cocktail I deleted that they changed: asked)
+          cocktails.cocktails = normalizeCocktails(await pageCopyAfterClash(result, "cocktails", cocktail => cocktail.id)).cocktails;
           markDirty();
           redraw();
           const list = document.getElementById("cocktails-list");
@@ -1197,7 +1212,7 @@ with
       }
 ```
 
-- [ ] **Step 2: Check.** `node --check admin.js` and `node --test` → `ℹ pass 207`, `ℹ fail 0`.
+- [ ] **Step 2: Check.** `node --check admin.js` and `node --test` → `ℹ pass 209`, `ℹ fail 0`.
 
 - [ ] **Step 3: Commit.**
 
@@ -1398,7 +1413,7 @@ with
   }
 ```
 
-- [ ] **Step 2: Check.** `node --check admin.js` and `node --test` → `ℹ pass 207`, `ℹ fail 0`.
+- [ ] **Step 2: Check.** `node --check admin.js` and `node --test` → `ℹ pass 209`, `ℹ fail 0`.
 
 - [ ] **Step 3: Commit.**
 
@@ -1484,7 +1499,7 @@ with
         return known !== null && served[file] && served[file].revision !== known;
       });
       if (moved && !busy() && state.selectedSection === section && state.selectedCharter === charterId) {
-        renderSection();
+        await ({ charter: renderCharter, galley: renderGalley, hotel: renderHotel })[section]();
         setStatus("Updated with changes saved elsewhere.", "ok");
       }
     } catch (error) {
@@ -1501,7 +1516,7 @@ with
   });
 ```
 
-- [ ] **Step 2: Check.** `node --check admin.js` and `node --test` → `ℹ pass 207`, `ℹ fail 0`.
+- [ ] **Step 2: Check.** `node --check admin.js` and `node --test` → `ℹ pass 209`, `ℹ fail 0`.
 
 - [ ] **Step 3: Commit.**
 
@@ -1544,7 +1559,7 @@ with
   cocktails, drink stocks, sites), never by array index. Coming back to the tab redraws the open page when one of its
   files moved (`checkFreshness`, `GET /api/admin/revisions`, a raw fetch that is not session activity), never over
   unsaved edits or an open dialog.
-- `node --test` runs the tests in `test/` (207 tests), which cover `routes-core`, `itinerary-core`, `charters-core`,
+- `node --test` runs the tests in `test/` (209 tests), which cover `routes-core`, `itinerary-core`, `charters-core`,
   `guest-preview-core`, `pack-core`, `pack-render`, `drag-reorder`, `merge-core`, the startup order
   (`startup-order.test.js` runs `admin.js` alone in a `vm` sandbox) and the refused-access card (`refused-access.test.js`,
   the same sandbox)

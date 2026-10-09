@@ -15,15 +15,15 @@ working copy in a `WeakMap` (`libraryBases`), the sites' in `sitesBase`. The cla
 clash the working copy holds theirs, so a stale copy is never sent with the new revision. Pages are unchanged in this
 plan: until c-03, a clash reports on the status line and redraws the section.
 
-**Tech Stack:** plain JS, no build, `node --test` (185 tests → 207).
+**Tech Stack:** plain JS, no build, `node --test` (185 tests → 209).
 
-**Preconditions:** admin PR #39 (`fix/admin-password-hashing`) is merged: this plan's OLD blocks are written
-against `main` with it. **Release order:** server plan c-01 first, this admin straight after (the new server refuses
-the old admin's saves, which send no `base_revision`, until the tab reloads the new admin).
+**Base:** admin `main` at `25c117c` (PR #39 merged 2026-10-09). If `main` has moved past it when this is
+built, dry-run the plan again first. **Release order:** server plan c-01 first, this admin straight after (the new
+server refuses the old admin's saves, which send no `base_revision`, until the tab reloads the new admin).
 
 **Dry-run (done while planning, for plans c-02 and c-03 together):** the plan text was applied to a `git archive` copy
-of admin PR #39's branch at `10ab701` (it has `main` at `e42f9df` merged in): `node --test` 207/207 and `node --check
-admin.js` clean. The `?v=` step is a `sed` over every tag, so it does not depend on the tag #39 lands with. The result was served by a
+of `main` at `25c117c`: `node --test` 209/209 and `node --check admin.js` clean. The `?v=` step is a `sed` over every
+tag. The result was served by a
 scratch server running plan c-01's code on a copy of `data-scratch`, with a Node script playing the other person
 (saving through the API with its own Charter or Hotel session). Browser pass, every item as designed:
 - **Crew:** a silent merge ("Crew member saved. · merged with Charter Admin's change from 14:54", both edits listed);
@@ -44,6 +44,12 @@ scratch server running plan c-01's code on a copy of `data-scratch`, with a Node
   redrew the page ("Updated with changes saved elsewhere.").
 - No console errors (only the expected 409 responses). The Crew clash was repeated on the final build: only the
   field I changed is edged (blank values compare equal, SC-D13).
+- **After the Fable review (SC-D14), on the final build:** Hotel changed Guest 3 while I edited Guest 1 (silent merge),
+  then I edited Guest 2: Guest 3's change survived (the page adopts the saved copy; the `g-slot` ids matched on both
+  sides); a day's new title survived their dish edit on another day; a day dialog clash on the notes (only the notes
+  edged); two quick moves of menu days saved one after the other with a plain "Menu day moved." (the per-file queue);
+  Cocktails: their change to a cocktail I deleted asked "Hotel changed Mojito at 15:35, which you deleted. Delete
+  anyway?", and Keep put it back in its place with their change.
 
 **Shared checkout hazard:** other Claude sessions may work in the same checkouts. **Never** run `git checkout`,
 `git switch`, `git stash` or `git add -A` in the main checkouts under `S:/Users/David/OneDrive/Maker Space/GitHub`. All
@@ -71,7 +77,7 @@ work happens in the worktree made in Task 0. Stage files by name. Before each ta
 ```bash
 cd "S:/Users/David/OneDrive/Maker Space/GitHub/portal/iolanthe-admin"
 git fetch -q origin
-git log -1 --oneline origin/main   # must contain PR #39's merge
+git log -1 --oneline origin/main   # 25c117c, or dry-run again
 git worktree add "S:/Users/David/OneDrive/Maker Space/GitHub/worktrees/spec-c-build/portal/iolanthe-admin" -b feat/spec-c-admin origin/main
 cd "S:/Users/David/OneDrive/Maker Space/GitHub/worktrees/spec-c-build/portal/iolanthe-admin" && node --test 2>&1 | grep -E "^ℹ (pass|fail)"
 ```
@@ -104,6 +110,8 @@ test("same: deep, ignores key order, missing = undefined", () => {
   assert.ok(core.same({ a: 1, b: undefined }, { a: 1 }));
   assert.ok(core.same({ a: 1, b: null }, { a: 1 }), "null = missing");
   assert.ok(core.same({ a: 1, b: "" }, { a: 1 }), "\"\" = missing");
+  assert.ok(core.same({ a: 1, b: [] }, { a: 1 }), "[] = missing");
+  assert.ok(!core.same({ a: [] }, { a: [0] }));
   assert.ok(!core.same({ a: 0 }, { a: null }));
   assert.ok(!core.same({ a: 1 }, { a: "1" }));
   assert.ok(!core.same([1, 2], [2, 1]));
@@ -227,6 +235,26 @@ test("menus: a day drag plus a dish edit merge (derived fields ignored)", () => 
     { menus: [day("m-1", 1, ["Beef", "Soup"]), base.menus[1], base.menus[2]] },
     { menus: [day("m-1", 1, ["Lamb"]), base.menus[1], base.menus[2]], revision: 4 }, S.menus);
   assert.deepEqual(both.clashes.map((c) => [c.key, c.field]), [["m-1", "dinner"]], "a day's dishes are one field");
+});
+
+test("menus: a day's title is mine to edit, not derived", () => {
+  const day = (id, n, label, dinner) => ({ id, order: n, day: n, charter_day: n, label, date: null, dinner });
+  const base = { menus: [day("m-1", 1, "Day 1", []), day("m-3", 2, "Day 2", [])], revision: 3 };
+  const mine = { menus: [day("m-1", 1, "Day 1", []), day("m-3", 2, "Beach BBQ", [])], revision: 3 };
+  const theirs = { menus: [day("m-1", 1, "Day 1", ["Beef"]), day("m-3", 2, "Day 2", [])], revision: 4 };
+  const result = core.merge3(base, mine, theirs, S.menus);
+  assert.deepEqual(result.clashes, []);
+  assert.equal(result.merged.menus[1].label, "Beach BBQ", "a title edit survives their dish edit");
+  assert.deepEqual(result.merged.menus[0].dinner, ["Beef"]);
+});
+
+test("a record I add before it has a key is an add; repeated keys fall back to one field", () => {
+  const base = crewFile([fred]);
+  const added = core.merge3(base, crewFile([fred, { name: "New hand" }]), crewFile([{ ...fred, position: "Purser" }], 5), S.crew);
+  assert.deepEqual(added.clashes, []);
+  assert.deepEqual(added.merged.crew, [{ ...fred, position: "Purser" }, { name: "New hand" }]);
+  const twice = core.merge3(base, crewFile([fred, fred]), crewFile([{ ...fred, position: "Purser" }], 5), S.crew);
+  assert.deepEqual(twice.clashes.map((c) => c.field), ["crew"]);
 });
 
 test("charter.json: top-level fields", () => {
@@ -405,7 +433,7 @@ test("newId and withSlotIds mirror the server", () => {
     charter: {},
     crew: { lists: { crew: { key: "id" } } },
     guests: { lists: { guests: { key: "id" } } },
-    menus: { lists: { menus: { key: "id", derived: ["order", "day", "charter_day", "label", "date"] } } },
+    menus: { lists: { menus: { key: "id", derived: ["order", "day", "charter_day", "date"] } } },
     guestDrinks: { lists: { sections: { key: sectionKey, lists: { items: { key: stockKey } } } } },
     availableAlcohol: { lists: { items: { key: stockKey } } },
     drinkStocks: { lists: { items: { key: "id" } } },
@@ -417,9 +445,9 @@ test("newId and withSlotIds mirror the server", () => {
     return Boolean(value) && typeof value === "object" && !Array.isArray(value);
   }
 
-  // Deep equality that ignores key order; a missing key, undefined, null and "" are the same (an editor writes null or
-  // "" for a field the stored record leaves out).
-  const blank = (value) => value === undefined || value === null || value === "";
+  // Deep equality that ignores key order; a missing key, undefined, null, "" and [] are the same (an editor writes null,
+  // "" or an empty list for a field the stored record leaves out).
+  const blank = (value) => value === undefined || value === null || value === "" || (Array.isArray(value) && !value.length);
 
   function same(a, b) {
     if (a === b || (blank(a) && blank(b))) return true;
@@ -527,9 +555,15 @@ test("newId and withSlotIds mirror the server", () => {
   function mergeList(baseList, mineList, theirsList, spec, ctx, out) {
     const lists = [baseList, mineList, theirsList].map((list) => (Array.isArray(list) ? list : []));
     const keyOf = keyFn(spec);
-    const keyed = lists.every((list) => list.every((record) => isRecord(record) && keyOf(record)));
+    // A record only mine has and without a key yet (the server gives it one on save) is an add with a key of its own.
+    const keysFor = (list, side) => list.map((record, index) => {
+      const key = isRecord(record) ? keyOf(record) : "";
+      return key || (side === "mine" && isRecord(record) ? `#new-${index}` : "");
+    });
+    const keyLists = [keysFor(lists[0], "base"), keysFor(lists[1], "mine"), keysFor(lists[2], "theirs")];
+    const keyed = keyLists.every((keys) => keys.every(Boolean) && new Set(keys).size === keys.length);
     if (!keyed) {
-      // Records without keys cannot be matched: the list merges as one field of its parent.
+      // Records without keys (or with repeated keys) cannot be matched: the list merges as one field of its parent.
       const [b, m, t] = lists;
       if (same(m, b)) return { merged: t, rebased: t };
       if (same(t, b) || same(m, t)) return { merged: m, rebased: m };
@@ -537,11 +571,11 @@ test("newId and withSlotIds mirror the server", () => {
       out.clashes.push({ kind: "field", list: owner.list || null, key: owner.key === undefined ? null : owner.key, parent: owner.parent || null, field: ctx.list, base: b, mine: m, theirs: t });
       return { merged: t, rebased: m };
     }
-    const [B, M, T] = lists.map((list) => new Map(list.map((record) => [keyOf(record), record])));
+    const [B, M, T] = lists.map((list, side) => new Map(list.map((record, index) => [keyLists[side][index], record])));
     const allKeys = [...new Set([...T.keys(), ...M.keys(), ...B.keys()])];
     const mergedRecords = new Map();
     const rebasedRecords = new Map();
-    const [baseKeys, mineKeys, theirsKeys] = lists.map((list) => list.map(keyOf));
+    const [baseKeys, mineKeys, theirsKeys] = keyLists;
     const recordSpec = { lists: spec.lists, derived: spec.derived, derivedFrom: mineReorderedKeys(baseKeys, mineKeys, theirsKeys) ? "mine" : "theirs" };
     for (const key of allKeys) {
       const b = B.get(key);
@@ -735,7 +769,7 @@ test("newId and withSlotIds mirror the server", () => {
 });
 ```
 
-- [ ] **Step 4: Run the tests.** `node --test` → `ℹ pass 207`, `ℹ fail 0`.
+- [ ] **Step 4: Run the tests.** `node --test` → `ℹ pass 209`, `ℹ fail 0`.
 
 - [ ] **Step 5: Commit.**
 
@@ -822,20 +856,29 @@ with
     return workingCopy;
   }
 
+  const saveQueues = new Map();
+
   // -> merge-core's saveWithRebase result: { ok: true, saved, mergedWith, notes } or { ok: false, clashes, theirs,
-  // merged, rebased, savedBy, savedAt }. Any other error is thrown.
-  function saveRevisioned({ path, schema, base, mine, normalize, wrap, unwrap }) {
-    return mergeCore().saveWithRebase({
+  // merged, rebased, savedBy, savedAt }. Any other error is thrown. Saves of one file (queue) run one at a time, so a
+  // second quick save (two drags) starts from the first one's result instead of clashing with it: base is a function,
+  // read when this save's turn comes, and mine is copied now.
+  function saveRevisioned({ path, queue, schema, base, mine, normalize, wrap, unwrap }) {
+    const snapshot = cloneData(mine);
+    const key = queue || path;
+    const run = () => mergeCore().saveWithRebase({
       send: async (data, baseRevision) => unwrap(await api(path, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(wrap(data, baseRevision))
       })),
-      base,
-      mine,
+      base: base(),
+      mine: snapshot,
       normalize,
       schema: mergeCore().SCHEMAS[schema]
     });
+    const next = (saveQueues.get(key) || Promise.resolve()).catch(() => null).then(run);
+    saveQueues.set(key, next);
+    return next;
   }
 
   // "Hotel changed the guest list at 14:02. Your change wasn't saved."
@@ -953,6 +996,31 @@ ${text}` : text;
     });
   }
 
+  // Spec C SC-D7 on a whole page: records I deleted that they changed are asked about once; Keep puts theirs back (in
+  // their place) with the rest of my changes. -> the page's copy to show. keyOf(record) -> the list's key.
+  async function pageCopyAfterClash(result, list, keyOf) {
+    const deleted = result.clashes.filter(clash => clash.kind === "deleted-by-me" && clash.list === list);
+    if (!deleted.length) {
+      return result.rebased;
+    }
+    const when = mergeCore().timeLabel(result.savedAt);
+    const names = deleted.map(clash => (clash.theirs && (clash.theirs.name || clash.theirs.title)) || "an item").join(", ");
+    if (await showAdminConfirm({
+      title: "Changed Elsewhere",
+      message: `${mergeCore().departmentLabel(result.savedBy)} changed ${names}${when ? ` at ${when}` : ""}, which you deleted. Delete anyway?`,
+      confirmLabel: "Delete",
+      cancelLabel: "Keep",
+      tone: "danger"
+    })) {
+      return result.rebased;
+    }
+    const keep = new Set(deleted.map(clash => clash.key));
+    const mine = new Map((result.rebased[list] || []).map(record => [keyOf(record), record]));
+    const ordered = (result.merged[list] || []).map(record => (keep.has(keyOf(record)) ? record : mine.get(keyOf(record)))).filter(Boolean);
+    const placed = new Set(ordered.map(keyOf));
+    return { ...result.rebased, [list]: ordered.concat((result.rebased[list] || []).filter(record => !placed.has(keyOf(record)))) };
+  }
+
   // Spec C SC-D7: I deleted what they changed.
   function confirmDeleteAnyway(clash) {
     const when = mergeCore().timeLabel(clash.savedAt);
@@ -971,8 +1039,9 @@ ${text}` : text;
     try {
       const result = await saveRevisioned({
         path: `/api/admin/charter/${encodeURIComponent(charterId)}/save`,
+        queue: `${charterId}/${file}`,
         schema: CHARTER_FILE_SCHEMAS[file] || "charter",
-        base: state.bundle && state.bundle[file] ? state.bundle[file] : {},
+        base: () => (state.bundle && state.bundle[file] ? state.bundle[file] : {}),
         mine: data,
         normalize: CHARTER_FILE_NORMALIZERS[file],
         wrap: (payload, baseRevision) => ({ file, data: payload, base_revision: baseRevision }),
@@ -1054,7 +1123,7 @@ with
     const result = await saveRevisioned({
       path,
       schema,
-      base: libraryBases.get(workingCopy) || {},
+      base: () => libraryBases.get(workingCopy) || {},
       mine,
       normalize,
       wrap: (data, baseRevision) => ({ ...data, base_revision: baseRevision }),
@@ -1081,6 +1150,9 @@ with
   }
 
   async function saveDrinkStocks(drinkStocks, successMessage, options = {}) {
+    // Spec C: a bottle added here gets its id before the save, so the merge can tell it from the others
+    const usedIds = new Set(drinkStocks.items.map(item => item.id).filter(Boolean));
+    drinkStocks.items = drinkStocks.items.map(item => (item.id ? item : { ...item, id: uniqueDrinkStockId(drinkStockBaseIdText(item), usedIds) }));
     try {
       return await saveLibraryCopy({
         path: "/api/admin/drink-stocks/save",
@@ -1264,14 +1336,14 @@ with
     const result = await saveRevisioned({
       path: "/api/admin/sites/save",
       schema: "sites",
-      base: sitesBase,
+      base: () => sitesBase,
       mine: normalized,
       normalize: normalizeSiteLibrary,
       wrap: (data, baseRevision) => ({ ...data, base_revision: baseRevision }),
       unwrap: payload => payload
     });
     if (!result.ok && typeof options.onClash !== "function") {
-      throw new Error(clashMessage(result, "the sites"));
+      throw new Error(`${clashMessage(result, "the sites")} Cancel, then open the page again to see their change.`);
     }
     const served = result.ok ? result.saved : result.theirs;
     sitesBase = cloneData(served);
@@ -1331,7 +1403,7 @@ with
   }
 ```
 
-- [ ] **Step 2: Check.** `node --check admin.js` and `node --test` → `ℹ pass 207`, `ℹ fail 0`.
+- [ ] **Step 2: Check.** `node --check admin.js` and `node --test` → `ℹ pass 209`, `ℹ fail 0`.
 
 - [ ] **Step 3: Commit.**
 
@@ -1421,7 +1493,7 @@ with
 }
 ```
 
-- [ ] **Step 2: Check.** `grep -c "admin-conflict-safe" index.html` → `32`; `node --test` → `ℹ pass 207`.
+- [ ] **Step 2: Check.** `grep -c "admin-conflict-safe" index.html` → `32`; `node --test` → `ℹ pass 209`.
 
 - [ ] **Step 3: Commit.**
 
