@@ -202,3 +202,22 @@ icon tone secondary. 177 tests. Browser pass: at 1180 × 820 the six filters sit
 46 px; Peach 80 % bar, Citron bottle × 3 (tooltip "3 unopened bottles"); a temporary item added, opened and deleted
 from its dialog (back to 54); the group dialog's delete reads "Delete all 3 unopened bottles of Absolut?" (cancelled);
 print opens the unchanged report; 820 px rows 62 px, 390 px 71 px, no sideways scroll.
+
+**2026-10-09 LIVE:** PR iolanthe-admin#29 merged (`898f89a`) and pulled onto the boat.
+
+## Guest Alcohol (2026-10-09)
+
+No mockup: the page only sets the order (sections, and the drinks in each) in which the charter-linked drinks appear on
+the guests' Wine & Drinks page; nothing is edited here and the page saves as a whole. Built directly and shown in the PR.
+
+- **SB-A1 Drag to reorder** replaces Move up / Move down for sections (a grip only when there is more than one section)
+  and for the drinks in a section; each move marks the page unsaved, as the arrows did; Save / Cancel unchanged.
+- **SB-A2 Rows:** 48 px: grip, name, the description on one line, bottle × count (when more than one; tooltip
+  "8 bottles"). Sections: a teal uppercase heading and an item-count pill (the arrows and the "6 items" line went).
+- **SB-A3 Header:** preview, separator, save, cancel (Charter Admin's pattern); the line under the title says what the
+  order is for.
+
+**2026-10-09 EXECUTED** on `feat/guest-alcohol-b` (assets `admin-guest-alcohol-b`): `drawGuestDrinkSections` /
+`drawGuestDrinkItems` rewritten; CSS `.guest-drinks-section-header`, `.guest-drinks-row`, `.guest-drinks-text`. 177
+tests. Browser pass on charter "New" (one Wine section, 6 drinks): a real mouse drag of Chablis to the top; Cancel asked
+to discard and restored the saved order; ArrowDown / ArrowUp on a grip with focus kept; nothing saved.

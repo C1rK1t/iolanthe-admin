@@ -85,7 +85,7 @@ boxes and cards, button styles, type and uppercase field labels. See
 
 Replace every pair of Move up / Move down buttons, and the swap logic behind them, with drag to reorder. They are on
 Galley Menus (dishes, custom sections, menu days), Guests (guest order), Guest Alcohol (sections and drinks) and
-Cocktails (ingredients and the cocktail list). Done: Galley Menus, Hotel Guests (2026-10-09). It must work with touch on the bridge tablet (pointer events and a grip handle, not HTML5
+Cocktails (ingredients and the cocktail list). Done: Galley Menus, Hotel Guests, Guest Alcohol (2026-10-09). It must work with touch on the bridge tablet (pointer events and a grip handle, not HTML5
 drag and drop, which does not fire on touch) and keep a keyboard way to move an item. One shared helper, `drag-reorder.js`,
 built with the Galley Menus phase B page (2026-10-09); Guests, Guest Alcohol and Cocktails switch to it in their
 phase B passes (`docs/style-rollout/spec-b-pages.md`).

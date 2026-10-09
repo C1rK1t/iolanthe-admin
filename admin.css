@@ -2620,20 +2620,55 @@ body.is-drag-reordering {
   text-align: left;
 }
 
+/* Guest Alcohol (style rollout B): grips for the sections and the drinks; one line of description */
+.guest-drinks-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.2rem;
+}
+
+.guest-drinks-section-header h3 {
+  margin: 0;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+}
+
+.guest-drinks-item-list {
+  display: grid;
+  gap: 0.35rem;
+}
+
 .guest-drinks-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 0.55rem;
-  padding: 0.55rem 0.65rem;
+  gap: 0.5rem;
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfc;
+  padding: 0.3rem 0.75rem 0.3rem 0.3rem;
 }
 
-.guest-drinks-summary {
-  grid-template-columns: minmax(0, 1fr);
-  gap: 0.2rem;
-  align-items: center;
+.guest-drinks-text {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
 }
 
-.guest-drinks-summary strong {
+.guest-drinks-text strong {
   line-height: 1.2;
+}
+
+.guest-drinks-text span {
+  color: var(--muted);
+  font-size: 0.82rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .available-alcohol-list-shell {
@@ -3120,7 +3155,6 @@ button.admin-icon-button--preview:focus {
   .form-grid,
   .weather-admin-status,
   .drink-grid,
-  .guest-drinks-summary,
   .available-alcohol-summary,
   .purchased-alcohol-summary,
   .cocktails-summary,
