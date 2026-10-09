@@ -2193,8 +2193,9 @@
     }
 
     let savedSignature = settingsStateSignature(readState());
+    let forcedDirty = Boolean(options.startDirty);   // spec C: a form redrawn after a clash starts unsaved
     const guard = {
-      isDirty: () => settingsStateSignature(readState()) !== savedSignature,
+      isDirty: () => forcedDirty || settingsStateSignature(readState()) !== savedSignature,
       confirmOptions: options.confirmOptions || UNSAVED_CHANGES_CONFIRM
     };
     const syncDirtyState = () => {
@@ -2218,6 +2219,7 @@
         if (typeof options.save === "function") {
           await options.save();
         }
+        forcedDirty = false;
         savedSignature = settingsStateSignature(readState());
         clearPageUnsavedGuard(guard);
         await reload();
@@ -2236,6 +2238,7 @@
             return;
           }
         }
+        forcedDirty = false;
         clearPageUnsavedGuard(guard);
         await reload();
       });
@@ -2245,6 +2248,7 @@
     return {
       isDirty: guard.isDirty,
       resetBaseline() {
+        forcedDirty = false;
         savedSignature = settingsStateSignature(readState());
         syncDirtyState();
       },
@@ -3147,6 +3151,68 @@
     event.returnValue = "";
   });
 
+  // Spec C §4.4: back on the tab, the open page redraws when a file it shows was saved elsewhere, unless it has unsaved
+  // edits or a dialog is open. Pages reload their files whenever they open, so tab focus is the only other moment. The
+  // Route page keeps its own copy (itinerary.json), so it is left out. A raw fetch, not api(): this check is not
+  // activity and must not keep an idle session alive.
+  const FRESHNESS_PANEL_FILES = Object.freeze({
+    charter: { info: ["charter.json"], crew: ["crew_list.json"], sites: ["sites.json"] },
+    galley: { menus: ["menus.json", "charter.json"], guests: ["guest_list.json", "charter.json"] },
+    hotel: {
+      guests: ["guest_list.json", "charter.json"],
+      "drink-stocks": ["drink-stocks.json"],
+      "guest-drinks": [GUEST_DRINKS_FILE_NAME, "drink-stocks.json"],
+      "available-alcohol": ["available-alcohol.json", "drink-stocks.json"],
+      "purchased-alcohol": ["drink-stocks.json"],
+      cocktails: ["cocktails.json"]
+    }
+  });
+  let freshnessCheck = null;
+
+  function knownRevision(file, charterId) {
+    const bundle = state.bundle && state.bundle.charter_id === charterId ? state.bundle : null;
+    if (bundle && bundle[file]) {
+      return mergeCore().revisionOf(bundle[file]);
+    }
+    return Object.prototype.hasOwnProperty.call(seenRevisions, file) ? seenRevisions[file] : null;
+  }
+
+  async function checkFreshness() {
+    const section = state.selectedSection;
+    const files = ((FRESHNESS_PANEL_FILES[section] || {})[state.sectionPanels[section]]) || [];
+    const charterId = state.selectedCharter;
+    const busy = () => hasPageUnsavedChanges() || document.body.classList.contains("modal-open");
+    if (!state.authenticated || !files.length || busy()) {
+      return;
+    }
+    try {
+      const response = await fetch(apiUrl(`/api/admin/revisions${charterId ? `?charter=${encodeURIComponent(charterId)}` : ""}`), { credentials: "same-origin" });
+      if (!response.ok) {
+        return;
+      }
+      const stamps = await response.json();
+      const served = { ...(stamps.library || {}), ...(stamps.charter || {}) };
+      const moved = files.some(file => {
+        const known = knownRevision(file, charterId);
+        return known !== null && served[file] && served[file].revision !== known;
+      });
+      if (moved && !busy() && state.selectedSection === section && state.selectedCharter === charterId) {
+        await ({ charter: renderCharter, galley: renderGalley, hotel: renderHotel })[section]();
+        setStatus("Updated with changes saved elsewhere.", "ok");
+      }
+    } catch (error) {
+      // A missed check is harmless: the next save merges.
+    }
+  }
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && !freshnessCheck) {
+      freshnessCheck = checkFreshness().finally(() => {
+        freshnessCheck = null;
+      });
+    }
+  });
+
   function syncModalOpenState() {
     const dialogOpen = dialogModal && !dialogModal.classList.contains("hidden");
     const loginOpen = els.loginModal && !els.loginModal.classList.contains("hidden");
@@ -3547,8 +3613,15 @@
     return state.charters.find(charter => charter.id === state.selectedCharter) || null;
   }
 
+  // Spec C: the last sites.json the server sent, the base of the next sites save. One copy is edited at a time (the
+  // Site Editor, or the Route page's Edit site, both from this load); saves pass a fresh object, so no per-copy base.
+  let sitesBase = {};
+
   async function loadSites() {
-    const siteLibrary = normalizeSiteLibrary(await api("/api/admin/sites"));
+    const served = await api("/api/admin/sites");
+    sitesBase = cloneData(served);
+    seenRevisions["sites.json"] = mergeCore().revisionOf(served);
+    const siteLibrary = normalizeSiteLibrary(served);
     state.sites = siteLibrary.sites;
     return siteLibrary;
   }
@@ -3694,7 +3767,8 @@
   function normalizeGuestList(value) {
     const guestList = value && typeof value === "object" ? cloneData(value) : {};
     guestList.guests = Array.isArray(guestList.guests) ? guestList.guests.map(normalizeGuestRecord) : [];
-    guestList.guests = sortAndEnsurePrincipalGuests(guestList.guests);
+    // Spec C: a guest without an id gets g-slot-<position> (the server's lib/record-ids.js withSlotIds)
+    guestList.guests = mergeCore().withSlotIds(sortAndEnsurePrincipalGuests(guestList.guests));
     return guestList;
   }
 
@@ -3900,7 +3974,7 @@
       }
       activeCount -= 1;
     }
-    normalized.guests = sortAndEnsurePrincipalGuests(normalized.guests);
+    normalized.guests = mergeCore().withSlotIds(sortAndEnsurePrincipalGuests(normalized.guests));
     return normalized;
   }
 
@@ -4212,14 +4286,26 @@
     });
   }
 
-  function openCrewMemberModal(crewList, memberOrOnSave, maybeOnSave, onDelete) {
+  // Spec C: the crew dialog's input for each record field, for the clash marks
+  const CREW_CLASH_FIELDS = Object.freeze({
+    name: "#crew-add-name",
+    position: "#crew-add-position",
+    role: "#crew-add-position",
+    department: "#crew-add-department",
+    position_order: "#crew-add-position-order",
+    description: "#crew-add-description",
+    note: "#crew-add-description"
+  });
+
+  // clash (spec C §4.1, from recordClash): the dialog opens on clash.record (theirs with my changes on top), marked.
+  function openCrewMemberModal(crewList, memberOrOnSave, maybeOnSave, onDelete, clash) {
     const existing = memberOrOnSave && typeof memberOrOnSave === "object" ? memberOrOnSave : null;
     const saveHandler = typeof maybeOnSave === "function" ? maybeOnSave : memberOrOnSave;
     // Style rollout B: delete lives in the Edit dialog, not on every row
     const canDelete = Boolean(existing && typeof onDelete === "function");
     const draft = {
       ...blankCrewMember(),
-      ...(existing ? cloneData(existing) : {})
+      ...(existing ? cloneData(clash && clash.record ? clash.record : existing) : {})
     };
     const source = { crewList };
     const positionSuggestions = getSuggestionList("position", source);
@@ -4252,6 +4338,7 @@
         </label>
       </form>
     `, { cardClass: "modal-welcome-message", hideClose: true, headerActionsHtml });
+    showClashMarks(modal, clash, CREW_CLASH_FIELDS, modal.querySelector("#crew-add-form"));
     modal.querySelector("#crew-add-form").addEventListener("submit", event => {
       event.preventDefault();
       const position = modal.querySelector("#crew-add-position").value;
@@ -4294,6 +4381,7 @@
     const existingNames = new Set((destinationCrewList.crew || [])
       .map(normalizedCrewName)
       .filter(Boolean));
+    const takenIds = new Set((destinationCrewList.crew || []).map(member => member.id).filter(Boolean));
     const imported = [];
     (sourceCrewList.crew || []).forEach(member => {
       const name = normalizedCrewName(member);
@@ -4301,7 +4389,10 @@
         return;
       }
       existingNames.add(name);
-      imported.push(cloneData(member));
+      // Spec C: a fresh id, so a member imported from another charter is a new record here
+      const id = mergeCore().newId("c", takenIds);
+      takenIds.add(id);
+      imported.push({ ...cloneData(member), id });
     });
     return imported;
   }
@@ -4660,17 +4751,33 @@
     };
   }
 
-  async function saveSitesLibrary(siteLibrary, successMessage) {
+  // Throws on a failed save. A clash goes to options.onClash(result) (the sites become theirs; returns null); without
+  // one it is thrown as a message and the base stays, so a retry merges again rather than overwriting theirs.
+  async function saveSitesLibrary(siteLibrary, successMessage, options = {}) {
     const normalized = validateSiteLibrary(siteLibrary);
-    const saved = await api("/api/admin/sites/save", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(normalized)
+    const result = await saveRevisioned({
+      path: "/api/admin/sites/save",
+      schema: "sites",
+      base: () => sitesBase,
+      mine: normalized,
+      normalize: normalizeSiteLibrary,
+      wrap: (data, baseRevision) => ({ ...data, base_revision: baseRevision }),
+      unwrap: payload => payload
     });
-    const normalizedSaved = normalizeSiteLibrary(saved);
+    if (!result.ok && typeof options.onClash !== "function") {
+      throw new Error(`${clashMessage(result, "the sites")} Cancel, then open the page again to see their change.`);
+    }
+    const served = result.ok ? result.saved : result.theirs;
+    sitesBase = cloneData(served);
+    seenRevisions["sites.json"] = mergeCore().revisionOf(served);
+    const normalizedSaved = normalizeSiteLibrary(served);
     siteLibrary.sites = normalizedSaved.sites;
     state.sites = normalizedSaved.sites;
-    setStatus(successMessage || "Sites saved.", "ok");
+    if (!result.ok) {
+      options.onClash(result);
+      return null;
+    }
+    setStatus(mergeCore().savedStatus(successMessage || "Sites saved.", result), "ok");
     return normalizedSaved;
   }
 
@@ -5498,7 +5605,20 @@
   }
 
   // defaults: optional draft fields for a NEW site (e.g. { title, latitude, longitude } from the Routes map).
-  function openSiteEditorModal(siteLibrary, site, onSave, defaults, onDelete) {
+  // Spec C: the site dialog's element for each record field, for the clash marks
+  const SITE_CLASH_FIELDS = Object.freeze({
+    title: "#site-editor-title",
+    latitude: "#site-editor-latitude-degrees",
+    longitude: "#site-editor-longitude-degrees",
+    description: "#site-editor-description",
+    tags: "#site-editor-tags",
+    media: "#site-editor-images",
+    images: "#site-editor-images"
+  });
+
+  // clash (spec C §4.1, from recordClash): the dialog opens on clash.record (theirs with my changes on top), marked.
+  // An onSave that reopened the dialog after a clash throws an error with clashReopened set.
+  function openSiteEditorModal(siteLibrary, site, onSave, defaults, onDelete, clash) {
     const editing = Boolean(site);
     // Style rollout B: delete lives in the Edit dialog (the Site Editor passes onDelete; the Route page does not)
     const canDelete = editing && typeof onDelete === "function";
@@ -5509,7 +5629,7 @@
     }
     const draft = {
       ...blankSite(),
-      ...(editing ? cloneData(site) : (defaults || {}))
+      ...(editing ? cloneData(clash && clash.record ? clash.record : site) : (defaults || {}))
     };
     const mediaItems = siteMediaEntries(draft);
     const pendingMedia = [];
@@ -5560,6 +5680,7 @@
         <p id="site-editor-error" class="modal-error full" role="alert"></p>
       </form>
     `, { cardClass: "modal-wide", hideClose: true, headerActionsHtml });
+    showClashMarks(modal, clash, SITE_CLASH_FIELDS, modal.querySelector("#site-editor-form"));
 
     const deleteSiteButton = modal.querySelector("[data-action='delete-site']");
     if (deleteSiteButton) {
@@ -5770,6 +5891,9 @@
         markModalSaved(modal);
         closeDialogModal();
       } catch (error) {
+        if (error && error.clashReopened) {
+          return;   // spec C: the dialog has reopened on their version
+        }
         errorField.textContent = error.message || "Unable to save site.";
       }
     });
@@ -5983,10 +6107,30 @@
     };
   }
 
-  function openGuestEditModal(guestList, guest, index, options, onSave, onDelete) {
+  // Spec C: the guest dialog's input for each record field, for the clash marks
+  const GUEST_CLASH_FIELDS = Object.freeze({
+    full_name: "#guest-edit-full-name",
+    preferred_name: "#guest-edit-preferred-name",
+    principal: "#guest-edit-principal",
+    cabin: "#guest-edit-cabin",
+    bcd_size: "#guest-edit-bcd-size",
+    wetsuit_size: "#guest-edit-wetsuit-size",
+    fin_size: "#guest-edit-fin-size",
+    allergies: "#guest-edit-allergies",
+    dietary_preferences: "#guest-edit-dietary",
+    drinks_preferences: "#guest-edit-drinks-preferences",
+    diving_ability: "#guest-edit-diving-ability",
+    diving_qualification: "#guest-edit-diving-qualification",
+    date_of_last_dive: "#guest-edit-last-dive-mode",
+    medical_notes: "#guest-edit-medical-notes",
+    notes: "#guest-edit-notes"
+  });
+
+  // clash (spec C §4.1, from recordClash): the dialog opens on clash.record (theirs with my changes on top), marked.
+  function openGuestEditModal(guestList, guest, index, options, onSave, onDelete, clash) {
     const settings = options || {};
     const inactiveGuest = guest.active === false;
-    const draft = normalizeGuestRecord(guest);
+    const draft = normalizeGuestRecord(clash && clash.record ? clash.record : guest);
     const suggestions = guestModalSuggestions(guestList);
     const suggestionIds = Object.fromEntries(Object.keys(suggestions).map(key => [key, `guest-edit-${key}-suggestions`]));
     const lastDiveMode = draft.date_of_last_dive !== "N/A" ? "date" : "na";
@@ -6056,6 +6200,7 @@
         </label>
       </form>
     `, { cardClass: "modal-wide", hideClose: true, headerActionsHtml });
+    showClashMarks(modal, clash, GUEST_CLASH_FIELDS, modal.querySelector("#guest-edit-form"));
     const deleteGuestButton = modal.querySelector("[data-action='delete-guest']");
     if (deleteGuestButton) {
       deleteGuestButton.addEventListener("click", async () => {
@@ -6131,14 +6276,35 @@
     });
   }
 
-  async function saveGuestList(guestList, settings) {
+  // Spec C: on success the list takes the saved copy (it may hold a merged change); on a clash it shows theirs, then
+  // onClash(result) decides what to reopen (without one: the status line).
+  async function saveGuestList(guestList, settings, onClash) {
     if (settings && settings.charterInfo) {
       const normalized = normalizeGuestListForCount(guestList, settings.charterInfo.guest_count);
       guestList.guests = normalized.guests;
     } else {
       guestList.guests = sortAndEnsurePrincipalGuests((guestList.guests || []).map(normalizeGuestRecord));
     }
-    return saveCharterFile("guest_list.json", guestList, settings.saveSuccessMessage || "Guests saved.");
+    const saved = await saveCharterFile("guest_list.json", guestList, settings.saveSuccessMessage || "Guests saved.", {
+      onClash: result => {
+        guestList.guests = (settings && settings.charterInfo
+          ? normalizeGuestListForCount(result.theirs, settings.charterInfo.guest_count)
+          : normalizeGuestList(result.theirs)).guests;
+        drawGuestEditors(guestList, settings);
+        if (typeof onClash === "function") {
+          onClash(result);
+        } else {
+          setStatus(clashMessage(result, "the guest list"), "error");
+        }
+      }
+    });
+    if (saved) {
+      // The saved copy may hold someone else's merged change: never keep editing the copy from before the save
+      guestList.guests = (settings && settings.charterInfo
+        ? normalizeGuestListForCount(saved, settings.charterInfo.guest_count)
+        : normalizeGuestList(saved)).guests;
+    }
+    return saved;
   }
 
   function drawGuestEditors(guestList, options) {
@@ -6219,20 +6385,7 @@
       ${settings.allowEdit ? rowChevronHtml() : `<span></span>`}
     `;
     if (settings.allowEdit) {
-      const canDelete = settings.allowDelete || (settings.allowDeleteInactive && inactive);
-      bindTapRow(row, "Edit guest", () => {
-        openGuestEditModal(guestList, guest, index, settings, async nextGuest => {
-          if (nextGuest.principal && settings.canChangePrincipal) {
-            guestList.guests.forEach(entry => {
-              entry.principal = false;
-            });
-          }
-          guestList.guests[index] = nextGuest;
-          guestList.guests = sortAndEnsurePrincipalGuests(guestList.guests);
-          await saveGuestList(guestList, settings);
-          drawGuestEditors(guestList, settings);
-        }, canDelete ? () => removeGuestFromList(guestList, guest, index, settings) : null);
-      });
+      bindTapRow(row, "Edit guest", () => openGuestEditor(guestList, guest, settings));
     }
     const promoteButton = row.querySelector("[data-action='promote-guest']");
     if (promoteButton) {
@@ -6260,14 +6413,62 @@
 
   // Deletes an inactive guest, or clears an active guest's slot (the slot stays); called from the Edit dialog once
   // the user has confirmed there
-  async function removeGuestFromList(guestList, guest, index, settings) {
-    if (guest.active === false) {
-      guestList.guests.splice(index, 1);
+  // Spec C §4.1, §4.3: edit, clear or delete one guest, found by id (the list re-sorts around them). A clash on this
+  // guest reopens the editor on their version with my changes on top.
+  function openGuestEditor(guestList, guest, settings, clash) {
+    const id = guest.id;
+    const index = Math.max(0, guestList.guests.findIndex(entry => entry.id === id));
+    const name = guestDisplayName(guest, index);
+    const canDelete = settings.allowDelete || (settings.allowDeleteInactive && guest.active === false);
+    openGuestEditModal(guestList, guest, index, settings, async nextGuest => {
+      if (nextGuest.principal && settings.canChangePrincipal) {
+        guestList.guests.forEach(entry => {
+          entry.principal = false;
+        });
+      }
+      const at = guestList.guests.findIndex(entry => entry.id === id);
+      if (at >= 0) {
+        guestList.guests[at] = nextGuest;
+      } else {
+        guestList.guests.push(nextGuest);   // adding back a guest someone else deleted
+      }
+      guestList.guests = sortAndEnsurePrincipalGuests(guestList.guests);
+      await saveGuestList(guestList, settings, result => {
+        const again = recordClash(result, "guests", id, name);
+        if (again) {
+          openGuestEditor(guestList, again.theirsRecord || again.record, settings, again);
+        } else {
+          setStatus(clashMessage(result, "the guest list"), "error");
+        }
+      });
+      drawGuestEditors(guestList, settings);
+    }, canDelete ? () => removeGuestFromList(guestList, guest, settings) : null, clash);
+  }
+
+  // An inactive guest is deleted, an active one's slot cleared. Deleting a guest someone else changed asks first.
+  async function removeGuestFromList(guestList, guest, settings) {
+    const id = guest.id;
+    const name = guestDisplayName(guest, 0);
+    const at = guestList.guests.findIndex(entry => entry.id === id);
+    if (at < 0) {
+      return;
+    }
+    if (guestList.guests[at].active === false) {
+      guestList.guests.splice(at, 1);
     } else {
-      clearGuestSlot(guest);
+      clearGuestSlot(guestList.guests[at]);
     }
     guestList.guests = sortAndEnsurePrincipalGuests(guestList.guests);
-    await saveGuestList(guestList, settings);
+    await saveGuestList(guestList, settings, async result => {
+      const clash = recordClash(result, "guests", id, name);
+      if (clash && clash.deletedByMe) {
+        if (await confirmDeleteAnyway(clash)) {
+          await removeGuestFromList(guestList, clash.theirsRecord, settings);
+        }
+      } else {
+        setStatus(clashMessage(result, "the guest list"), "error");
+      }
+    });
     drawGuestEditors(guestList, settings);
   }
 
@@ -6353,27 +6554,55 @@
     if (!canEditCrew) {
       return row;
     }
-    row.addEventListener("click", () => {
-      openCrewMemberModal(crewList, member, updatedMember => {
-        saveCrewEdit(crewList, crewList.crew.map((entry, entryIndex) => entryIndex === index ? updatedMember : entry), "Crew member saved.");
-      }, async () => {
-        try {
-          await saveCrewEdit(crewList, crewList.crew.filter((entry, entryIndex) => entryIndex !== index), "Crew member deleted.");
-        } catch (error) {
-          setStatus(error.message, "error");
-        }
-      });
-    });
+    row.addEventListener("click", () => openCrewMemberEditor(crewList, member));
     return row;
   }
 
-  async function saveCrewEdit(crewList, crew, message) {
-    const saved = await saveCharterFile("crew_list.json", { ...crewList, crew }, message);
+  // Spec C: on a clash the list shows theirs, then onClash(result) decides what to reopen.
+  async function saveCrewEdit(crewList, crew, message, onClash) {
+    const saved = await saveCharterFile("crew_list.json", { ...crewList, crew }, message, {
+      onClash: result => {
+        crewList.crew = normalizeCrewEditorList(result.theirs).crew;
+        drawCrewEditors(crewList);
+        onClash(result);
+      }
+    });
     if (!saved) {
       return;
     }
     crewList.crew = normalizeCrewEditorList(saved).crew;
     drawCrewEditors(crewList);
+  }
+
+  // Spec C §4.1, §4.3: edit or delete one crew member, found by id. A clash on this member reopens the editor on their
+  // version with my changes on top; deleting a member they changed asks first.
+  function openCrewMemberEditor(crewList, member, clash) {
+    const id = member.id;
+    const name = member.name || "this crew member";
+    openCrewMemberModal(crewList, member, updatedMember => {
+      const crew = crewList.crew.some(entry => entry.id === id)
+        ? crewList.crew.map(entry => (entry.id === id ? updatedMember : entry))
+        : [...crewList.crew, updatedMember];   // adding back a member someone else deleted
+      saveCrewEdit(crewList, crew, "Crew member saved.", result => {
+        const again = recordClash(result, "crew", id, updatedMember.name || name);
+        if (again) {
+          openCrewMemberEditor(crewList, again.theirsRecord || again.record, again);
+        } else {
+          setStatus(clashMessage(result, "the crew list"), "error");
+        }
+      });
+    }, () => deleteCrewMember(crewList, id, name), clash);
+  }
+
+  async function deleteCrewMember(crewList, id, name) {
+    await saveCrewEdit(crewList, crewList.crew.filter(entry => entry.id !== id), "Crew member deleted.", async result => {
+      const clash = recordClash(result, "crew", id, name);
+      if (!clash) {
+        setStatus(clashMessage(result, "the crew list"), "error");
+      } else if (clash.deletedByMe && await confirmDeleteAnyway(clash)) {
+        await deleteCrewMember(crewList, id, name);
+      }
+    });
   }
 
   function drawSiteEditors(siteLibrary) {
@@ -6412,30 +6641,63 @@
       <span class="site-row-media"${mediaCount ? ` title="${mediaCount} media"` : ""}>${mediaCount ? `${buttonIconSvg("camera")}${mediaCount}` : ""}</span>
       <svg class="row-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
     `;
-    row.addEventListener("click", () => {
-      openSiteEditorModal(siteLibrary, site, async updatedSite => {
-        const nextLibrary = normalizeSiteLibrary({
-          ...siteLibrary,
-          sites: siteLibrary.sites.map((entry, entryIndex) => entryIndex === index ? updatedSite : entry)
-        });
-        const saved = await saveSitesLibrary(nextLibrary, "Site saved.");
+    row.addEventListener("click", () => openSiteEditor(siteLibrary, site));
+    return row;
+  }
+
+  // Spec C §4.1, §4.3: edit or delete one site, found by id. A clash on this site reopens the editor on their version
+  // with my changes on top; deleting a site they changed asks first.
+  function openSiteEditor(siteLibrary, site, clash) {
+    const id = site.id;
+    const name = siteDisplayName(site, "this site");
+    openSiteEditorModal(siteLibrary, site, async updatedSite => {
+      const exists = siteLibrary.sites.some(entry => entry.id === id);
+      const nextLibrary = normalizeSiteLibrary({
+        ...siteLibrary,
+        sites: exists ? siteLibrary.sites.map(entry => (entry.id === id ? updatedSite : entry)) : [...siteLibrary.sites, updatedSite]
+      });
+      let clashResult = null;
+      const saved = await saveSitesLibrary(nextLibrary, "Site saved.", { onClash: result => { clashResult = result; } });
+      if (!saved) {
+        siteLibrary.sites = nextLibrary.sites;   // theirs
+        drawSiteEditors(siteLibrary);
+        const again = recordClash(clashResult, "sites", id, name);
+        if (!again) {
+          throw new Error(clashMessage(clashResult, "the sites"));
+        }
+        openSiteEditor(siteLibrary, siteLibrary.sites.find(entry => entry.id === id) || again.record, again);
+        const reopened = new Error("");
+        reopened.clashReopened = true;
+        throw reopened;
+      }
+      siteLibrary.sites = saved.sites;
+      drawSiteEditors(siteLibrary);
+    }, null, () => deleteSite(siteLibrary, id, name), clash);
+  }
+
+  async function deleteSite(siteLibrary, id, name) {
+    try {
+      const nextLibrary = normalizeSiteLibrary({ ...siteLibrary, sites: siteLibrary.sites.filter(entry => entry.id !== id) });
+      let clashResult = null;
+      const saved = await saveSitesLibrary(nextLibrary, "Site deleted.", { onClash: result => { clashResult = result; } });
+      if (saved) {
         siteLibrary.sites = saved.sites;
         drawSiteEditors(siteLibrary);
-      }, null, async () => {
-        try {
-          const nextLibrary = normalizeSiteLibrary({
-            ...siteLibrary,
-            sites: siteLibrary.sites.filter((entry, entryIndex) => entryIndex !== index)
-          });
-          const saved = await saveSitesLibrary(nextLibrary, "Site deleted.");
-          siteLibrary.sites = saved.sites;
-          drawSiteEditors(siteLibrary);
-        } catch (error) {
-          setStatus(error.message, "error");
+        return;
+      }
+      siteLibrary.sites = nextLibrary.sites;   // theirs
+      drawSiteEditors(siteLibrary);
+      const clash = recordClash(clashResult, "sites", id, name);
+      if (clash && clash.deletedByMe) {
+        if (await confirmDeleteAnyway(clash)) {
+          await deleteSite(siteLibrary, id, name);
         }
-      });
-    });
-    return row;
+      } else {
+        setStatus(clashMessage(clashResult, "the sites"), "error");
+      }
+    } catch (error) {
+      setStatus(error.message, "error");
+    }
   }
 
   function cloneCharterInfo(charterInfo) {
@@ -6490,6 +6752,25 @@
     return message;
   }
 
+  // Spec C: Charter Admin's input for each charter.json field, for the clash marks
+  const CHARTER_INFO_CLASH_FIELDS = Object.freeze({
+    name: "#charter-info-name",
+    start_date: "#charter-info-start-date",
+    end_date: "#charter-info-end-date",
+    guest_count: "#charter-info-guest-count",
+    diving_guest_count: "#charter-info-diving-guest-count",
+    arrival: "#charter-info-arrival-date",
+    primary_contact: "#charter-info-primary-contact-name",
+    charter_style: "#charter-info-charter-style",
+    non_swimmers_present: "#charter-info-non-swimmers-present",
+    diving_planned: "#charter-info-diving-planned",
+    medical_notes_present: "#charter-info-medical-notes-present",
+    dietary_restrictions_present: "#charter-info-dietary-restrictions-present",
+    charter_preference_notes: "#charter-info-charter-preference-notes",
+    drink_preferences_notes: "#charter-info-drink-preferences-notes",
+    notes: "#charter-info-notes"
+  });
+
   function bindCharterInfoPanel(charterInfo) {
     const form = document.getElementById("charter-info-form");
     if (!form) {
@@ -6523,9 +6804,12 @@
       arrivalHost.replaceChildren(picker.root);
     }
 
+    const infoClash = state.charterInfoClash;
+    state.charterInfoClash = null;
     bindSettingsFormController({
       formId: "charter-info-form",
       cancelButtonId: "cancel-charter-info",
+      startDirty: Boolean(infoClash),
       readState: () => readCharterInfoForm(charterInfo),
       save: async () => {
         if (syncCharterInfoOverlap()) {
@@ -6533,16 +6817,31 @@
         }
         Object.assign(charterInfo, readCharterInfoForm(charterInfo));
         // Not saveCharterFile(): its catch would swallow the server's message, and the controller needs the throw to keep the form dirty.
-        const payload = await api(`/api/admin/charter/${encodeURIComponent(state.selectedCharter)}/save`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ file: "charter.json", data: charterInfo })
+        const result = await saveRevisioned({
+          path: `/api/admin/charter/${encodeURIComponent(state.selectedCharter)}/save`,
+          queue: `${state.selectedCharter}/charter.json`,
+          schema: "charter",
+          base: () => (state.bundle && state.bundle["charter.json"] ? state.bundle["charter.json"] : {}),
+          mine: charterInfo,
+          normalize: normalizeCharterInfo,
+          wrap: (payload, baseRevision) => ({ file: "charter.json", data: payload, base_revision: baseRevision }),
+          unwrap: payload => (payload && typeof payload === "object" && Object.prototype.hasOwnProperty.call(payload, "data") ? payload.data : payload)
         });
-        const saved = payload && typeof payload === "object" && Object.prototype.hasOwnProperty.call(payload, "data") ? payload.data : payload;
+        if (!result.ok) {
+          // Spec C §4.2: redraw on their copy with my changes on top, still unsaved; the throw keeps this save unsaved
+          if (state.bundle) {
+            state.bundle["charter.json"] = cloneData(result.theirs);
+          }
+          state.charterInfoClash = result;
+          await renderCharter();
+          const when = mergeCore().timeLabel(result.savedAt);
+          throw new Error(`${mergeCore().departmentLabel(result.savedBy)} changed the charter info${when ? ` at ${when}` : ""}. Check the marked fields and save again.`);
+        }
+        const saved = result.saved;
         if (state.bundle) {
           state.bundle["charter.json"] = cloneData(saved);
         }
-        setStatus("Charter info saved.", "ok");
+        setStatus(mergeCore().savedStatus("Charter info saved.", result), "ok");
         const normalizedSaved = normalizeCharterInfo(saved);
         Object.assign(charterInfo, normalizedSaved);
         const summary = currentCharterSummary();
@@ -6562,6 +6861,9 @@
         await renderCharter();
       }
     });
+    if (infoClash) {
+      showClashMarks(form.parentElement, pageClash(infoClash, "the charter info"), CHARTER_INFO_CLASH_FIELDS, form);
+    }
 
     const guestViewButton = document.getElementById("charter-guest-view");
     if (guestViewButton) {
@@ -6611,9 +6913,10 @@
     if (addButton) {
       addButton.addEventListener("click", () => {
         openCrewMemberModal(crewList, async member => {
+          const id = mergeCore().newId("c", new Set(crewList.crew.map(entry => entry.id)));
           const nextCrewList = {
             ...crewList,
-            crew: [...crewList.crew, member]
+            crew: [...crewList.crew, { ...member, id }]
           };
           const saved = await saveCharterFile("crew_list.json", nextCrewList, "Crew member added.");
           if (!saved) {
@@ -6790,7 +7093,9 @@
         loadSites(),
         loadReservedPeriods()
       ]);
-      const charterInfo = normalizeCharterInfo(bundle["charter.json"]);
+      // Spec C §4.2: after a clash Charter Admin redraws on their copy with my changes on top (bindCharterInfoPanel)
+      const infoClash = activePanel === "info" ? state.charterInfoClash : null;
+      const charterInfo = normalizeCharterInfo(infoClash ? infoClash.rebased : bundle["charter.json"]);
       const itinerary = bundle["itinerary.json"] || {};
       state.charterContext = { charterId: state.selectedCharter, charter: charterInfo, itinerary, siteLibrary };
       const guestList = normalizeGuestList(bundle["guest_list.json"]);
@@ -7001,7 +7306,13 @@
     const inactiveDays = inactiveMenuDays(menus).map((day, index) => normalizeMenuDay(day, itineraryDayCount + index + 1));
 
     while (activeDays.length < itineraryDayCount) {
-      activeDays.push(blankMenuDay(activeDays.length + 1));
+      // m-day-<n> from the position, so two people filling the same days create the same records, not twice as many
+      const takenIds = new Set([...activeDays, ...inactiveDays].map(day => day.id).filter(Boolean));
+      let n = activeDays.length + 1;
+      while (takenIds.has(`m-day-${n}`)) {
+        n += 1;
+      }
+      activeDays.push({ ...blankMenuDay(activeDays.length + 1), id: `m-day-${n}` });
     }
     if (activeDays.length > itineraryDayCount) {
       const excessDays = activeDays.slice(itineraryDayCount);
@@ -7355,7 +7666,21 @@
       });
   }
 
-  function openMenuDayModal(menus, menuIndex, itinerary, itineraryDayCount, dateLabel) {
+  // Spec C: the day dialog's element for each field of a day's menu, for the clash marks
+  const MENU_DAY_CLASH_FIELDS = Object.freeze({
+    label: "#menu-day-title",
+    title: "#menu-day-title",
+    todays_notes: "#menu-day-notes",
+    notes: "#menu-day-notes",
+    breakfast: ["#menu-day-section-list", "Breakfast"],
+    lunch: ["#menu-day-section-list", "Lunch"],
+    dinner: ["#menu-day-section-list", "Dinner"],
+    snacks: ["#menu-day-section-list", "Snacks"],
+    children: ["#menu-day-section-list", "Other sections"]
+  });
+
+  // clash (spec C §4.1): menus is a copy of theirs with my day on top at menuIndex; the dialog is marked.
+  function openMenuDayModal(menus, menuIndex, itinerary, itineraryDayCount, dateLabel, clash) {
     const original = menus.menus[menuIndex];
     if (!original) {
       return;
@@ -7400,6 +7725,7 @@
       });
     };
     redrawSections();
+    showClashMarks(modal, clash, MENU_DAY_CLASH_FIELDS, modal.querySelector("#menu-day-form"));
     modal.querySelector("#clone-menu-day").addEventListener("click", () => {
       openMenuDayCloneEditor(modal, menus, menuIndex, dayNumber, sourceDay => {
         const sourceCopy = cloneData(sourceDay);
@@ -7433,7 +7759,7 @@
       closeDialogModal();
       if (inactiveDay) {
         menus.menus = menus.menus.filter(entry => entry !== original);
-        await saveMenusAndRender(menus, "Inactive menu deleted.");
+        await saveMenusAndRender(menus, "Inactive menu deleted.", { onClash: result => deleteMenuDayAnyway(result, original.id) });
         return;
       }
       clearMenuDayData(original);
@@ -7452,12 +7778,48 @@
       }
       applyMenuSectionsToDay(original, sectionDrafts);
       syncMenusToItineraryDays(menus, itineraryDayCount);
-      const saved = await saveMenusAndRender(menus, "Menu day saved.");
+      const saved = await saveMenusAndRender(menus, "Menu day saved.", {
+        onClash: result => reopenMenuDayAfterClash(result, original.id, itinerary, itineraryDayCount, dateLabel)
+      });
       if (saved) {
         markModalSaved(modal);
         closeDialogModal();
       }
     });
+  }
+
+  // Spec C §4.1: the day dialog reopens on a copy of their menus with my day on top; the page shows theirs.
+  async function reopenMenuDayAfterClash(result, id, itinerary, itineraryDayCount, dateLabel) {
+    await closeDialogModal({ force: true });
+    await renderGalley();   // the page shows theirs (and may save its sync to the itinerary days) before the dialog opens
+    const clash = recordClash(result, "menus", id, "this day's menu");
+    if (!clash || !clash.record) {
+      setStatus(clashMessage(result, "the menus"), "error");
+      return;
+    }
+    const menus = normalizeMenus(state.bundle && state.bundle["menus.json"] ? state.bundle["menus.json"] : result.theirs);
+    const at = menus.menus.findIndex(day => day.id === id);
+    if (at >= 0) {
+      menus.menus[at] = normalizeMenuDay(clash.record, at + 1);
+    } else {
+      menus.menus.push(normalizeMenuDay(clash.record, menus.menus.length + 1));   // adding back a day someone deleted
+    }
+    openMenuDayModal(menus, at >= 0 ? at : menus.menus.length - 1, itinerary, itineraryDayCount, dateLabel, clash);
+  }
+
+  // Spec C SC-D7: I deleted an inactive menu someone else changed.
+  async function deleteMenuDayAnyway(result, id) {
+    const clash = recordClash(result, "menus", id, "this inactive menu");
+    if (clash && clash.deletedByMe && await confirmDeleteAnyway(clash)) {
+      const menus = normalizeMenus(result.theirs);
+      menus.menus = menus.menus.filter(day => day.id !== id);
+      await saveMenusAndRender(menus, "Inactive menu deleted.");
+      return;
+    }
+    if (!clash || !clash.deletedByMe) {
+      setStatus(clashMessage(result, "the menus"), "error");
+    }
+    renderGalley();
   }
 
   function openMenuDayCloneEditor(modal, menus, currentIndex, destinationDayNumber, onClone) {
@@ -8051,8 +8413,8 @@
     return true;
   }
 
-  async function saveMenusAndRender(menus, successMessage) {
-    const saved = await saveCharterFile("menus.json", menus, successMessage);
+  async function saveMenusAndRender(menus, successMessage, options = {}) {
+    const saved = await saveCharterFile("menus.json", menus, successMessage, options);
     if (saved) {
       state.bundle = state.bundle || {};
       state.bundle["menus.json"] = cloneData(saved);
@@ -8559,20 +8921,56 @@
     };
   }
 
-  async function loadDrinkStocks() {
-    return normalizeDrinkStocks(await api("/api/admin/drink-stocks"));
+  // Spec C: a library save (drink stocks, available alcohol, cocktails). The working copy adopts the copy the save ends
+  // with: the saved one, or theirs after a clash (then options.onClash gets the result). -> the normalised saved copy,
+  // or null after a clash. Other errors are thrown.
+  async function saveLibraryCopy({ path, file, schema, workingCopy, mine, normalize, adopt, label, successMessage, options }) {
+    const result = await saveRevisioned({
+      path,
+      schema,
+      base: () => libraryBases.get(workingCopy) || {},
+      mine,
+      normalize,
+      wrap: (data, baseRevision) => ({ ...data, base_revision: baseRevision }),
+      unwrap: payload => payload
+    });
+    const served = result.ok ? result.saved : result.theirs;
+    rememberLibraryBase(workingCopy, served, file);
+    adopt(normalize(served));
+    if (!result.ok) {
+      if (options && typeof options.onClash === "function") {
+        options.onClash(result);
+      } else {
+        setStatus(clashMessage(result, label), "error");
+      }
+      return null;
+    }
+    setStatus(mergeCore().savedStatus(successMessage, result), "ok");
+    return normalize(served);
   }
 
-  async function saveDrinkStocks(drinkStocks, successMessage) {
+  async function loadDrinkStocks() {
+    const served = await api("/api/admin/drink-stocks");
+    return rememberLibraryBase(normalizeDrinkStocks(served), served, "drink-stocks.json");
+  }
+
+  async function saveDrinkStocks(drinkStocks, successMessage, options = {}) {
+    // Spec C: a bottle added here gets its id before the save, so the merge can tell it from the others
+    const usedIds = new Set(drinkStocks.items.map(item => item.id).filter(Boolean));
+    drinkStocks.items = drinkStocks.items.map(item => (item.id ? item : { ...item, id: uniqueDrinkStockId(drinkStockBaseIdText(item), usedIds) }));
     try {
-      const saved = normalizeDrinkStocks(await api("/api/admin/drink-stocks/save", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: drinkStocks.items })
-      }));
-      drinkStocks.items = saved.items;
-      setStatus(successMessage || "Drink stocks saved.", "ok");
-      return saved;
+      return await saveLibraryCopy({
+        path: "/api/admin/drink-stocks/save",
+        file: "drink-stocks.json",
+        schema: "drinkStocks",
+        workingCopy: drinkStocks,
+        mine: { items: drinkStocks.items },
+        normalize: normalizeDrinkStocks,
+        adopt: copy => { drinkStocks.items = copy.items; },
+        label: "the drink stocks",
+        successMessage: successMessage || "Drink stocks saved.",
+        options
+      });
     } catch (error) {
       setStatus(error.message, "error");
       return null;
@@ -8580,20 +8978,27 @@
   }
 
   async function loadAvailableAlcohol(charterId = syncSelectedCharter()) {
-    return normalizeAvailableAlcohol(await api(`/api/admin/charter/${encodeURIComponent(charterId)}/available-alcohol`));
+    const served = await api(`/api/admin/charter/${encodeURIComponent(charterId)}/available-alcohol`);
+    return rememberLibraryBase(normalizeAvailableAlcohol(served), served, "available-alcohol.json");
   }
 
-  async function saveAvailableAlcohol(charterId, availableAlcohol, successMessage) {
+  async function saveAvailableAlcohol(charterId, availableAlcohol, successMessage, options = {}) {
     try {
-      const saved = normalizeAvailableAlcohol(await api(`/api/admin/charter/${encodeURIComponent(charterId)}/available-alcohol/save`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(availableAlcohol)
-      }));
-      availableAlcohol.items = saved.items;
-      availableAlcohol.show_prices_to_guests = saved.show_prices_to_guests;
-      setStatus(successMessage || "Available Alcohol saved.", "ok");
-      return saved;
+      return await saveLibraryCopy({
+        path: `/api/admin/charter/${encodeURIComponent(charterId)}/available-alcohol/save`,
+        file: "available-alcohol.json",
+        schema: "availableAlcohol",
+        workingCopy: availableAlcohol,
+        mine: { show_prices_to_guests: availableAlcohol.show_prices_to_guests, items: availableAlcohol.items },
+        normalize: normalizeAvailableAlcohol,
+        adopt: copy => {
+          availableAlcohol.items = copy.items;
+          availableAlcohol.show_prices_to_guests = copy.show_prices_to_guests;
+        },
+        label: "Available Alcohol",
+        successMessage: successMessage || "Available Alcohol saved.",
+        options
+      });
     } catch (error) {
       setStatus(error.message, "error");
       return null;
@@ -8621,19 +9026,24 @@
   }
 
   async function loadCocktails() {
-    return normalizeCocktails(await api("/api/admin/cocktails"));
+    const served = await api("/api/admin/cocktails");
+    return rememberLibraryBase(normalizeCocktails(served), served, "cocktails.json");
   }
 
-  async function saveCocktails(cocktails, successMessage) {
+  async function saveCocktails(cocktails, successMessage, options = {}) {
     try {
-      const saved = normalizeCocktails(await api("/api/admin/cocktails/save", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(cocktails)
-      }));
-      cocktails.cocktails = saved.cocktails;
-      setStatus(successMessage || "Cocktails saved.", "ok");
-      return saved;
+      return await saveLibraryCopy({
+        path: "/api/admin/cocktails/save",
+        file: "cocktails.json",
+        schema: "cocktails",
+        workingCopy: cocktails,
+        mine: { cocktails: cocktails.cocktails },
+        normalize: normalizeCocktails,
+        adopt: copy => { cocktails.cocktails = copy.cocktails; },
+        label: "the cocktails",
+        successMessage: successMessage || "Cocktails saved.",
+        options
+      });
     } catch (error) {
       setStatus(error.message, "error");
       return null;
@@ -10011,14 +10421,31 @@
   // Removes a row's stock (every unopened item of a group, or the one item) once the dialog has confirmed it
   async function deleteDrinkStockRow(drinkStocks, displayRow) {
     const { index, isGrouped } = displayRow;
-    if (isGrouped) {
-      displayRow.indexes.slice().sort((left, right) => right - left).forEach(removeIndex => {
-        drinkStocks.items.splice(removeIndex, 1);
-      });
-    } else {
-      drinkStocks.items.splice(index, 1);
-    }
-    const saved = await saveDrinkStocks(drinkStocks, isGrouped ? "Drink stock group deleted." : "Drink stock item deleted.");
+    const ids = (isGrouped ? displayRow.indexes : [index])
+      .map(removeIndex => drinkStocks.items[removeIndex] && drinkStocks.items[removeIndex].id)
+      .filter(Boolean);
+    const item = drinkStocks.items[index] || {};
+    const name = [item.name, item.variant].filter(Boolean).join(" ") || "this drink";
+    await deleteDrinkStocksById(drinkStocks, ids, name, isGrouped ? "Drink stock group deleted." : "Drink stock item deleted.");
+  }
+
+  // Spec C SC-D7: deleting stock someone else changed asks first.
+  async function deleteDrinkStocksById(drinkStocks, ids, name, message) {
+    drinkStocks.items = drinkStocks.items.filter(item => !ids.includes(item.id));
+    const saved = await saveDrinkStocks(drinkStocks, message, {
+      onClash: async result => {
+        drawDrinkStockRows(drinkStocks);
+        const clashedId = ids.find(id => recordClash(result, "items", id, name));
+        const clash = clashedId ? recordClash(result, "items", clashedId, name) : null;
+        if (clash && clash.deletedByMe) {
+          if (await confirmDeleteAnyway(clash)) {
+            await deleteDrinkStocksById(drinkStocks, ids, name, message);
+          }
+        } else {
+          setStatus(clashMessage(result, "the drink stocks"), "error");
+        }
+      }
+    });
     if (saved) {
       drawDrinkStockRows(drinkStocks);
     }
@@ -11408,10 +11835,28 @@
     }
   }
 
+  // Spec C: the drink stock dialog's input for each record field, for the clash marks
+  const DRINK_STOCK_CLASH_FIELDS = Object.freeze({
+    name: "#drink-stock-name",
+    variant: "#drink-stock-variant",
+    description: "#drink-stock-description",
+    category: "#drink-stock-category",
+    sub_category: "#drink-stock-sub-category",
+    in_stock: "#drink-stock-quantity",
+    opened: "#drink-stock-opened",
+    remaining: "#drink-stock-remaining",
+    charter_specific: "#drink-stock-charter",
+    charter_id: "#drink-stock-charter",
+    date_added: "#drink-stock-date"
+  });
+
+  // options.clash (spec C §4.1, from recordClash): the dialog opens on clash.record (theirs with my changes on top).
   function openDrinkStockModal(drinkStocks, item, index, options = {}) {
     const editing = Number.isInteger(index);
     const stacked = Boolean(options.stacked);
-    const draft = normalizeDrinkStockItem(item || { in_stock: true, date_added: todayInputDate() });
+    const draft = normalizeDrinkStockItem(options.clash && options.clash.record
+      ? options.clash.record
+      : (item || { in_stock: true, date_added: todayInputDate() }));
     const quantityContext = editing ? drinkStockQuantityContext(drinkStocks, index) : null;
     const initialQuantity = quantityContext
       ? quantityContext.quantity
@@ -11468,6 +11913,7 @@
     const modal = stacked
       ? openStackedDialogModal(modalTitle, modalBody, { cardClass: "modal-wide", headerActionsHtml })
       : openDialogModal(modalTitle, modalBody, { cardClass: "modal-wide", hideClose: true, headerActionsHtml });
+    showClashMarks(modal, options.clash, DRINK_STOCK_CLASH_FIELDS, modal.querySelector("#drink-stock-form"));
     const deleteStockButton = modal.querySelector("[data-action='delete-stock']");
     if (deleteStockButton) {
       deleteStockButton.addEventListener("click", async () => {
@@ -11623,9 +12069,33 @@
       } else {
         reconcileUnopenedDrinkStockQuantity(drinkStocks, null, draft, nextItem, targetQuantity, { keepZeroReference: true });
       }
-      const saved = await saveDrinkStocks(drinkStocks, editing ? "Drink stock item saved." : "Drink stock item added.");
+      let clashed = false;
+      const saved = await saveDrinkStocks(drinkStocks, editing ? "Drink stock item saved." : "Drink stock item added.", {
+        onClash: async result => {
+          // Spec C §4.1: drinkStocks now holds theirs; reopen this item on theirs with my changes on top
+          clashed = true;
+          markModalSaved(modal);
+          if (stacked) {
+            await closeStackedDialogModal(modal);
+          } else {
+            await closeDialogModal({ force: true });
+          }
+          if (typeof options.onSaved !== "function") {
+            drawDrinkStockRows(drinkStocks);
+          }
+          const clash = previousId ? recordClash(result, "items", previousId, nextItem.name || "this drink") : null;
+          if (!clash || !clash.record) {
+            setStatus(clashMessage(result, "the drink stocks"), "error");
+            return;
+          }
+          const at = drinkStocks.items.findIndex(entry => entry.id === previousId);
+          openDrinkStockModal(drinkStocks, at >= 0 ? drinkStocks.items[at] : clash.record, at >= 0 ? at : undefined, { ...options, group: undefined, clash });
+        }
+      });
       if (!saved) {
-        errorField.textContent = "Unable to save drink stock item.";
+        if (!clashed) {
+          errorField.textContent = "Unable to save drink stock item.";
+        }
         return;
       }
       const savedItem = saved.items.find(candidate => previousId && candidate.id === previousId)
@@ -12195,7 +12665,15 @@
     });
     document.getElementById("save-guest-drinks")?.addEventListener("click", async () => {
       drinks.sections = guestDrinkPresentationFromSections(resolvedGuestDrinksMenu(drinks, drinkStocks, charterId).sections).sections;
-      const saved = await saveCharterFile(GUEST_DRINKS_FILE_NAME, drinks, "Guest Alcohol saved.");
+      const saved = await saveCharterFile(GUEST_DRINKS_FILE_NAME, drinks, "Guest Alcohol saved.", {
+        onClash: result => {
+          // Spec C §4.2: their copy with my changes on top, still unsaved
+          drinks.sections = normalizeGuestDrinks(result.rebased).sections;
+          markDirty();
+          redraw();
+          showListClash(document.getElementById("guest-drinks-sections"), result, "Guest Alcohol", () => null);
+        }
+      });
       if (saved) {
         drinks.sections = normalizeGuestDrinks(saved).sections;
         markClean();
@@ -13309,7 +13787,23 @@
       }), { department: "hotel", printable: true });
     });
     document.getElementById("commit-available-alcohol")?.addEventListener("click", async () => {
-      const saved = await saveAvailableAlcohol(charterId, availableAlcohol, "Available Alcohol saved.");
+      const saved = await saveAvailableAlcohol(charterId, availableAlcohol, "Available Alcohol saved.", {
+        onClash: async result => {
+          // Spec C §4.2: their copy with my changes on top, still unsaved (a drink I removed that they changed: asked)
+          const rebased = normalizeAvailableAlcohol(await pageCopyAfterClash(result, "items", item => String(item.stock_id || "").trim().toLocaleLowerCase()));
+          availableAlcohol.items = rebased.items;
+          availableAlcohol.show_prices_to_guests = rebased.show_prices_to_guests;
+          if (showPricesToggle) {
+            showPricesToggle.checked = Boolean(rebased.show_prices_to_guests);
+          }
+          markDirty();
+          redraw();
+          showListClash(document.getElementById("available-alcohol-list"), result, "Available Alcohol", key => {
+            const at = availableAlcohol.items.findIndex(item => String(item.stock_id || "").trim().toLocaleLowerCase() === key);
+            return at >= 0 ? document.querySelector(`[data-price-index="${at}"]`) : null;
+          });
+        }
+      });
       if (saved) {
         markClean();
         await renderHotel();
@@ -13482,6 +13976,7 @@
       ? source.ingredients
       : (Array.isArray(source.recipe) ? source.recipe : []);
     return {
+      ...(typeof source.id === "string" && source.id ? { id: source.id } : {}),
       name: typeof source.name === "string" ? source.name.trim() : "",
       description: typeof source.description === "string"
         ? source.description
@@ -13732,7 +14227,8 @@
     };
     document.getElementById("add-cocktail")?.addEventListener("click", () => {
       openCocktailItemModal(null, cocktail => {
-        cocktails.cocktails.push(normalizeCocktailItem(cocktail));
+        const id = mergeCore().newId("k", new Set(cocktails.cocktails.map(entry => entry.id)));
+        cocktails.cocktails.push(normalizeCocktailItem({ ...cocktail, id }));
         markDirty();
         redraw();
       });
@@ -13745,7 +14241,19 @@
       });
     });
     document.getElementById("save-cocktails")?.addEventListener("click", async () => {
-      const saved = await saveCocktails(cocktails, "Cocktails saved.");
+      const saved = await saveCocktails(cocktails, "Cocktails saved.", {
+        onClash: async result => {
+          // Spec C §4.2: their copy with my changes on top, still unsaved (a cocktail I deleted that they changed: asked)
+          cocktails.cocktails = normalizeCocktails(await pageCopyAfterClash(result, "cocktails", cocktail => cocktail.id)).cocktails;
+          markDirty();
+          redraw();
+          const list = document.getElementById("cocktails-list");
+          showListClash(list, result, "the cocktails", key => {
+            const at = cocktails.cocktails.findIndex(cocktail => cocktail.id === key);
+            return at >= 0 && list ? list.children[at] || null : null;
+          });
+        }
+      });
       if (saved) {
         cocktails.cocktails = saved.cocktails;
         markClean();
@@ -13954,21 +14462,253 @@
     return drinks;
   }
 
-  async function saveCharterFile(file, data, successMessage) {
-    try {
-      const payload = await api(`/api/admin/charter/${encodeURIComponent(state.selectedCharter)}/save`, {
+  // ---- Conflict-safe saves (charter rework spec C §3.2, §4) -------------------------------------------------------
+  // Every save of the nine protected files sends base_revision; a 409 is merged (merge-core.js) and sent again. A clash
+  // (both changed the same field of the same record) goes to the caller's onClash, or is reported.
+  // The base of a charter file's merge is state.bundle[file]: only loadCharter replaces it, and every page render calls
+  // loadCharter before it builds its working copies; these saves set it to the copy they end with. A library file's
+  // base is kept per working copy (libraryBases): the drink stock picker loads its own copy while a page holds an older
+  // one. After a clash the working copy holds theirs, so a stale copy is never sent with the new revision.
+  const mergeCore = () => window.IolantheMerge;
+  const CHARTER_FILE_SCHEMAS = Object.freeze({
+    "charter.json": "charter",
+    "crew_list.json": "crew",
+    "guest_list.json": "guests",
+    "menus.json": "menus",
+    [GUEST_DRINKS_FILE_NAME]: "guestDrinks"
+  });
+  const CHARTER_FILE_NORMALIZERS = Object.freeze({
+    "charter.json": normalizeCharterInfo,
+    "crew_list.json": normalizeCrewEditorList,
+    "guest_list.json": normalizeGuestList,
+    "menus.json": normalizeMenus,
+    [GUEST_DRINKS_FILE_NAME]: normalizeGuestDrinks
+  });
+  const CHARTER_FILE_LABELS = Object.freeze({
+    "charter.json": "the charter info",
+    "crew_list.json": "the crew list",
+    "guest_list.json": "the guest list",
+    "menus.json": "the menus",
+    [GUEST_DRINKS_FILE_NAME]: "Guest Alcohol"
+  });
+  const libraryBases = new WeakMap();
+  // The revision of each library file (and available-alcohol.json, which is not in the bundle) last loaded or saved,
+  // for the freshness check on tab focus (§4.4).
+  const seenRevisions = {};
+
+  function rememberLibraryBase(workingCopy, served, file) {
+    libraryBases.set(workingCopy, cloneData(served));
+    seenRevisions[file] = mergeCore().revisionOf(served);
+    return workingCopy;
+  }
+
+  const saveQueues = new Map();
+
+  // -> merge-core's saveWithRebase result: { ok: true, saved, mergedWith, notes } or { ok: false, clashes, theirs,
+  // merged, rebased, savedBy, savedAt }. Any other error is thrown. Saves of one file (queue) run one at a time, so a
+  // second quick save (two drags) starts from the first one's result instead of clashing with it: base is a function,
+  // read when this save's turn comes, and mine is copied now.
+  function saveRevisioned({ path, queue, schema, base, mine, normalize, wrap, unwrap }) {
+    const snapshot = cloneData(mine);
+    const atQueue = cloneData(base());
+    const key = queue || path;
+    // previous: the result of the save before this one; after a merge or a clash it took in a change this copy lacks
+    const run = previous => mergeCore().saveWithRebase({
+      send: async (data, baseRevision) => unwrap(await api(path, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ file, data })
-      });
-      const savedData = payload && typeof payload === "object" && Object.prototype.hasOwnProperty.call(payload, "data")
-        ? payload.data
-        : payload;
-      if (state.bundle && file) {
-        state.bundle[file] = cloneData(savedData);
+        body: JSON.stringify(wrap(data, baseRevision))
+      })),
+      base: mergeCore().queuedBase(previous, atQueue, base()),
+      mine: snapshot,
+      normalize,
+      schema: mergeCore().SCHEMAS[schema]
+    });
+    const next = (saveQueues.get(key) || Promise.resolve(null)).catch(() => null).then(run);
+    saveQueues.set(key, next);
+    return next;
+  }
+
+  // "Hotel changed the guest list at 14:02. Your change wasn't saved."
+  function clashMessage(result, what) {
+    const when = mergeCore().timeLabel(result.savedAt);
+    return `${mergeCore().departmentLabel(result.savedBy)} changed ${what}${when ? ` at ${when}` : ""}. Your change wasn't saved.`;
+  }
+
+  // Spec C §4.1: one record's clash, for the editor that reopens on their version with my changes on top (record).
+  // null when nothing clashed on that record.
+  function recordClash(result, list, key, name) {
+    const own = result.clashes.filter(clash => clash.list === list && clash.key === key);
+    if (!own.length) {
+      return null;
+    }
+    const find = copy => (Array.isArray(copy && copy[list]) ? copy[list] : []).find(record => record && record.id === key) || null;
+    const theirsRecord = find(result.theirs);
+    const record = find(result.rebased);
+    return {
+      name,
+      record,
+      theirsRecord,
+      savedBy: result.savedBy,
+      savedAt: result.savedAt,
+      deletedByThem: own.some(clash => clash.kind === "deleted-by-them"),
+      deletedByMe: own.some(clash => clash.kind === "deleted-by-me"),
+      changed: mergeCore().changedFields(theirsRecord || {}, record || {}),
+      theirs: mergeCore().clashFields(result.clashes, list, key)
+    };
+  }
+
+  // Spec C §4.2: a clash on a whole page (its top-level fields), in recordClash's shape.
+  function pageClash(result, name) {
+    return {
+      name,
+      record: result.rebased,
+      theirsRecord: result.theirs,
+      savedBy: result.savedBy,
+      savedAt: result.savedAt,
+      deletedByThem: false,
+      deletedByMe: false,
+      changed: mergeCore().changedFields(result.theirs, result.rebased),
+      theirs: mergeCore().clashFields(result.clashes, null, null)
+    };
+  }
+
+  // Mockup B: the amber banner before `before` (or first in the container), a teal edge on each field I changed and
+  // "↳ Hotel wrote: …" under each field we both changed. fields: { field: selector or [selector, label] }; fields that
+  // share an element (a day's meals share the section list) get one edge and one hint each, labelled.
+  function showClashMarks(container, clash, fields, before) {
+    if (!container || !clash) {
+      return;
+    }
+    container.querySelectorAll(":scope > .clash-banner").forEach(old => old.remove());   // a page that clashed again
+    const core = mergeCore();
+    const who = core.departmentLabel(clash.savedBy);
+    const when = core.timeLabel(clash.savedAt);
+    const banner = document.createElement("div");
+    banner.className = "clash-banner";
+    banner.setAttribute("role", "status");
+    banner.innerHTML = `<span class="clash-pill">${escapeHtml(who)}</span><span>${clash.deletedByThem ? "deleted" : "changed"} ${escapeHtml(clash.name)}${when ? ` at ${escapeHtml(when)}` : ""}. ${clash.deletedByThem ? "Save to add it back." : "Your changes are on top; check them and save again."}</span>`;
+    const anchor = before || container.firstElementChild;
+    if (anchor) {
+      anchor.before(banner);
+    } else {
+      container.prepend(banner);
+    }
+    setStatus(`${who} ${clash.deletedByThem ? "deleted" : "changed"} ${clash.name}${when ? ` at ${when}` : ""}. Check the marked fields and save again.`, "error");
+    const hints = new Map();   // selector -> { after: the element the next hint follows, texts: hints already shown }
+    Object.entries(fields || {}).forEach(([field, target]) => {
+      const [selector, label] = Array.isArray(target) ? target : [target, ""];
+      const mine = clash.changed.includes(field);
+      const theirs = Object.prototype.hasOwnProperty.call(clash.theirs, field);
+      const input = mine || theirs ? container.querySelector(selector) : null;
+      if (!input) {
+        return;
       }
-      setStatus(successMessage || `${file} saved.`, "ok");
-      return savedData;
+      if (mine) {
+        input.classList.add("field-mine");
+      }
+      if (!theirs) {
+        return;
+      }
+      const text = `↳ ${who} wrote: ${label ? `${label}: ` : ""}${core.valueSummary(clash.theirs[field])}`;
+      const shown = hints.get(selector) || { after: input, texts: new Set() };
+      if (!shown.texts.has(text)) {
+        const hint = document.createElement("span");
+        hint.className = "field-theirs";
+        hint.textContent = text;
+        shown.after.after(hint);
+        shown.after = hint;
+        shown.texts.add(text);
+        hints.set(selector, shown);
+      }
+    });
+  }
+
+  // Spec C §4.2: a whole-page clash on a list page: the banner before the list, and on each record we both changed a
+  // teal edge with their value as its tooltip. elementFor(key) -> that record's element, or null.
+  function showListClash(list, result, name, elementFor) {
+    if (!list) {
+      return;
+    }
+    showClashMarks(list.parentElement, pageClash(result, name), {}, list);
+    const who = mergeCore().departmentLabel(result.savedBy);
+    result.clashes.forEach(clash => {
+      const element = clash.key === null ? null : elementFor(clash.key);
+      if (!element) {
+        return;
+      }
+      element.classList.add("field-mine");
+      const text = clash.kind === "field" ? `${who} wrote: ${mergeCore().valueSummary(clash.theirs)}` : `${who} deleted this`;
+      element.title = element.title ? `${element.title}
+${text}` : text;
+    });
+  }
+
+  // Spec C SC-D7 on a whole page: records I deleted that they changed are asked about once; Keep puts theirs back (in
+  // their place) with the rest of my changes. -> the page's copy to show. keyOf(record) -> the list's key.
+  async function pageCopyAfterClash(result, list, keyOf) {
+    const deleted = result.clashes.filter(clash => clash.kind === "deleted-by-me" && clash.list === list);
+    if (!deleted.length) {
+      return result.rebased;
+    }
+    const when = mergeCore().timeLabel(result.savedAt);
+    const names = deleted.map(clash => (clash.theirs && (clash.theirs.name || clash.theirs.title)) || "an item").join(", ");
+    if (await showAdminConfirm({
+      title: "Changed Elsewhere",
+      message: `${mergeCore().departmentLabel(result.savedBy)} changed ${names}${when ? ` at ${when}` : ""}, which you deleted. Delete anyway?`,
+      confirmLabel: "Delete",
+      cancelLabel: "Keep",
+      tone: "danger"
+    })) {
+      return result.rebased;
+    }
+    const keep = new Set(deleted.map(clash => clash.key));
+    const mine = new Map((result.rebased[list] || []).map(record => [keyOf(record), record]));
+    const ordered = (result.merged[list] || []).map(record => (keep.has(keyOf(record)) ? record : mine.get(keyOf(record)))).filter(Boolean);
+    const placed = new Set(ordered.map(keyOf));
+    return { ...result.rebased, [list]: ordered.concat((result.rebased[list] || []).filter(record => !placed.has(keyOf(record)))) };
+  }
+
+  // Spec C SC-D7: I deleted what they changed.
+  function confirmDeleteAnyway(clash) {
+    const when = mergeCore().timeLabel(clash.savedAt);
+    return showAdminConfirm({
+      title: "Changed Elsewhere",
+      message: `${mergeCore().departmentLabel(clash.savedBy)} changed ${clash.name}${when ? ` at ${when}` : ""}. Delete anyway?`,
+      confirmLabel: "Delete",
+      cancelLabel: "Cancel",
+      tone: "danger"
+    });
+  }
+
+  // options.onClash(result): a clash. Without one the status line reports it and the section redraws from theirs.
+  async function saveCharterFile(file, data, successMessage, options = {}) {
+    const charterId = state.selectedCharter;
+    try {
+      const result = await saveRevisioned({
+        path: `/api/admin/charter/${encodeURIComponent(charterId)}/save`,
+        queue: `${charterId}/${file}`,
+        schema: CHARTER_FILE_SCHEMAS[file] || "charter",
+        base: () => (state.bundle && state.bundle[file] ? state.bundle[file] : {}),
+        mine: data,
+        normalize: CHARTER_FILE_NORMALIZERS[file],
+        wrap: (payload, baseRevision) => ({ file, data: payload, base_revision: baseRevision }),
+        unwrap: payload => (payload && typeof payload === "object" && Object.prototype.hasOwnProperty.call(payload, "data") ? payload.data : payload)
+      });
+      if (state.bundle && file && state.selectedCharter === charterId) {
+        state.bundle[file] = cloneData(result.ok ? result.saved : result.theirs);
+      }
+      if (!result.ok) {
+        if (typeof options.onClash === "function") {
+          options.onClash(result);
+        } else {
+          setStatus(clashMessage(result, CHARTER_FILE_LABELS[file] || file), "error");
+          renderSection();
+        }
+        return null;
+      }
+      setStatus(mergeCore().savedStatus(successMessage || `${file} saved.`, result), "ok");
+      return result.saved;
     } catch (error) {
       setStatus(error.message, "error");
       return null;

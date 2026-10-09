@@ -236,6 +236,48 @@ button.admin-icon-button--gold:focus {
 .status-pill--ended { background: #e3e7e9; color: var(--muted); }
 .status-pill--none { background: #f7e3e1; color: var(--danger); }
 
+/* Spec C (conflict-safe saves), mockup B: someone else saved the same record while you edited it. */
+.clash-banner {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0 0 0.8rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid #e6c88f;
+  border-radius: 6px;
+  background: var(--warn-bg);
+  color: #5b3d0b;
+  font-size: 0.88rem;
+}
+
+.clash-pill {
+  flex: none;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: #f3e3c8;
+  color: #7a4b0c;
+}
+
+.field-mine {
+  border-color: var(--accent) !important;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.field-theirs {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.78rem;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--warn);
+}
+
 .segmented {
   position: relative;
   display: inline-flex;
