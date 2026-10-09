@@ -10304,14 +10304,31 @@
   // Removes a row's stock (every unopened item of a group, or the one item) once the dialog has confirmed it
   async function deleteDrinkStockRow(drinkStocks, displayRow) {
     const { index, isGrouped } = displayRow;
-    if (isGrouped) {
-      displayRow.indexes.slice().sort((left, right) => right - left).forEach(removeIndex => {
-        drinkStocks.items.splice(removeIndex, 1);
-      });
-    } else {
-      drinkStocks.items.splice(index, 1);
-    }
-    const saved = await saveDrinkStocks(drinkStocks, isGrouped ? "Drink stock group deleted." : "Drink stock item deleted.");
+    const ids = (isGrouped ? displayRow.indexes : [index])
+      .map(removeIndex => drinkStocks.items[removeIndex] && drinkStocks.items[removeIndex].id)
+      .filter(Boolean);
+    const item = drinkStocks.items[index] || {};
+    const name = [item.name, item.variant].filter(Boolean).join(" ") || "this drink";
+    await deleteDrinkStocksById(drinkStocks, ids, name, isGrouped ? "Drink stock group deleted." : "Drink stock item deleted.");
+  }
+
+  // Spec C SC-D7: deleting stock someone else changed asks first.
+  async function deleteDrinkStocksById(drinkStocks, ids, name, message) {
+    drinkStocks.items = drinkStocks.items.filter(item => !ids.includes(item.id));
+    const saved = await saveDrinkStocks(drinkStocks, message, {
+      onClash: async result => {
+        drawDrinkStockRows(drinkStocks);
+        const clashedId = ids.find(id => recordClash(result, "items", id, name));
+        const clash = clashedId ? recordClash(result, "items", clashedId, name) : null;
+        if (clash && clash.deletedByMe) {
+          if (await confirmDeleteAnyway(clash)) {
+            await deleteDrinkStocksById(drinkStocks, ids, name, message);
+          }
+        } else {
+          setStatus(clashMessage(result, "the drink stocks"), "error");
+        }
+      }
+    });
     if (saved) {
       drawDrinkStockRows(drinkStocks);
     }
@@ -11701,10 +11718,28 @@
     }
   }
 
+  // Spec C: the drink stock dialog's input for each record field, for the clash marks
+  const DRINK_STOCK_CLASH_FIELDS = Object.freeze({
+    name: "#drink-stock-name",
+    variant: "#drink-stock-variant",
+    description: "#drink-stock-description",
+    category: "#drink-stock-category",
+    sub_category: "#drink-stock-sub-category",
+    in_stock: "#drink-stock-quantity",
+    opened: "#drink-stock-opened",
+    remaining: "#drink-stock-remaining",
+    charter_specific: "#drink-stock-charter",
+    charter_id: "#drink-stock-charter",
+    date_added: "#drink-stock-date"
+  });
+
+  // options.clash (spec C §4.1, from recordClash): the dialog opens on clash.record (theirs with my changes on top).
   function openDrinkStockModal(drinkStocks, item, index, options = {}) {
     const editing = Number.isInteger(index);
     const stacked = Boolean(options.stacked);
-    const draft = normalizeDrinkStockItem(item || { in_stock: true, date_added: todayInputDate() });
+    const draft = normalizeDrinkStockItem(options.clash && options.clash.record
+      ? options.clash.record
+      : (item || { in_stock: true, date_added: todayInputDate() }));
     const quantityContext = editing ? drinkStockQuantityContext(drinkStocks, index) : null;
     const initialQuantity = quantityContext
       ? quantityContext.quantity
@@ -11761,6 +11796,7 @@
     const modal = stacked
       ? openStackedDialogModal(modalTitle, modalBody, { cardClass: "modal-wide", headerActionsHtml })
       : openDialogModal(modalTitle, modalBody, { cardClass: "modal-wide", hideClose: true, headerActionsHtml });
+    showClashMarks(modal, options.clash, DRINK_STOCK_CLASH_FIELDS, modal.querySelector("#drink-stock-form"));
     const deleteStockButton = modal.querySelector("[data-action='delete-stock']");
     if (deleteStockButton) {
       deleteStockButton.addEventListener("click", async () => {
@@ -11916,9 +11952,33 @@
       } else {
         reconcileUnopenedDrinkStockQuantity(drinkStocks, null, draft, nextItem, targetQuantity, { keepZeroReference: true });
       }
-      const saved = await saveDrinkStocks(drinkStocks, editing ? "Drink stock item saved." : "Drink stock item added.");
+      let clashed = false;
+      const saved = await saveDrinkStocks(drinkStocks, editing ? "Drink stock item saved." : "Drink stock item added.", {
+        onClash: async result => {
+          // Spec C §4.1: drinkStocks now holds theirs; reopen this item on theirs with my changes on top
+          clashed = true;
+          markModalSaved(modal);
+          if (stacked) {
+            await closeStackedDialogModal(modal);
+          } else {
+            await closeDialogModal({ force: true });
+          }
+          if (typeof options.onSaved !== "function") {
+            drawDrinkStockRows(drinkStocks);
+          }
+          const clash = previousId ? recordClash(result, "items", previousId, nextItem.name || "this drink") : null;
+          if (!clash || !clash.record) {
+            setStatus(clashMessage(result, "the drink stocks"), "error");
+            return;
+          }
+          const at = drinkStocks.items.findIndex(entry => entry.id === previousId);
+          openDrinkStockModal(drinkStocks, at >= 0 ? drinkStocks.items[at] : clash.record, at >= 0 ? at : undefined, { ...options, group: undefined, clash });
+        }
+      });
       if (!saved) {
-        errorField.textContent = "Unable to save drink stock item.";
+        if (!clashed) {
+          errorField.textContent = "Unable to save drink stock item.";
+        }
         return;
       }
       const savedItem = saved.items.find(candidate => previousId && candidate.id === previousId)
@@ -13610,7 +13670,23 @@
       }), { department: "hotel", printable: true });
     });
     document.getElementById("commit-available-alcohol")?.addEventListener("click", async () => {
-      const saved = await saveAvailableAlcohol(charterId, availableAlcohol, "Available Alcohol saved.");
+      const saved = await saveAvailableAlcohol(charterId, availableAlcohol, "Available Alcohol saved.", {
+        onClash: async result => {
+          // Spec C §4.2: their copy with my changes on top, still unsaved (a drink I removed that they changed: asked)
+          const rebased = normalizeAvailableAlcohol(await pageCopyAfterClash(result, "items", item => String(item.stock_id || "").trim().toLocaleLowerCase()));
+          availableAlcohol.items = rebased.items;
+          availableAlcohol.show_prices_to_guests = rebased.show_prices_to_guests;
+          if (showPricesToggle) {
+            showPricesToggle.checked = Boolean(rebased.show_prices_to_guests);
+          }
+          markDirty();
+          redraw();
+          showListClash(document.getElementById("available-alcohol-list"), result, "Available Alcohol", key => {
+            const at = availableAlcohol.items.findIndex(item => String(item.stock_id || "").trim().toLocaleLowerCase() === key);
+            return at >= 0 ? document.querySelector(`[data-price-index="${at}"]`) : null;
+          });
+        }
+      });
       if (saved) {
         markClean();
         await renderHotel();
@@ -14034,7 +14110,8 @@
     };
     document.getElementById("add-cocktail")?.addEventListener("click", () => {
       openCocktailItemModal(null, cocktail => {
-        cocktails.cocktails.push(normalizeCocktailItem(cocktail));
+        const id = mergeCore().newId("k", new Set(cocktails.cocktails.map(entry => entry.id)));
+        cocktails.cocktails.push(normalizeCocktailItem({ ...cocktail, id }));
         markDirty();
         redraw();
       });
@@ -14047,7 +14124,19 @@
       });
     });
     document.getElementById("save-cocktails")?.addEventListener("click", async () => {
-      const saved = await saveCocktails(cocktails, "Cocktails saved.");
+      const saved = await saveCocktails(cocktails, "Cocktails saved.", {
+        onClash: async result => {
+          // Spec C §4.2: their copy with my changes on top, still unsaved (a cocktail I deleted that they changed: asked)
+          cocktails.cocktails = normalizeCocktails(await pageCopyAfterClash(result, "cocktails", cocktail => cocktail.id)).cocktails;
+          markDirty();
+          redraw();
+          const list = document.getElementById("cocktails-list");
+          showListClash(list, result, "the cocktails", key => {
+            const at = cocktails.cocktails.findIndex(cocktail => cocktail.id === key);
+            return at >= 0 && list ? list.children[at] || null : null;
+          });
+        }
+      });
       if (saved) {
         cocktails.cocktails = saved.cocktails;
         markClean();
