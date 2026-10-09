@@ -2441,33 +2441,33 @@ body.is-drag-reordering {
   gap: 0.8rem;
 }
 
+/* Drink Stocks (style rollout B): the filters wrap (search wide), the rows flex and open the editor on a tap */
 .drink-stock-controls {
   display: grid;
-  grid-template-columns: minmax(14rem, 1.4fr) repeat(5, minmax(9rem, 1fr));
-  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
+  gap: 0.6rem;
   align-items: end;
   margin-bottom: 1rem;
 }
 
-.drink-stock-controls--locked {
-  grid-template-columns: minmax(14rem, 1.4fr) minmax(9rem, 1fr);
+.drink-stock-controls > label:first-child {
+  grid-column: span 2;
+}
+
+.drink-stock-controls select,
+.drink-stock-controls input {
+  min-height: 36px;
+  font-size: 0.86rem;
 }
 
 .drink-stock-list-shell {
   display: grid;
   gap: 0.4rem;
-  --drink-stock-actions-width: calc((var(--admin-icon-button-size) * 2) + 0.6rem);
-  --drink-stock-grid-template:
-    minmax(14ch, var(--drink-stock-name-width, 18ch))
-    minmax(10ch, var(--drink-stock-category-width, 12ch))
-    minmax(10ch, var(--drink-stock-remaining-width, 12ch))
-    minmax(8ch, var(--drink-stock-status-width, 9ch))
-    minmax(10ch, var(--drink-stock-charter-width, 16ch))
-    minmax(var(--drink-stock-actions-width), var(--drink-stock-actions-width));
+  --drink-stock-grid-template: minmax(0, 1.6fr) minmax(4.5rem, 0.55fr) minmax(7.5rem, 1fr) minmax(6.5rem, auto) minmax(0, 1.1fr) 20px;
 }
 
 .drink-stock-list {
-  gap: 0.55rem;
+  gap: 0.35rem;
 }
 
 .drink-stock-list-header {
@@ -2492,33 +2492,122 @@ body.is-drag-reordering {
   text-align: left;
 }
 
-.drink-stock-summary {
-  display: contents;
-}
-
-.drink-stock-summary span {
-  color: var(--muted);
-}
-
 .drink-stock-row {
   display: grid;
   grid-template-columns: var(--drink-stock-grid-template);
   align-items: center;
   gap: 0.35rem 0.75rem;
-  padding: 0.55rem 0.65rem;
+  min-height: 46px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 0.35rem 0.5rem 0.35rem 0.75rem;
+  cursor: pointer;
 }
 
-.drink-stock-row .record-actions {
-  align-self: center;
-  justify-content: flex-end;
-  justify-self: stretch;
-  width: 100%;
-  margin-top: 0;
-  margin-left: 0;
+.drink-stock-row:hover {
+  background: #e8eef0;
+}
+
+.drink-stock-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 .drink-stock-cell--name {
   line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drink-stock-cell--category {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.stock-pill {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.18rem 0.55rem;
+}
+
+.stock-pill--in {
+  background: #d6ebdf;
+  color: #1e5a3b;
+}
+
+.stock-pill--out {
+  background: #fbe4e1;
+  color: var(--danger);
+}
+
+.stock-pill--sold,
+.stock-pill--available {
+  background: var(--soft);
+  color: var(--muted);
+}
+
+.stock-pill--charter {
+  background: #d9e8ea;
+  color: var(--accent-dark);
+}
+
+.stock-pill--internal {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.stock-gauge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.stock-gauge-bar {
+  width: 64px;
+  height: 9px;
+  border-radius: 5px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.stock-gauge-bar i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.stock-gauge.is-low .stock-gauge-bar i {
+  background: var(--warn);
+}
+
+.stock-bottles {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.stock-bottles svg {
+  width: 13px;
+  height: 15px;
+  fill: var(--accent);
+}
+
+.stock-none {
+  color: #9aa6ad;
 }
 
 .drink-stock-list-header-spacer {
@@ -3031,8 +3120,6 @@ button.admin-icon-button--preview:focus {
   .form-grid,
   .weather-admin-status,
   .drink-grid,
-  .drink-stock-controls,
-  .drink-stock-summary,
   .guest-drinks-summary,
   .available-alcohol-summary,
   .purchased-alcohol-summary,
@@ -3067,9 +3154,44 @@ button.admin-icon-button--preview:focus {
     display: none;
   }
 
-  .drink-stock-summary {
-    flex: 1 1 100%;
-    gap: 0.45rem;
+  /* Two compact lines: name and remaining, then category and the two pills (no per-cell labels) */
+  .drink-stock-row {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem 0.6rem;
+    padding-right: 2.2rem;
+  }
+
+  .drink-stock-row::after {
+    content: "";
+    flex-basis: 100%;
+    order: 2;
+  }
+
+  .drink-stock-row > .drink-stock-cell {
+    order: 3;
+  }
+
+  .drink-stock-row > .drink-stock-cell--name {
+    flex: 1 1 50%;
+    order: 1;
+  }
+
+  .drink-stock-row > .drink-stock-cell:nth-child(3) {
+    order: 1;
+  }
+
+  .drink-stock-row > .row-chevron {
+    position: absolute;
+    top: 50%;
+    right: 0.6rem;
+    transform: translateY(-50%);
+  }
+
+  .drink-stock-row .drink-stock-cell::before {
+    content: none;
   }
 
   .drink-stock-cell::before {
@@ -3118,10 +3240,6 @@ button.admin-icon-button--preview:focus {
     font-weight: 700;
     letter-spacing: 0.03em;
     text-transform: uppercase;
-  }
-
-  .drink-stock-row .record-actions {
-    margin-left: 0;
   }
 
   .available-alcohol-row .record-actions {
