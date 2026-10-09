@@ -705,3 +705,13 @@ save could undo it. Spec: [spec-c.md](spec-c.md). Mockup `.superpowers/brainstor
     status after the redraw. c-01's release check reads `live_version` 7.
   - Server #11 and admin #39 merged (`5f09377`, `25c117c`); the plans are now based on `main` and say to dry-run again
     if `main` moves first.
+- **SC-D15 Build (2026-10-09):** plans c-01..c-03 executed verbatim by Sonnet / Haiku implementers (every file identical
+  to the dry run), browser pass on the build worktrees (port 8041; migrations v6 + v7 ran; the checklist passed; freshness
+  holds off while a dialog is open; the Route page's Edit site shows the clash message; the banner fits at 390 / 820 px).
+  Final Sonnet review: approve, two mediums fixed on the branch: (1) a queued save keeps its queue-time base when the
+  save before it merged or clashed (`queuedBase` in merge-core.js, tested), otherwise a quick second drag could undo a
+  third party's change that the first save had merged in (browser-verified: their note survived two quick moves);
+  (2) menu days added to fill the itinerary get `m-day-<n>` ids from their position, so two people opening Galley at
+  once create the same days, not twice as many. Known and left: new drink stock ids are slugs (two people adding the
+  same product at the same moment could share one); a bare-array `crew_list.json` (none on the boat) would show empty;
+  after a bar purchase the freshness check may redraw once needlessly.

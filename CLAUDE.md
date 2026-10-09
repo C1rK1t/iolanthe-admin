@@ -102,7 +102,7 @@ white for any body that has it.
   cocktails, drink stocks, sites), never by array index. Coming back to the tab redraws the open page when one of its
   files moved (`checkFreshness`, `GET /api/admin/revisions`, a raw fetch that is not session activity), never over
   unsaved edits or an open dialog.
-- `node --test` runs the tests in `test/` (209 tests), which cover `routes-core`, `itinerary-core`, `charters-core`,
+- `node --test` runs the tests in `test/` (210 tests), which cover `routes-core`, `itinerary-core`, `charters-core`,
   `guest-preview-core`, `pack-core`, `pack-render`, `drag-reorder`, `merge-core`, the startup order
   (`startup-order.test.js` runs `admin.js` alone in a `vm` sandbox) and the refused-access card (`refused-access.test.js`,
   the same sandbox)

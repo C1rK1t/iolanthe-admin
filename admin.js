@@ -7306,8 +7306,13 @@
     const inactiveDays = inactiveMenuDays(menus).map((day, index) => normalizeMenuDay(day, itineraryDayCount + index + 1));
 
     while (activeDays.length < itineraryDayCount) {
+      // m-day-<n> from the position, so two people filling the same days create the same records, not twice as many
       const takenIds = new Set([...activeDays, ...inactiveDays].map(day => day.id).filter(Boolean));
-      activeDays.push({ ...blankMenuDay(activeDays.length + 1), id: mergeCore().newId("m", takenIds) });
+      let n = activeDays.length + 1;
+      while (takenIds.has(`m-day-${n}`)) {
+        n += 1;
+      }
+      activeDays.push({ ...blankMenuDay(activeDays.length + 1), id: `m-day-${n}` });
     }
     if (activeDays.length > itineraryDayCount) {
       const excessDays = activeDays.slice(itineraryDayCount);
@@ -14505,19 +14510,21 @@
   // read when this save's turn comes, and mine is copied now.
   function saveRevisioned({ path, queue, schema, base, mine, normalize, wrap, unwrap }) {
     const snapshot = cloneData(mine);
+    const atQueue = cloneData(base());
     const key = queue || path;
-    const run = () => mergeCore().saveWithRebase({
+    // previous: the result of the save before this one; after a merge or a clash it took in a change this copy lacks
+    const run = previous => mergeCore().saveWithRebase({
       send: async (data, baseRevision) => unwrap(await api(path, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(wrap(data, baseRevision))
       })),
-      base: base(),
+      base: mergeCore().queuedBase(previous, atQueue, base()),
       mine: snapshot,
       normalize,
       schema: mergeCore().SCHEMAS[schema]
     });
-    const next = (saveQueues.get(key) || Promise.resolve()).catch(() => null).then(run);
+    const next = (saveQueues.get(key) || Promise.resolve(null)).catch(() => null).then(run);
     saveQueues.set(key, next);
     return next;
   }

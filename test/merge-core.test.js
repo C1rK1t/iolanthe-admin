@@ -276,6 +276,15 @@ test("saveWithRebase: normalize runs on base and theirs, so a page's defaults ar
   assert.equal(without.ok, false, "without normalize the filled default clashes");
 });
 
+test("queuedBase: the latest base after my own clean save, the queued one after a merge, a clash or a failure", () => {
+  const atQueue = { revision: 4 };
+  const latest = { revision: 6 };
+  assert.equal(core.queuedBase(null, atQueue, latest), latest, "nothing before it");
+  assert.equal(core.queuedBase({ ok: true, mergedWith: null }, atQueue, latest), latest);
+  assert.equal(core.queuedBase({ ok: true, mergedWith: { savedBy: "hotel" } }, atQueue, latest), atQueue);
+  assert.equal(core.queuedBase({ ok: false, clashes: [] }, atQueue, latest), atQueue);
+});
+
 test("labels and summaries", () => {
   const now = new Date(2026, 10, 3, 18, 0);
   assert.equal(core.departmentLabel("hotel"), "Hotel");

@@ -283,6 +283,15 @@
     }
   }
 
+  // A queued save's merge base. Its copy was taken when it was queued; if the save before it ended in a merge or a
+  // clash, the base has since taken in someone else's change that copy lacks, so the base from queue time must stay
+  // (the server then answers 409 and the merge keeps their change). After a clean save of my own, the latest base is
+  // right.
+  function queuedBase(previous, atQueue, latest) {
+    const clean = !previous || (previous.ok === true && !previous.mergedWith);
+    return clean ? latest : atQueue;
+  }
+
   function departmentLabel(savedBy) {
     return DEPARTMENT_LABELS[savedBy] || "Someone";
   }
@@ -357,7 +366,7 @@
   }
 
   return {
-    STAMP_KEYS, SCHEMAS, same, revisionOf, merge3, clashFields, changedFields, saveWithRebase, departmentLabel, timeLabel,
+    STAMP_KEYS, SCHEMAS, same, revisionOf, merge3, clashFields, changedFields, saveWithRebase, queuedBase, departmentLabel, timeLabel,
     whoLabel, savedStatus, valueSummary, newId, withSlotIds
   };
 });
