@@ -85,9 +85,27 @@ white for any body that has it.
 - `drag-reorder.js` — drag to reorder with a grip (pointer events, so it works on touch, plus the arrow keys on the
   focused grip), `window.IolantheDragReorder.attach(container, { items, handleSelector, onMove, afterMove })`; it
   replaces the Move up / Move down pairs (style rollout B: Galley Menus first). `moveItem` / `dropIndex` are pure.
-- `node --test` runs the tests in `test/` (185 tests), which cover `routes-core`, `itinerary-core`, `charters-core`,
-  `guest-preview-core`, `pack-core`, `pack-render`, `drag-reorder`, the startup order (`startup-order.test.js` runs
-  `admin.js` alone in a `vm` sandbox) and the refused-access card (`refused-access.test.js`, the same sandbox)
+- `merge-core.js` — conflict-safe saves (charter rework spec C), pure, also a Node module (`window.IolantheMerge`):
+  `merge3(base, mine, theirs, schema)` merges two people's copies of a file record by record and field by field
+  (`SCHEMAS`: crew, guests, menus, Guest Alcohol, Available Alcohol, drink stocks, cocktails, sites, charter.json) and
+  reports a clash where both changed the same field; `saveWithRebase` sends a save with `base_revision`, merges a 409
+  and sends again (3 rounds), or returns the clash; labels, ids (`newId`, `withSlotIds`).
+- **Conflict-safe saves** (spec C): every save of `charter.json`, `crew_list.json`, `guest_list.json`, `menus.json`,
+  `guest_drinks.json`, Available Alcohol, drink stocks, cocktails and sites goes through `saveRevisioned` in admin.js
+  (`saveCharterFile`, `saveLibraryCopy`, `saveSitesLibrary`, the Charter Admin form). The merge base of a charter file
+  is `state.bundle[file]` (only `loadCharter`, which every page render calls, and these saves replace it); a library
+  file's base is kept per working copy (`libraryBases`), the sites' in `sitesBase`. A silent merge says so on the status
+  line; a clash reopens the dialog on their version with my changes on top (`recordClash`, `showClashMarks`: amber
+  banner, `.field-mine` teal edge, "↳ Hotel wrote: …"), or redraws a whole-page save the same way, unsaved (`pageClash`,
+  `showListClash`); deleting a record someone changed asks first (`confirmDeleteAnyway`). After a clash the working copy
+  holds theirs, so a stale copy is never sent with the new revision. Records are found by `id` (crew, guests, menus,
+  cocktails, drink stocks, sites), never by array index. Coming back to the tab redraws the open page when one of its
+  files moved (`checkFreshness`, `GET /api/admin/revisions`, a raw fetch that is not session activity), never over
+  unsaved edits or an open dialog.
+- `node --test` runs the tests in `test/` (209 tests), which cover `routes-core`, `itinerary-core`, `charters-core`,
+  `guest-preview-core`, `pack-core`, `pack-render`, `drag-reorder`, `merge-core`, the startup order
+  (`startup-order.test.js` runs `admin.js` alone in a `vm` sandbox) and the refused-access card (`refused-access.test.js`,
+  the same sandbox)
 - `routes.js` / `routes.css` — the Route panel (Charter → Route): state, side panel, header, map, saving and wiring. A
   "Working on" selector gives it two subjects: the library routes (the route library, saved through
   `/api/admin/routes/*`) and this charter's route (the route stored in the charter's `itinerary.json`, saved through
