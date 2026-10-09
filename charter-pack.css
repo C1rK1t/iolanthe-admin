@@ -1,0 +1,147 @@
+/* The Charter Pack page (charter rework spec P): the settings card, the A4 page preview, the pack pages and their three
+   themes, and the print rules. Pages are real A4 boxes (210 × 297 mm), scaled down to fit the preview. */
+
+/* ---- the admin page -------------------------------------------------------------------------------------------- */
+.charter-pack .card-header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.charter-pack .cp-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.charter-pack .cp-sep { width: 1px; height: 24px; background: var(--line); }
+.charter-pack .cp-page-no { min-width: 48px; text-align: center; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; }
+.charter-pack .cp-map-hint { color: var(--muted); font-size: 13px; }
+.charter-pack .cp-btn {
+  width: 36px; height: 36px; min-height: 0; padding: 0; border: 0; border-radius: 6px;
+  display: inline-grid; place-items: center; background: #e8eef0; color: var(--ink); cursor: pointer;
+}
+.charter-pack .cp-btn:hover, .charter-pack .cp-btn:focus-visible { background: #d8e2e5; }
+.charter-pack .cp-btn:disabled { opacity: .35; cursor: not-allowed; }
+.charter-pack .cp-btn svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.charter-pack .cp-layout { display: grid; grid-template-columns: minmax(260px, 320px) minmax(0, 1fr); gap: 16px; margin-top: 12px; align-items: start; }
+.charter-pack .cp-settings { display: grid; gap: 12px; min-width: 0; }
+.charter-pack .cp-settings .segmented { flex-wrap: wrap; }
+.charter-pack .cp-settings label:not(.inline-check) { display: grid; gap: 4px; }
+.charter-pack .cp-settings input[type="text"], .charter-pack .cp-settings textarea { width: 100%; box-sizing: border-box; font: inherit; text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--ink); }
+.charter-pack .cp-settings .inline-check { display: flex; align-items: center; gap: 8px; }
+.charter-pack .cp-cover-row { display: flex; align-items: center; gap: 8px; }
+.charter-pack .cp-cover-thumb { width: 96px; height: 54px; object-fit: cover; border-radius: 4px; border: 1px solid var(--line); background: #e8eef0; }
+.charter-pack .cp-stage { position: relative; min-width: 0; max-width: 100%; overflow: hidden; }
+.charter-pack .cp-scaler { transform-origin: top left; width: 210mm; }
+.charter-pack .cp-scaler .pack-page { box-shadow: 0 6px 20px rgba(16, 32, 40, .18); }
+.charter-pack .cp-scaler .pack-page:not(.is-current) { position: absolute; left: -30000px; top: 0; }
+@media (max-width: 900px) {
+  .charter-pack .cp-layout { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ---- themes (P-D6): one page structure, colours and type change ------------------------------------------------ */
+.pack-theme-a { --pack-paper: #f8f4ec; --pack-ink: #081826; --pack-muted: #7a6a48; --pack-tint: #c8a96b; --pack-accent: #a88a4c; --pack-font: Georgia, "Times New Roman", serif; --pack-cover-bg: #081826; --pack-cover-ink: #f4ead7; }
+.pack-theme-b { --pack-paper: #ffffff; --pack-ink: #172026; --pack-muted: #5f6b73; --pack-tint: #176f7a; --pack-accent: #176f7a; --pack-font: Arial, Helvetica, sans-serif; --pack-cover-bg: #ffffff; --pack-cover-ink: #172026; }
+.pack-theme-c { --pack-paper: #fbf8f1; --pack-ink: #0f2d4a; --pack-muted: #6b5a35; --pack-tint: #0f2d4a; --pack-accent: #8a6d2f; --pack-font: "Times New Roman", Times, serif; --pack-cover-bg: #fbf8f1; --pack-cover-ink: #0f2d4a; }
+
+/* ---- a page ---------------------------------------------------------------------------------------------------- */
+.pack-page {
+  position: relative; width: 210mm; height: 297mm; overflow: hidden; box-sizing: border-box;
+  background: var(--pack-paper); color: var(--pack-ink); font-family: var(--pack-font); font-size: 10pt; line-height: 1.4;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.pack-page * { box-sizing: border-box; }
+.pack-wm { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+.pack-wm text { font-family: "Times New Roman", Times, serif; font-size: 44px; fill: var(--pack-tint); opacity: .05; }
+.pack-lineart {
+  position: absolute; right: 8mm; bottom: 11mm; width: 105mm; aspect-ratio: 2264 / 656; z-index: 0; pointer-events: none;
+  background: var(--pack-tint); opacity: .2;
+  -webkit-mask: url(/admin/assets/pack/vessel-line-art.png) center / contain no-repeat;
+  mask: url(/admin/assets/pack/vessel-line-art.png) center / contain no-repeat;
+}
+.pack-body { position: absolute; inset: 14mm 14mm 16mm 16mm; z-index: 1; display: flex; flex-direction: column; }
+.pack-flow { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 4mm; }
+.pack-foot { position: absolute; left: 16mm; right: 14mm; bottom: 7mm; z-index: 1; display: flex; justify-content: space-between; gap: 6mm; font-size: 7.5pt; color: var(--pack-muted); }
+.pack-section-head { margin-bottom: 5mm; }
+.pack-section-head h2 { margin: 0; font-size: 18pt; font-weight: normal; padding-bottom: 2mm; border-bottom: 1px solid var(--pack-tint); }
+.pack-section-head h2 span { font-size: 9pt; color: var(--pack-muted); letter-spacing: .08em; text-transform: uppercase; }
+.pack-block { flex: none; }
+.pack-block h3 { margin: 0 0 1.5mm; font-size: 8pt; letter-spacing: .14em; text-transform: uppercase; color: var(--pack-accent); font-weight: bold; }
+.pack-block h4 { margin: 0 0 1mm; font-size: 9pt; color: var(--pack-accent); }
+.pack-block ul { margin: 0; padding-left: 4.5mm; }
+.pack-block li { margin: .6mm 0; }
+.pack-block li span { color: var(--pack-muted); }
+
+/* summary */
+.pack-facts { display: grid; grid-template-columns: 34mm 1fr; gap: 2mm 6mm; margin: 0; }
+.pack-facts dt { color: var(--pack-accent); text-transform: uppercase; letter-spacing: .1em; font-size: 8pt; padding-top: .6mm; }
+.pack-facts dd { margin: 0; }
+.pack-welcome p { margin: 0 0 2mm; font-size: 11pt; font-style: italic; }
+.pack-welcome p:last-child { margin-bottom: 0; }
+.pack-cont::after { content: " (continued)"; font-weight: normal; font-size: 8pt; color: var(--pack-muted); }
+
+/* route */
+.pack-map { width: 100%; height: 90mm; border: 1px solid var(--pack-tint); background: #e9edee; }
+.pack-map .leaflet-control-attribution { font-size: 6pt; background: rgba(255, 255, 255, .7); }
+.pack-map-failed { margin: 0; padding: 6mm; border: 1px dashed var(--pack-tint); color: var(--pack-muted); }
+.pack-key { columns: 2; column-gap: 8mm; margin: 2.5mm 0 0; padding-left: 0; list-style: none; font-size: 8.5pt; }
+.pack-marker span {
+  position: relative; left: 0; top: 0; transform: translate(-50%, -50%); display: inline-block; white-space: nowrap;
+  padding: 1px 5px; border-radius: 9px; background: var(--pack-tint); color: #fff; border: 1.5px solid #fff;
+  font: bold 9px/1.3 Arial, Helvetica, sans-serif; box-shadow: 0 1px 3px rgba(0, 0, 0, .35);
+}
+.pack-day { border-top: 1px solid var(--pack-tint); padding-top: 1.5mm; }
+.pack-day-head { display: flex; gap: 4mm; align-items: baseline; margin-bottom: 1mm; }
+.pack-day-head b { color: var(--pack-accent); font-weight: normal; font-size: 11pt; }
+.pack-day-head span { color: var(--pack-muted); font-size: 8.5pt; }
+.pack-stop { margin: 0 0 1.5mm 2mm; }
+.pack-stop-name { font-weight: bold; }
+.pack-times { font-weight: normal; color: var(--pack-muted); font-size: 8.5pt; }
+
+/* crew & yacht */
+.pack-specs { display: grid; grid-template-columns: 40mm 1fr; gap: 1mm 6mm; margin: 0; }
+.pack-specs dt { color: var(--pack-muted); }
+.pack-specs dd { margin: 0; }
+.pack-crew-group ul { list-style: none; padding-left: 0; columns: 2; column-gap: 8mm; }
+
+/* menus & drinks */
+.pack-menu-day { border-top: 1px solid var(--pack-tint); padding-top: 1.5mm; }
+.pack-course { margin: 1mm 0 1.5mm 2mm; }
+.pack-subhead { margin-top: 2mm !important; }
+
+/* ---- the cover ------------------------------------------------------------------------------------------------- */
+.pack-page--cover { background: var(--pack-cover-bg); color: var(--pack-cover-ink); }
+.pack-cover { position: absolute; inset: 0; display: flex; flex-direction: column; }
+.pack-cover-photo { display: block; width: 100%; height: 58%; object-fit: cover; }
+.pack-cover-text { flex: 1; display: flex; flex-direction: column; gap: 2.5mm; padding: 12mm 16mm 14mm; }
+.pack-kicker { font-size: 8pt; letter-spacing: .24em; text-transform: uppercase; color: var(--pack-tint); }
+.pack-ornament { display: none; }
+.pack-title { margin: 0; font-size: 26pt; font-weight: normal; line-height: 1.15; }
+.pack-rule { width: 20mm; height: 1px; background: var(--pack-tint); margin: 1mm 0; }
+.pack-route, .pack-dates { margin: 0; font-size: 12pt; }
+.pack-stats { display: none; }
+.pack-cover-foot { margin-top: auto; display: flex; justify-content: space-between; align-items: flex-end; gap: 10mm; }
+.pack-for { display: grid; gap: 1mm; max-width: 120mm; }
+.pack-for-label { font-size: 8pt; letter-spacing: .18em; text-transform: uppercase; color: var(--pack-tint); }
+.pack-for-name { font-size: 13pt; }
+.pack-note { margin: 2mm 0 0; font-size: 9.5pt; font-style: italic; }
+.pack-stamp { width: 32mm; height: 32mm; flex: none; mix-blend-mode: multiply; }   /* the stamp's white ground drops out */
+/* A: navy cover, so the black stamp is inverted to cream (full contrast, P-D9); its ground, now black, drops out */
+.pack-theme-a .pack-stamp { filter: invert(100%) sepia(18%) saturate(300%) hue-rotate(5deg); mix-blend-mode: screen; }
+/* B: smaller photo, sans-serif title, stat tiles */
+.pack-theme-b .pack-cover-photo { height: 48%; }
+.pack-theme-b .pack-title { font-weight: bold; font-size: 24pt; }
+.pack-theme-b .pack-kicker { align-self: flex-start; padding: 1mm 3mm; border-radius: 10px; background: var(--pack-tint); color: #fff; letter-spacing: .12em; }
+.pack-theme-b .pack-stats { display: grid; grid-template-columns: repeat(3, 30mm); gap: 3mm; margin-top: 3mm; }
+.pack-theme-b .pack-stats div { border: 1px solid #d7dde1; border-radius: 4px; padding: 2mm; text-align: center; color: var(--pack-muted); font-size: 8pt; }
+.pack-theme-b .pack-stats b { display: block; font-size: 16pt; color: var(--pack-tint); }
+/* C: the guest's paper look — inset photo, centred serif, gold ornament */
+.pack-theme-c .pack-cover-photo { width: auto; height: 45%; margin: 16mm 16mm 0; border: 1px solid #d4b06a; }
+.pack-theme-c .pack-cover-text { align-items: center; text-align: center; }
+.pack-theme-c .pack-ornament { display: block; color: #d4b06a; font-size: 14pt; }
+.pack-theme-c .pack-title { letter-spacing: .04em; }
+.pack-theme-c .pack-rule { background: #d4b06a; }
+.pack-theme-c .pack-cover-foot { width: 100%; text-align: left; }
+.pack-theme-c .pack-day, .pack-theme-c .pack-menu-day { border-top-style: dotted; }
+
+/* ---- printing (Save as PDF): only the copy in #pack-print-host prints ------------------------------------------ */
+#pack-print-host { display: none; }
+@media print {
+  @page { size: A4; margin: 0; }
+  body.pack-printing { margin: 0 !important; padding: 0 !important; background: #fff !important; min-height: 0 !important; }
+  body.pack-printing > *:not(#pack-print-host) { display: none !important; }
+  body.pack-printing #pack-print-host { display: block; }
+  #pack-print-host .pack-page { position: relative !important; left: auto !important; box-shadow: none !important; margin: 0 !important; break-after: page; }
+  #pack-print-host .pack-page:last-child { break-after: auto; }
+}
