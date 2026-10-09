@@ -664,3 +664,26 @@ save could undo it. Spec: [spec-c.md](spec-c.md). Mockup `.superpowers/brainstor
   migration v6.
 - **SC-D12 No wait on style rollout B:** every page spec C touches has had its phase B pass (only Settings and login
   remain). Plans next: `c-01-server.md`, `c-02-admin-core.md`, `c-03-admin-pages.md`, dry-run, Fable review.
+- **SC-D13 Planning (2026-10-09): plans c-01 / c-02 / c-03, dry-run on PR #11 (server, `42fefcd`) and PR #39 (admin,
+  `10ab701`), browser-verified on a scratch server.** Changes from the spec found while planning:
+  - **Migration v7, not v6:** v6 is the admin password hashing (iolanthe-server#11, open). Both plans need #11 / #39
+    merged first; their OLD blocks are written against them. The template schema stays at 5, as #11 explains.
+  - **Blank values are equal:** a missing field, `null` and `""` compare the same in the merge (dialogs write `null`
+    or `""` for fields a stored record leaves out; without this, untouched fields got the teal edge or false clashes).
+  - **A page's normaliser runs on base and theirs** before the merge (`saveWithRebase` `normalize`), so defaults it
+    fills (a guest's cabin "N/A") are not taken for my changes.
+  - **A menu's day numbers follow the order that won** (they are derived; the guest site picks today's menu by them).
+  - **Library merge bases per working copy** (`WeakMap`), because the drink stock picker loads its own copy while a
+    page holds an older one; one base for sites. **After a clash the working copy holds theirs**, so a stale copy is
+    never sent with the new revision.
+  - **Records found by id everywhere** (crew, guests, menus, drink stocks, sites, cocktails): the old code edited by
+    array index or object identity, which a merge can shift. New crew, cocktails and menu days get ids in the admin;
+    imported crew members get fresh ones; guests without one get `g-slot-<position>` on both sides.
+  - **Cocktails are a whole-page save** (the dialog edits the page's copy), so a cocktail clash shows as a page clash
+    with the row edged, not a reopened dialog. The drink stock dialog reopens as a single item (no group context).
+  - **The Route page's Edit site** has no clash UI: a clash there shows "… changed the sites at …" in the dialog and
+    the base stays, so a second save merges again rather than overwriting.
+  - **Freshness** checks only the open panel's files and skips the Route page (its own copy); page open already
+    reloads, so tab focus is the only new moment. The check is a raw `fetch` (not session activity).
+  - **`scripts/check-revisions.js`** (Node) instead of a shell script; the revisions endpoint and the stamp fields are
+    as specified.
