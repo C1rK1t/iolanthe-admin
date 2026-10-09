@@ -136,7 +136,9 @@ on-board guest portal, not for a document sent before the charter:
 is edited; (b) section tick-boxes on the Charter Pack page; (c) reword the portal text so it reads well in both places
 (for example "the vessel safety brief" without "included in this pack"); (a) or (b) together with (c) is likely best.
 
-### Settings → Vessel tab: cabins and other vessel specifics (David, 2026-10-09)
+### NEXT UP: Settings → Vessel tab: cabins and other vessel specifics (David, 2026-10-09)
+
+**Priority: do soon** (David, 2026-10-09, after the style rollout finished).
 
 A **Vessel** tab under Settings where the vessel's own details are managed, starting with the cabins: how many, each
 cabin's name, berths and occupancy (and similar specifics). Guests are then assigned to named cabins instead of the
