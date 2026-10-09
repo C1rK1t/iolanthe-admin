@@ -5543,7 +5543,20 @@
   }
 
   // defaults: optional draft fields for a NEW site (e.g. { title, latitude, longitude } from the Routes map).
-  function openSiteEditorModal(siteLibrary, site, onSave, defaults, onDelete) {
+  // Spec C: the site dialog's element for each record field, for the clash marks
+  const SITE_CLASH_FIELDS = Object.freeze({
+    title: "#site-editor-title",
+    latitude: "#site-editor-latitude-degrees",
+    longitude: "#site-editor-longitude-degrees",
+    description: "#site-editor-description",
+    tags: "#site-editor-tags",
+    media: "#site-editor-images",
+    images: "#site-editor-images"
+  });
+
+  // clash (spec C §4.1, from recordClash): the dialog opens on clash.record (theirs with my changes on top), marked.
+  // An onSave that reopened the dialog after a clash throws an error with clashReopened set.
+  function openSiteEditorModal(siteLibrary, site, onSave, defaults, onDelete, clash) {
     const editing = Boolean(site);
     // Style rollout B: delete lives in the Edit dialog (the Site Editor passes onDelete; the Route page does not)
     const canDelete = editing && typeof onDelete === "function";
@@ -5554,7 +5567,7 @@
     }
     const draft = {
       ...blankSite(),
-      ...(editing ? cloneData(site) : (defaults || {}))
+      ...(editing ? cloneData(clash && clash.record ? clash.record : site) : (defaults || {}))
     };
     const mediaItems = siteMediaEntries(draft);
     const pendingMedia = [];
@@ -5605,6 +5618,7 @@
         <p id="site-editor-error" class="modal-error full" role="alert"></p>
       </form>
     `, { cardClass: "modal-wide", hideClose: true, headerActionsHtml });
+    showClashMarks(modal, clash, SITE_CLASH_FIELDS, modal.querySelector("#site-editor-form"));
 
     const deleteSiteButton = modal.querySelector("[data-action='delete-site']");
     if (deleteSiteButton) {
@@ -5815,6 +5829,9 @@
         markModalSaved(modal);
         closeDialogModal();
       } catch (error) {
+        if (error && error.clashReopened) {
+          return;   // spec C: the dialog has reopened on their version
+        }
         errorField.textContent = error.message || "Unable to save site.";
       }
     });
@@ -6562,30 +6579,63 @@
       <span class="site-row-media"${mediaCount ? ` title="${mediaCount} media"` : ""}>${mediaCount ? `${buttonIconSvg("camera")}${mediaCount}` : ""}</span>
       <svg class="row-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
     `;
-    row.addEventListener("click", () => {
-      openSiteEditorModal(siteLibrary, site, async updatedSite => {
-        const nextLibrary = normalizeSiteLibrary({
-          ...siteLibrary,
-          sites: siteLibrary.sites.map((entry, entryIndex) => entryIndex === index ? updatedSite : entry)
-        });
-        const saved = await saveSitesLibrary(nextLibrary, "Site saved.");
+    row.addEventListener("click", () => openSiteEditor(siteLibrary, site));
+    return row;
+  }
+
+  // Spec C §4.1, §4.3: edit or delete one site, found by id. A clash on this site reopens the editor on their version
+  // with my changes on top; deleting a site they changed asks first.
+  function openSiteEditor(siteLibrary, site, clash) {
+    const id = site.id;
+    const name = siteDisplayName(site, "this site");
+    openSiteEditorModal(siteLibrary, site, async updatedSite => {
+      const exists = siteLibrary.sites.some(entry => entry.id === id);
+      const nextLibrary = normalizeSiteLibrary({
+        ...siteLibrary,
+        sites: exists ? siteLibrary.sites.map(entry => (entry.id === id ? updatedSite : entry)) : [...siteLibrary.sites, updatedSite]
+      });
+      let clashResult = null;
+      const saved = await saveSitesLibrary(nextLibrary, "Site saved.", { onClash: result => { clashResult = result; } });
+      if (!saved) {
+        siteLibrary.sites = nextLibrary.sites;   // theirs
+        drawSiteEditors(siteLibrary);
+        const again = recordClash(clashResult, "sites", id, name);
+        if (!again) {
+          throw new Error(clashMessage(clashResult, "the sites"));
+        }
+        openSiteEditor(siteLibrary, siteLibrary.sites.find(entry => entry.id === id) || again.record, again);
+        const reopened = new Error("");
+        reopened.clashReopened = true;
+        throw reopened;
+      }
+      siteLibrary.sites = saved.sites;
+      drawSiteEditors(siteLibrary);
+    }, null, () => deleteSite(siteLibrary, id, name), clash);
+  }
+
+  async function deleteSite(siteLibrary, id, name) {
+    try {
+      const nextLibrary = normalizeSiteLibrary({ ...siteLibrary, sites: siteLibrary.sites.filter(entry => entry.id !== id) });
+      let clashResult = null;
+      const saved = await saveSitesLibrary(nextLibrary, "Site deleted.", { onClash: result => { clashResult = result; } });
+      if (saved) {
         siteLibrary.sites = saved.sites;
         drawSiteEditors(siteLibrary);
-      }, null, async () => {
-        try {
-          const nextLibrary = normalizeSiteLibrary({
-            ...siteLibrary,
-            sites: siteLibrary.sites.filter((entry, entryIndex) => entryIndex !== index)
-          });
-          const saved = await saveSitesLibrary(nextLibrary, "Site deleted.");
-          siteLibrary.sites = saved.sites;
-          drawSiteEditors(siteLibrary);
-        } catch (error) {
-          setStatus(error.message, "error");
+        return;
+      }
+      siteLibrary.sites = nextLibrary.sites;   // theirs
+      drawSiteEditors(siteLibrary);
+      const clash = recordClash(clashResult, "sites", id, name);
+      if (clash && clash.deletedByMe) {
+        if (await confirmDeleteAnyway(clash)) {
+          await deleteSite(siteLibrary, id, name);
         }
-      });
-    });
-    return row;
+      } else {
+        setStatus(clashMessage(clashResult, "the sites"), "error");
+      }
+    } catch (error) {
+      setStatus(error.message, "error");
+    }
   }
 
   function cloneCharterInfo(charterInfo) {
