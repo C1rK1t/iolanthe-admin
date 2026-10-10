@@ -43,6 +43,16 @@
     };
   }
 
+  // The keys that turn the preview pages (captain 08): ← ↑ PageUp back, → ↓ PageDown forward, Home / End to the first /
+  // last page (±Infinity, which showPage clamps). A chord with Ctrl, Alt or Meta is the browser's. event: a KeyboardEvent
+  // or { key, ctrlKey, altKey, metaKey }. -> -1 | 1 | -Infinity | Infinity | null
+  const PAGE_KEYS = { ArrowLeft: -1, ArrowUp: -1, PageUp: -1, ArrowRight: 1, ArrowDown: 1, PageDown: 1, Home: -Infinity, End: Infinity };
+  function pageKeyStep(event) {
+    const e = toObj(event);
+    if (e.ctrlKey || e.altKey || e.metaKey) return null;
+    return Object.prototype.hasOwnProperty.call(PAGE_KEYS, e.key) ? PAGE_KEYS[e.key] : null;
+  }
+
   // Ticks or unticks a section; the last ticked section stays ticked.
   function toggleSection(sections, id) {
     if (!SECTIONS.includes(id)) return [...sections];
@@ -238,7 +248,7 @@
 
   return {
     THEMES, TYPES, SECTIONS, SECTION_TITLES, PREPARED_FOR_MAX, COVER_NOTE_MAX,
-    defaultPack, normalizePack, toggleSection, formatDateRange, routeSummary, dayLabel,
+    defaultPack, normalizePack, toggleSection, pageKeyStep, formatDateRange, routeSummary, dayLabel,
     mapMarkers, mapKey, mergeMarkers, buildPackModel
   };
 });

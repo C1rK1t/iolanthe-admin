@@ -76,6 +76,9 @@ white for any body that has it.
   `/api/admin/charter/<id>/pack` and prints by moving the live pages into `<body>` (`#pack-print-host`) and back on
   `afterprint`. Data:
   `/api/charter?charter=<id>`. Themes A / B / C are classes `.pack-theme-a/b/c`; assets in `assets/pack/`.
+  The preview stage is centred when it is wider than A4 (`.cp-scaler` has `margin: 0 auto`) and takes the keys `pageKeyStep`
+  (pack-core.js) maps: ← ↑ PageUp back, → ↓ PageDown forward, Home / End; they act only while the stage or a page button has
+  focus or the pointer is over the stage, never from a text field, and never with Ctrl / Alt / Meta.
 - The Charter section menu reads **Charter Admin** (the info panel, id `info`), **Route & Itinerary** (`routes`), Crew,
   **Charter Pack** (`pack`), Guest view, Site Editor; the two-line wraps are `<br>`s in the labels (`renderCharter`).
 - Reserved periods (maintenance / unavailable / other) come from `/api/admin/reserved-periods` and save with a

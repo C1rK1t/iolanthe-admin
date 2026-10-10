@@ -28,6 +28,25 @@ test("toggleSection keeps the standard order and never empties the list", () => 
   assert.deepEqual(core.toggleSection(["crew"], "nope"), ["crew"]);
 });
 
+test("pageKeyStep: arrows, PageUp/Down, Home and End turn the preview pages; other keys and modifier chords do not", () => {
+  const step = (key, extra) => core.pageKeyStep({ key, ...(extra || {}) });
+  assert.equal(step("ArrowLeft"), -1);
+  assert.equal(step("ArrowUp"), -1);
+  assert.equal(step("PageUp"), -1);
+  assert.equal(step("ArrowRight"), 1);
+  assert.equal(step("ArrowDown"), 1);
+  assert.equal(step("PageDown"), 1);
+  assert.equal(step("Home"), -Infinity);
+  assert.equal(step("End"), Infinity);
+  assert.equal(step("Enter"), null);
+  assert.equal(step(" "), null);
+  assert.equal(step("ArrowLeft", { ctrlKey: true }), null);
+  assert.equal(step("ArrowRight", { altKey: true }), null);
+  assert.equal(step("ArrowDown", { metaKey: true }), null);
+  assert.equal(step("ArrowLeft", { shiftKey: true }), -1);
+  assert.equal(core.pageKeyStep(null), null);
+});
+
 test("formatDateRange: same month, across months, across years, missing", () => {
   assert.equal(core.formatDateRange("2026-11-01", "2026-11-09"), "1 – 9 November 2026");
   assert.equal(core.formatDateRange("2026-11-28", "2026-12-03"), "28 November – 3 December 2026");

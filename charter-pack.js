@@ -144,7 +144,8 @@
 
     // ---- preview -----------------------------------------------------------------------------------------------
     const scaler = el("div", { class: "cp-scaler" });
-    const stage = el("div", { class: "cp-stage" }, scaler);
+    // Focusable, so the arrow keys turn the pages once the preview is clicked or tabbed to (captain 08).
+    const stage = el("div", { class: "cp-stage", tabindex: "0", role: "region", "aria-label": "Charter pack preview" }, scaler);
     const pageReadout = el("span", { class: "cp-page-no" });
     const prevBtn = iconBtn("prev", "Previous page", () => showPage(pageIndex - 1));
     const nextBtn = iconBtn("next", "Next page", () => showPage(pageIndex + 1));
@@ -177,6 +178,22 @@
       nextBtn.disabled = pageIndex === all.length - 1;
       fit();
     }
+
+    // ← → (↑ ↓, PageUp/Down, Home/End) turn the pages while the preview has focus, the page buttons have focus, or the
+    // pointer is over the preview; never while typing in a field (captain 08).
+    const TEXT_FIELD = "input, textarea, select, [contenteditable]:not([contenteditable=\"false\"])";
+    function onKeydown(event) {
+      const step = core().pageKeyStep(event);
+      if (step === null) return;
+      const target = event.target;
+      if (target && typeof target.closest === "function" && target.closest(TEXT_FIELD)) return;
+      const focused = document.activeElement;
+      const previewHasFocus = stage.contains(focused) || focused === prevBtn || focused === nextBtn;
+      if (!previewHasFocus && !stage.matches(":hover")) return;
+      event.preventDefault();
+      showPage(pageIndex + step);
+    }
+    window.addEventListener("keydown", onKeydown);
 
     function fit() {
       const current = pages()[pageIndex];
@@ -463,6 +480,7 @@
       window.clearTimeout(redrawTimer);
       if (saveTimer) save();
       resizeObserver.disconnect();
+      window.removeEventListener("keydown", onKeydown);
       dropMap();
       removePrintHost();
     };
