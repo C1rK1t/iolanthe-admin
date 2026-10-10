@@ -138,7 +138,7 @@ white for any body that has it.
   - A server without the marker simply lacks the marker-driven behaviour above. Three things changed for every server:
     the anchorages save waits for its load, the menu import reads the source before the overwrite question, and the
     pack cover upload goes through `throwAdminApiError` (login handling and the banner).
-- `node --test` runs the tests in `test/` (270 tests), which cover `routes-core`, `itinerary-core`, `charters-core`,
+- `node --test` runs the tests in `test/` (278 tests), which cover `routes-core`, `itinerary-core`, `charters-core`,
   `guest-preview-core`, `pack-core`, `pack-render`, `drag-reorder`, `merge-core`, `damaged-core`, the damaged-file
   pages (`damaged-page.test.js`, `admin.js` in a `vm` sandbox), the anchorages save guard
   (`routes-places-guard.test.js`), the startup order (`startup-order.test.js` runs `admin.js` alone in a `vm` sandbox),
