@@ -40,7 +40,8 @@
   // What a strip says is out of action while its file can't be read.
   const STRIPS = Object.freeze({
     "reserved-periods.json": "Reserved periods aren't shown, and periods and charter dates can't be changed until it's fixed or restored.",
-    "anchorages.json": "Anchorages aren't shown, and can't be added or changed until it's fixed or restored."
+    "anchorages.json": "Anchorages aren't shown, and can't be added or changed until it's fixed or restored.",
+    "crew-order.json": "The crew are shown in this charter's own order, and can't be re-ordered until it's fixed or restored."
   });
   const PICKED = Object.freeze({ "menus.json": "its menus", "crew_list.json": "its crew" });
   const DATES_MESSAGE = "reserved-periods.json can't be read, so new dates can't be checked against the reserved periods. Fix or restore it first.";

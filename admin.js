@@ -3046,7 +3046,7 @@
   // Route page keeps its own copy (itinerary.json), so it is left out. A raw fetch, not api(): this check is not
   // activity and must not keep an idle session alive.
   const FRESHNESS_PANEL_FILES = Object.freeze({
-    charter: { info: ["charter.json"], crew: ["crew_list.json"], sites: ["sites.json"] },
+    charter: { info: ["charter.json"], crew: ["crew_list.json", "crew-order.json"], sites: ["sites.json"] },
     galley: { menus: ["menus.json", "charter.json"], guests: ["guest_list.json", "charter.json"] },
     hotel: {
       guests: ["guest_list.json", "charter.json"],
@@ -3895,22 +3895,10 @@
       name: "",
       position: "",
       department: "",
-      position_order: null,
       description: "",
       role: "",
       note: ""
     };
-  }
-
-  function parsePositionOrder(value) {
-    if (value === "" || value === null || value === undefined) {
-      return null;
-    }
-    const numberValue = Number(value);
-    if (!Number.isFinite(numberValue) || !Number.isInteger(numberValue) || numberValue < 1) {
-      return null;
-    }
-    return numberValue;
   }
 
   function crewPositionLabel(member) {
@@ -3923,31 +3911,14 @@
     return String(value || "").trim() || "Department not set";
   }
 
-  function crewPositionOrderLabel(member) {
-    const order = parsePositionOrder(member.position_order);
-    return order === null ? "" : String(order);
-  }
-
-  function sortedCrewEntries(crewList) {
+  // Departments alphabetically; inside one, the remembered crew order (crew-order-core.js): the names the order knows in
+  // its order, then the rest as they stand in the file, so a new member is at the bottom of their department.
+  function sortedCrewEntries(crewList, departments) {
+    const withinDepartment = crewOrderCore().compareWithinDepartment(departments);
     return (crewList.crew || [])
       .map((member, index) => ({ member, index }))
-      .sort((a, b) => {
-        const departmentCompare = crewDepartmentLabel(a.member).localeCompare(crewDepartmentLabel(b.member), undefined, { sensitivity: "base" });
-        if (departmentCompare) {
-          return departmentCompare;
-        }
-        const orderA = parsePositionOrder(a.member.position_order);
-        const orderB = parsePositionOrder(b.member.position_order);
-        if (orderA !== null && orderB !== null && orderA !== orderB) {
-          return orderA - orderB;
-        }
-        const positionCompare = crewPositionLabel(a.member).localeCompare(crewPositionLabel(b.member), undefined, { sensitivity: "base" });
-        if (positionCompare) {
-          return positionCompare;
-        }
-        const nameCompare = String(a.member.name || "").localeCompare(String(b.member.name || ""), undefined, { sensitivity: "base" });
-        return nameCompare || a.index - b.index;
-      });
+      .sort((a, b) => crewDepartmentLabel(a.member).localeCompare(crewDepartmentLabel(b.member), undefined, { sensitivity: "base" })
+        || withinDepartment(a, b));
   }
 
   function normalizedCrewName(member) {
@@ -4207,7 +4178,6 @@
     position: "#crew-add-position",
     role: "#crew-add-position",
     department: "#crew-add-department",
-    position_order: "#crew-add-position-order",
     description: "#crew-add-description",
     note: "#crew-add-description"
   });
@@ -4245,9 +4215,6 @@
         <label>Department
           <input id="crew-add-department" value="${escapeAttribute(draft.department || "")}"${datalistAttribute("crew-add-department-suggestions", departmentSuggestions)}>
         </label>
-        <label>Position Order
-          <input id="crew-add-position-order" type="number" min="1" step="1" value="${escapeAttribute(crewPositionOrderLabel(draft))}">
-        </label>
         <label class="full">Description / Note
           <textarea id="crew-add-description">${escapeHtml(draft.description || draft.note || "")}</textarea>
         </label>
@@ -4258,14 +4225,12 @@
       event.preventDefault();
       const position = modal.querySelector("#crew-add-position").value;
       const description = modal.querySelector("#crew-add-description").value;
-      const positionOrder = parsePositionOrder(modal.querySelector("#crew-add-position-order").value);
       saveHandler({
         ...blankCrewMember(),
         ...draft,
         name: modal.querySelector("#crew-add-name").value,
         position,
         department: modal.querySelector("#crew-add-department").value,
-        position_order: positionOrder,
         description,
         role: position,
         note: description
@@ -4983,6 +4948,7 @@
             </div>
           ` : ""}
         </div>
+        <div id="crew-order-strip"></div>
         <div id="crew-editor-list" class="editor-list"></div>
       </section>
     `;
@@ -6436,13 +6402,20 @@
     if (!container) {
       return;
     }
+    const strip = document.getElementById("crew-order-strip");
+    if (strip) {
+      strip.innerHTML = state.crewOrder && state.crewOrder.damaged ? damagedStripHtml("crew-order.json", state.crewOrder.damaged) : "";
+    }
     container.innerHTML = "";
     if (!crewList.crew.length) {
       container.innerHTML = `<p class="muted">No crew members yet.</p>`;
       return;
     }
-    const crewEntries = sortedCrewEntries(crewList);
+    const order = state.crewOrder;
+    const crewEntries = sortedCrewEntries(crewList, order ? order.departments : {});
     const canEditCrew = canManageCharterAdmin();
+    // Grips need the order: loaded, and readable (a damaged file is never saved over, so it gets no grips)
+    const canReorder = canEditCrew && Boolean(order) && !order.damaged;
     const longestNameLength = crewEntries.reduce((longest, { member, index }) => {
       return Math.max(longest, String(member.name || `Crew ${index + 1}`).length);
     }, 10);
@@ -6461,25 +6434,29 @@
     groups.forEach(({ department, entries }) => {
       const group = document.createElement("section");
       group.className = "crew-group";
+      const key = crewOrderCore().departmentKey(entries[0].member);
+      group.dataset.departmentKey = key;
       group.innerHTML = `<h3 class="crew-group-title">${escapeHtml(department)}<span class="crew-group-count">${entries.length}</span></h3>`;
       entries.forEach(({ member, index }) => {
-        group.appendChild(crewRowElement(crewList, member, index, canEditCrew));
+        group.appendChild(crewRowElement(crewList, member, index, canEditCrew, canReorder));
       });
       container.appendChild(group);
+      if (canReorder) {
+        bindCrewGroupReorder(crewList, group, key, entries.map(entry => entry.member));
+      }
     });
   }
 
-  // One crew member: tap to edit (and delete, inside the dialog) when the session may manage crew
-  function crewRowElement(crewList, member, index, canEditCrew) {
-    const row = document.createElement(canEditCrew ? "button" : "div");
-    row.className = "crew-row";
-    if (canEditCrew) {
-      row.type = "button";
-      row.title = "Edit crew member";
-    }
+  // One crew member: tap to edit (and delete, inside the dialog) when the session may manage crew; a grip moves them
+  // within their department when the remembered order is loaded (canReorder)
+  function crewRowElement(crewList, member, index, canEditCrew, canReorder) {
+    const row = document.createElement("div");
+    row.className = `crew-row${canReorder ? " has-grip" : ""}`;
     const note = member.description || member.note || "";
+    const displayName = member.name || `Crew ${index + 1}`;
     row.innerHTML = `
-      <strong class="crew-row-name">${escapeHtml(member.name || `Crew ${index + 1}`)}</strong>
+      ${canReorder ? dragHandleHtml(`Move ${displayName}`, "crew-grip") : ""}
+      <strong class="crew-row-name">${escapeHtml(displayName)}</strong>
       <span class="crew-row-position">${escapeHtml(crewPositionLabel(member))}</span>
       <span class="crew-row-note">${escapeHtml(note)}</span>
       ${canEditCrew ? `<svg class="crew-row-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>` : ""}
@@ -6487,8 +6464,92 @@
     if (!canEditCrew) {
       return row;
     }
-    row.addEventListener("click", () => openCrewMemberEditor(crewList, member));
+    bindTapRow(row, "Edit crew member", () => openCrewMemberEditor(crewList, member));
     return row;
+  }
+
+  // ---- The remembered crew order (library/crew-order.json; design 2026-10-10-crew-order-design.md) ----------------------
+  // One order for every charter, loaded on each visit and saved by a drag, never as part of crew_list.json. A server
+  // without it (404) or a failed load leaves the crew in file order without grips; a damaged file shows a strip instead.
+  async function loadCrewOrder() {
+    delete seenRevisions[CREW_ORDER_FILE];
+    delete seenDamage[CREW_ORDER_FILE];
+    try {
+      const served = await api("/api/admin/crew-order");
+      state.crewOrder = crewOrderCore().normalizeOrder(served);
+      seenRevisions[CREW_ORDER_FILE] = state.crewOrder.revision;
+      seenDamage[CREW_ORDER_FILE] = damagedCore().damagedIn(served);
+    } catch (error) {
+      state.crewOrder = null;
+      if (error && error.status !== 404) {
+        setStatus("The crew order could not be loaded, so the crew are shown in file order.", "error");
+      }
+    }
+  }
+
+  let crewOrderSaving = false;
+
+  // Saves the department's new sequence on top of the order the server holds. A 409 means someone else saved the order
+  // first: the same drag is applied to their copy and sent again (up to 3 rounds; lists of names are not merged).
+  async function saveCrewOrderMove(key, sequence) {
+    let order = state.crewOrder;
+    for (let round = 1; ; round += 1) {
+      const departments = crewOrderCore().reorderDepartment(order.departments, key, sequence);
+      try {
+        const saved = await api("/api/admin/crew-order/save", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ departments, base_revision: order.revision })
+        });
+        state.crewOrder = crewOrderCore().normalizeOrder(saved);
+        seenRevisions[CREW_ORDER_FILE] = state.crewOrder.revision;
+        return;
+      } catch (error) {
+        const body = error && error.status === 409 && error.payload && error.payload.code === "revision" ? error.payload : null;
+        if (!body || !body.data || round >= 3) {
+          if (body && body.data) {
+            state.crewOrder = crewOrderCore().normalizeOrder(body.data);
+            seenRevisions[CREW_ORDER_FILE] = state.crewOrder.revision;
+          }
+          throw error;
+        }
+        order = crewOrderCore().normalizeOrder(body.data);
+        state.crewOrder = order;
+      }
+    }
+  }
+
+  function focusCrewGrip(key, index) {
+    const group = [...document.querySelectorAll("#crew-editor-list > .crew-group")].find(entry => entry.dataset.departmentKey === key);
+    const grips = group ? group.querySelectorAll(":scope > .crew-row .crew-grip") : [];
+    if (grips[index]) {
+      grips[index].focus();
+    }
+  }
+
+  // A drag inside one department's group can only land in that group, so a member never changes department.
+  function bindCrewGroupReorder(crewList, group, key, members) {
+    window.IolantheDragReorder.attach(group, {
+      items: () => [...group.querySelectorAll(":scope > .crew-row")],
+      handleSelector: ".crew-grip",
+      onMove: async (from, to) => {
+        if (crewOrderSaving || from === to) {
+          return;
+        }
+        crewOrderSaving = true;
+        try {
+          const moved = window.IolantheDragReorder.moveItem(members, from, to);
+          await saveCrewOrderMove(key, crewOrderCore().sequenceOf(moved));
+          setStatus("Crew order saved.", "ok");
+        } catch (error) {
+          setStatus(error && error.message ? error.message : "The crew order wasn't saved.", "error");
+        } finally {
+          crewOrderSaving = false;
+          drawCrewEditors(crewList);
+        }
+      },
+      afterMove: to => focusCrewGrip(key, to)
+    });
   }
 
   // Spec C: on a clash the list shows theirs, then onClash(result) decides what to reopen.
@@ -6876,7 +6937,13 @@
     if (importButton) {
       importButton.addEventListener("click", () => openCrewImportModal(crewList));
     }
-    drawCrewEditors(crewList);
+    // The remembered order loads before the first draw, so the rows do not jump; a page opened over meanwhile is left alone.
+    const list = document.getElementById("crew-editor-list");
+    loadCrewOrder().then(() => {
+      if (document.getElementById("crew-editor-list") === list) {
+        drawCrewEditors(crewList);
+      }
+    });
   }
 
   function bindSitesPanel(siteLibrary) {
@@ -14446,6 +14513,8 @@
   // one. After a clash the working copy holds theirs, so a stale copy is never sent with the new revision.
   const mergeCore = () => window.IolantheMerge;
   const damagedCore = () => window.IolantheDamaged;
+  const crewOrderCore = () => window.IolantheCrewOrder;
+  const CREW_ORDER_FILE = "crew-order.json";
   const CHARTER_FILE_SCHEMAS = Object.freeze({
     "charter.json": "charter",
     "crew_list.json": "crew",

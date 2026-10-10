@@ -1,0 +1,321 @@
+{
+  "keys": [
+    {
+      "input": "  San   San ",
+      "expect": "san san"
+    },
+    {
+      "input": "PAUL",
+      "expect": "paul"
+    },
+    {
+      "input": "",
+      "expect": ""
+    },
+    {
+      "input": "   ",
+      "expect": ""
+    },
+    {
+      "input": null,
+      "expect": ""
+    }
+  ],
+  "within": [
+    {
+      "name": "the stored list decides, in its order",
+      "departments": {
+        "interior": [
+          "kio",
+          "paul",
+          "san san"
+        ]
+      },
+      "department": "Interior",
+      "members": [
+        {
+          "name": "San San"
+        },
+        {
+          "name": "Paul"
+        },
+        {
+          "name": "Kio"
+        }
+      ],
+      "expect": [
+        "Kio",
+        "Paul",
+        "San San"
+      ]
+    },
+    {
+      "name": "names the list does not know go after the known, in file order",
+      "departments": {
+        "interior": [
+          "paul"
+        ]
+      },
+      "department": "Interior",
+      "members": [
+        {
+          "name": "Zoe"
+        },
+        {
+          "name": "Paul"
+        },
+        {
+          "name": "Amy"
+        }
+      ],
+      "expect": [
+        "Paul",
+        "Zoe",
+        "Amy"
+      ]
+    },
+    {
+      "name": "unknown names use position_order first (set before unset, ascending), then file order",
+      "departments": {},
+      "department": "Interior",
+      "members": [
+        {
+          "name": "C"
+        },
+        {
+          "name": "B",
+          "position_order": 2
+        },
+        {
+          "name": "A",
+          "position_order": 1
+        },
+        {
+          "name": "D"
+        }
+      ],
+      "expect": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ]
+    },
+    {
+      "name": "a stored name beats position_order",
+      "departments": {
+        "interior": [
+          "b"
+        ]
+      },
+      "department": "Interior",
+      "members": [
+        {
+          "name": "A",
+          "position_order": 1
+        },
+        {
+          "name": "B",
+          "position_order": 9
+        }
+      ],
+      "expect": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "name": "another department's list is not used",
+      "departments": {
+        "bridge and deck": [
+          "b",
+          "a"
+        ]
+      },
+      "department": "Interior",
+      "members": [
+        {
+          "name": "A"
+        },
+        {
+          "name": "B"
+        }
+      ],
+      "expect": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "name": "names compare by key (case and spacing)",
+      "departments": {
+        "interior": [
+          "san san",
+          "paul"
+        ]
+      },
+      "department": "Interior",
+      "members": [
+        {
+          "name": "PAUL"
+        },
+        {
+          "name": " San  San"
+        }
+      ],
+      "expect": [
+        " San  San",
+        "PAUL"
+      ]
+    },
+    {
+      "name": "a key like constructor is just a department with no list",
+      "departments": {},
+      "department": "constructor",
+      "members": [
+        {
+          "name": "B"
+        },
+        {
+          "name": "A"
+        }
+      ],
+      "expect": [
+        "B",
+        "A"
+      ]
+    }
+  ],
+  "reorder": [
+    {
+      "name": "absent names keep their slots",
+      "departments": {
+        "interior": [
+          "a",
+          "b",
+          "c",
+          "d"
+        ]
+      },
+      "department": "Interior",
+      "sequence": [
+        "d",
+        "a",
+        "c"
+      ],
+      "expect": [
+        "d",
+        "b",
+        "a",
+        "c"
+      ]
+    },
+    {
+      "name": "a department with no list stores the sequence as shown",
+      "departments": {},
+      "department": "Interior",
+      "sequence": [
+        "Paul",
+        "Kio"
+      ],
+      "expect": [
+        "paul",
+        "kio"
+      ]
+    },
+    {
+      "name": "newcomers join the bottom first, then the move applies",
+      "departments": {
+        "interior": [
+          "a",
+          "b"
+        ]
+      },
+      "department": "Interior",
+      "sequence": [
+        "c",
+        "a"
+      ],
+      "expect": [
+        "c",
+        "b",
+        "a"
+      ]
+    },
+    {
+      "name": "duplicates and empty names in the sequence are dropped",
+      "departments": {
+        "interior": [
+          "a",
+          "b"
+        ]
+      },
+      "department": "Interior",
+      "sequence": [
+        "b",
+        "",
+        "b",
+        "a",
+        "  "
+      ],
+      "expect": [
+        "b",
+        "a"
+      ]
+    },
+    {
+      "name": "other departments are untouched",
+      "departments": {
+        "interior": [
+          "a",
+          "b"
+        ],
+        "galley": [
+          "x",
+          "y"
+        ]
+      },
+      "department": "Interior",
+      "sequence": [
+        "b",
+        "a"
+      ],
+      "expect": [
+        "b",
+        "a"
+      ],
+      "others": {
+        "galley": [
+          "x",
+          "y"
+        ]
+      }
+    },
+    {
+      "name": "the no-department group has the empty key",
+      "departments": {},
+      "department": "",
+      "sequence": [
+        "z",
+        "y"
+      ],
+      "expect": [
+        "z",
+        "y"
+      ]
+    },
+    {
+      "name": "a department called __proto__ is an ordinary name",
+      "departments": {},
+      "department": "__proto__",
+      "sequence": [
+        "a",
+        "b"
+      ],
+      "expect": [
+        "a",
+        "b"
+      ]
+    }
+  ]
+}

@@ -14,7 +14,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 const ROOT = path.join(__dirname, "..");
-const SCRIPTS = ["charters-core.js", "itinerary-core.js", "merge-core.js", "damaged-core.js", "admin.js"];
+const SCRIPTS = ["charters-core.js", "itinerary-core.js", "merge-core.js", "damaged-core.js", "crew-order-core.js", "drag-reorder.js", "admin.js"];
 
 // A stand-in for any DOM object these tests don't check: every property is another stand-in, calling one returns one,
 // writes are ignored.
@@ -49,7 +49,8 @@ function bannerElement(banners, queries = {}) {
 function keepingElement(extras = {}) {
   const kept = { innerHTML: "", textContent: "", className: "", drawn: [], ...extras };
   return new Proxy(kept, {
-    get: (target, prop) => (Object.prototype.hasOwnProperty.call(target, prop) ? target[prop] : standIn()),
+    // _dragReorder is drag-reorder.js's own mark on its container: undefined until attach sets it, not a stand-in
+    get: (target, prop) => (Object.prototype.hasOwnProperty.call(target, prop) || prop === "_dragReorder" ? target[prop] : standIn()),
     set: (target, prop, value) => {
       target[prop] = value;
       if (prop === "innerHTML") target.drawn.push(String(value));
@@ -178,7 +179,7 @@ async function openAdmin(bootstrap, answers, extraElements = {}) {
     removeEventListener: () => {},
     fetch: async (url, options = {}) => {
       const { pathname } = new URL(String(url));
-      requests.push({ method: options.method || "GET", pathname });
+      requests.push({ method: options.method || "GET", pathname, body: options.body });
       const status = statuses[pathname] || 200;
       return { ok: status < 400, status, headers: { get: () => "application/json" }, json: async () => replies[pathname] || {} };
     },
@@ -718,4 +719,93 @@ test("coming back to the tab with a different damage problem redraws the page", 
   await comeBack(page);
   assert.equal(reads(page, "csaba"), before + 1);
   assert.match(page.workspace.innerHTML, /charter\.json is empty\./);
+});
+
+// ---- The remembered crew order (iolanthe-server library/crew-order.json; design 2026-10-10-crew-order-design.md) ----------
+const crewMember = (id, name, department = "Interior") => ({ id, name, department, position: "Stew", description: "" });
+const crewBundle = () => ({ ...bundleWith(DATED), "crew_list.json": { crew: [crewMember("c-1", "Ana"), crewMember("c-2", "Bea"), crewMember("c-3", "Cy")], revision: 1, ...STAMP } });
+const crewOrderOf = (departments, extra = {}) => ({ revision: 2, saved_by: "charter", saved_at: "2026-10-01T00:00:00.000Z", departments, ...extra });
+
+async function openCrew(order, status) {
+  const list = keepingElement();
+  const strip = keepingElement();
+  const answers = charterAnswers(crewBundle(), order ? { "/api/admin/crew-order": order, "/api/admin/crew-order/save": order } : {});
+  const page = await openAdmin(CHARTER_ADMIN, answers, { "crew-editor-list": list, "crew-order-strip": strip });
+  if (status) {
+    page.statuses["/api/admin/crew-order"] = status;
+  }
+  await page.window.IolantheAdmin.showCharterPanel("crew");
+  await settleAll();
+  const rows = page.created.filter(element => /^crew-row/.test(String(element.className)));
+  const names = rows.slice(-3).map(row => /crew-row-name">([^<]*)</.exec(row.innerHTML)[1]);
+  return { page, list, strip, rows: rows.slice(-3), names };
+}
+
+test("Crew draws each department in the remembered order, a grip on every row", { timeout: 5000 }, async () => {
+  const { page, rows, names, strip } = await openCrew(crewOrderOf({ interior: ["cy", "ana"] }));
+  assert.deepEqual(names, ["Cy", "Ana", "Bea"]);
+  assert.ok(rows.every(row => String(row.className).includes("has-grip") && row.innerHTML.includes('class="drag-handle crew-grip"')));
+  assert.equal(strip.innerHTML, "");
+  assert.deepEqual(saves(page.requests), []);
+});
+
+test("Crew with an order that knows no one: file order, so a new member is at the bottom", { timeout: 5000 }, async () => {
+  const { names } = await openCrew(crewOrderOf({}));
+  assert.deepEqual(names, ["Ana", "Bea", "Cy"]);
+});
+
+test("Crew with crew-order.json marked damaged: the crew still show in file order, no grips, a strip, nothing saved", { timeout: 5000 }, async () => {
+  const { page, rows, names, strip } = await openCrew(crewOrderOf({}, { revision: 0, damaged: PROBLEM }));
+  assert.deepEqual(names, ["Ana", "Bea", "Cy"]);
+  assert.ok(rows.every(row => !String(row.className).includes("has-grip") && !row.innerHTML.includes("crew-grip")));
+  assert.match(strip.innerHTML, /crew-order\.json can&#39;t be read\./);
+  assert.match(strip.innerHTML, /crew-order\.json is not valid JSON at line 3 column 5\./);
+  assert.deepEqual(saves(page.requests), []);
+});
+
+test("Crew on a server without the crew order (404): file order, no grips, no strip, nothing saved", { timeout: 5000 }, async () => {
+  const { page, rows, names, strip } = await openCrew(null, 404);
+  assert.deepEqual(names, ["Ana", "Bea", "Cy"]);
+  assert.ok(rows.every(row => !row.innerHTML.includes("crew-grip")));
+  assert.equal(strip.innerHTML, "");
+  assert.deepEqual(saves(page.requests), []);
+});
+
+// The drag-reorder attach() of the department's group: the group is the created element that holds the options.
+const dragOptions = page => page.created.filter(element => Object.prototype.hasOwnProperty.call(element, "_dragReorder")).map(element => element._dragReorder.options);
+
+test("a drag saves the department's new order with the revision it loaded, and only the order", { timeout: 5000 }, async () => {
+  const { page } = await openCrew(crewOrderOf({ interior: ["cy", "ana"] }));
+  const [options] = dragOptions(page);
+  await options.onMove(2, 0);
+  await settleAll();
+  assert.deepEqual(saves(page.requests).map(request => request.pathname), ["/api/admin/crew-order/save"]);
+  assert.deepEqual(JSON.parse(saves(page.requests)[0].body), { departments: { interior: ["bea", "cy", "ana"] }, base_revision: 2 });
+});
+
+test("a drag that finds the order saved by someone else (409) is sent again on their copy, three times at most", { timeout: 5000 }, async () => {
+  const { page } = await openCrew(crewOrderOf({ interior: ["cy", "ana"] }));
+  page.statuses["/api/admin/crew-order/save"] = 409;
+  page.replies["/api/admin/crew-order/save"] = { error: "Someone else saved this", code: "revision", revision: 5, data: crewOrderOf({ interior: ["ana"], galley: ["x"] }, { revision: 5 }) };
+  const [options] = dragOptions(page);
+  await options.onMove(2, 0);
+  await settleAll();
+  const sent = saves(page.requests).map(request => JSON.parse(request.body));
+  assert.equal(sent.length, 3);
+  assert.deepEqual(sent[0].base_revision, 2);
+  assert.deepEqual(sent[1], { departments: { interior: ["bea", "cy", "ana"], galley: ["x"] }, base_revision: 5 });
+});
+
+test("a drag that makes no move saves nothing", { timeout: 5000 }, async () => {
+  const { page } = await openCrew(crewOrderOf({}));
+  const [options] = dragOptions(page);
+  await options.onMove(1, 1);
+  await settleAll();
+  assert.deepEqual(saves(page.requests), []);
+});
+
+test("the member dialog no longer has the Position Order field (a record's old position_order is kept)", () => {
+  const source = fs.readFileSync(path.join(ROOT, "admin.js"), "utf8");
+  assert.equal(source.includes("crew-add-position-order"), false);
+  assert.equal(source.includes("parsePositionOrder"), false);
 });

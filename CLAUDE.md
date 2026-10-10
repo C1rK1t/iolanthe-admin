@@ -85,6 +85,18 @@ white for any body that has it.
   in date. Charter Info uses the shared `admin.css` classes (`.stat-tiles`, `.form-section`, `.status-pill`,
   `.segmented`, gold icon tone), the first slice of the admin style rollout. Galley and Hotel keep their "Select
   Charter" dropdowns.
+- `crew-order-core.js` — the remembered crew order (captain item 09), pure, also a Node module (`window.IolantheCrewOrder`): a
+  mirror of the server's `lib/crew-order.js` (`keyOf`, `compareWithinDepartment`, `reorderDepartment`, `normalizeOrder`,
+  `sequenceOf`), both tested against `test/fixtures/crew-order-cases.json` (a copy of the server's). The Crew page loads
+  `GET /api/admin/crew-order` (`loadCrewOrder`) and shows each department in that order: the names it knows first, in its
+  order, then the rest in file order, so a new or imported member is at the bottom of their department in every charter.
+  Each row has a grip (`bindCrewGroupReorder`: `IolantheDragReorder` per department group, so a drag never leaves its
+  department); a drag saves `POST /api/admin/crew-order/save` with the revision the page loaded (`saveCrewOrderMove`), and a
+  409 applies the same drag to their copy and sends again (3 rounds; lists of names are not merged). Never saved through
+  `crew_list.json`. A damaged `crew-order.json` shows a strip and no grips (the crew still show and edit); a server without
+  it (404) or a failed load shows no grips. It is in the freshness check. Needs the server release with the endpoints
+  (iolanthe-server#23). The member dialog no longer has Position Order (an old `position_order` still sorts the names the
+  order does not know).
 - `drag-reorder.js` — drag to reorder with a grip (pointer events, so it works on touch, plus the arrow keys on the
   focused grip), `window.IolantheDragReorder.attach(container, { items, handleSelector, onMove, afterMove })`; it
   replaces the Move up / Move down pairs (style rollout B: Galley Menus first). `moveItem` / `dropIndex` are pure.
@@ -131,9 +143,9 @@ white for any body that has it.
   - A server without the marker simply lacks the marker-driven behaviour above. Three things changed for every server:
     the anchorages save waits for its load, the menu import reads the source before the overwrite question, and the
     pack cover upload goes through `throwAdminApiError` (login handling and the banner).
-- `node --test` runs the tests in `test/` (263 tests), which cover `routes-core`, `itinerary-core`, `charters-core`,
-  `guest-preview-core`, `pack-core`, `pack-render`, `drag-reorder`, `merge-core`, `damaged-core`, the damaged-file
-  pages (`damaged-page.test.js`, `admin.js` in a `vm` sandbox), the anchorages save guard
+- `node --test` runs the tests in `test/` (278 tests), which cover `routes-core`, `itinerary-core`, `charters-core`,
+  `guest-preview-core`, `pack-core`, `pack-render`, `drag-reorder`, `merge-core`, `damaged-core`, `crew-order-core`, the damaged-file
+  pages and the Crew page's order (`damaged-page.test.js`, `admin.js` in a `vm` sandbox), the anchorages save guard
   (`routes-places-guard.test.js`), the startup order (`startup-order.test.js` runs `admin.js` alone in a `vm` sandbox),
   the refused-access card (`refused-access.test.js`, the same sandbox) and the Settings panels
   (`settings-panels.test.js`, the same sandbox)

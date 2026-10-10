@@ -1761,14 +1761,27 @@ label.switch-row {
 button.crew-row:hover,
 button.crew-row:focus,
 button.site-row:hover,
-button.site-row:focus {
+button.site-row:focus,
+.crew-row[role="button"]:hover {
   background: #e8eef0;
 }
 
+.crew-row[role="button"] {
+  cursor: pointer;
+}
+
 button.crew-row:focus-visible,
-button.site-row:focus-visible {
+button.site-row:focus-visible,
+.crew-row:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
+}
+
+/* A crew row with a grip (drag-reorder.js): the grip is the first column */
+.crew-row.has-grip {
+  grid-template-columns: 28px minmax(var(--crew-name-column-width, 12ch), max-content) minmax(0, 1fr) minmax(0, 18rem) 20px;
+  column-gap: 0.7rem;
+  padding-left: 0.3rem;
 }
 
 .crew-row-name {
@@ -1810,6 +1823,23 @@ button.site-row:focus-visible {
   .crew-row-chevron {
     grid-column: 2;
     grid-row: 1 / span 3;
+  }
+
+  .crew-row.has-grip {
+    grid-template-columns: 28px minmax(0, 1fr) 20px;
+  }
+
+  .crew-row.has-grip > :not(.crew-row-chevron):not(.drag-handle) {
+    grid-column: 2;
+  }
+
+  .crew-row.has-grip > .drag-handle {
+    grid-column: 1;
+    grid-row: 1 / span 3;
+  }
+
+  .crew-row.has-grip > .crew-row-chevron {
+    grid-column: 3;
   }
 
   .crew-row-note:empty {
