@@ -457,3 +457,32 @@ test("a save the server refuses for a damaged file shows one banner, and the sam
   assert.equal(page.banners.length, 1);
   assert.equal(page.banners[0], first);
 });
+
+test("the admin exposes the damaged-notice helpers the other pages call", async () => {
+  const page = await openAdmin(CHARTER_ADMIN, charterAnswers(bundleWith(DATED)));
+  const admin = page.window.IolantheAdmin;
+  for (const name of ["damagedNoticeHtml", "bindDamagedNotice", "showDamagedStrip", "throwAdminApiError"]) {
+    assert.equal(typeof admin[name], "function", name);
+  }
+  const html = admin.damagedNoticeHtml([{ file: "<b>x", problem: "p" }], { embedded: true });
+  assert.equal(typeof html, "string");
+  assert.ok(html.includes("damaged-notice"));
+  assert.ok(html.includes("&lt;b&gt;x"));
+  assert.ok(!html.includes("<b>x"));
+});
+
+test("a different refusal replaces the banner: still exactly one, and a new element", async () => {
+  const page = await openAdmin(CHARTER_ADMIN, charterAnswers(bundleWith(DATED)));
+  page.statuses["/api/admin/sites/save"] = 500;
+  const refuse = problem => { page.replies["/api/admin/sites/save"] = { error: `sites.json ${problem}`, code: "damaged", file: "sites.json", damaged: problem }; };
+  const library = () => ({ sites: [{ id: "coron", title: "Coron", latitude: 11.9975, longitude: 120.201 }] });
+  refuse("is empty");
+  await assert.rejects(page.window.IolantheAdmin.saveSitesLibrary(library(), "Site saved."), { status: 500 });
+  const first = page.banners[0];
+
+  refuse("is not valid JSON at line 2 column 1");
+  await assert.rejects(page.window.IolantheAdmin.saveSitesLibrary(library(), "Site saved."), { status: 500 });
+  assert.equal(page.banners.length, 1);
+  assert.notEqual(page.banners[0], first);
+  assert.match(page.banners[0].innerHTML, /not valid JSON/);
+});
