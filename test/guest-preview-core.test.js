@@ -62,10 +62,10 @@ test("defaultStepIndex, stepIndexForDay, stepIndexForDate", () => {
 });
 
 test("previewUrl: encoded params, only a plain tab id kept", () => {
-  assert.equal(core.previewUrl({ date: "2026-11-03", charterId: "csaba", hash: "#itinerary" }), "/?preview=2026-11-03&charter=csaba#itinerary");
-  assert.equal(core.previewUrl({ date: "2026-11-03", charterId: "csaba", hash: "" }), "/?preview=2026-11-03&charter=csaba");
-  assert.equal(core.previewUrl({ date: "2026-11-03", charterId: "a b", hash: "#x\"><img" }), "/?preview=2026-11-03&charter=a%20b");
-  assert.equal(core.previewUrl({ date: "2026-11-03", charterId: "csaba", hash: "#custom_tab-2" }), "/?preview=2026-11-03&charter=csaba#custom_tab-2");
+  assert.equal(core.previewUrl({ date: "2026-11-03", charterId: "csaba", hash: "#itinerary" }), "/index.html?preview=2026-11-03&charter=csaba#itinerary");
+  assert.equal(core.previewUrl({ date: "2026-11-03", charterId: "csaba", hash: "" }), "/index.html?preview=2026-11-03&charter=csaba");
+  assert.equal(core.previewUrl({ date: "2026-11-03", charterId: "a b", hash: "#x\"><img" }), "/index.html?preview=2026-11-03&charter=a%20b");
+  assert.equal(core.previewUrl({ date: "2026-11-03", charterId: "csaba", hash: "#custom_tab-2" }), "/index.html?preview=2026-11-03&charter=csaba#custom_tab-2");
 });
 
 test("fitScale: fits width and height, never above 1, phone by default", () => {
