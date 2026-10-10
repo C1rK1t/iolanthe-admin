@@ -311,3 +311,10 @@ test("newId and withSlotIds mirror the server", () => {
   assert.deepEqual(core.withSlotIds([{}, { id: "g-slot-1" }]).map((g) => g.id), ["g-slot-2", "g-slot-1"]);
   assert.equal(guests[1].id, undefined);
 });
+
+test("the server's damaged marker is never merged in or counted as a change (SC-D16)", () => {
+  const result = core.merge3({ name: "A" }, { name: "A", damaged: "is empty" }, { name: "A", revision: 2, saved_by: "hotel", saved_at: "2026-11-03T06:02:00.000Z" }, {});
+  assert.equal("damaged" in result.merged, false);
+  assert.equal("damaged" in result.rebased, false);
+  assert.deepEqual(core.changedFields({ name: "A", damaged: "is empty" }, { name: "A" }), []);
+});

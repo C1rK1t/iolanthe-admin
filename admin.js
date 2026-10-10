@@ -9,7 +9,7 @@
     storedActiveCharter: "",
     forcedCharter: "",
     todayOffsetDays: 0,
-    reservedPeriods: { revision: 0, periods: [] },
+    reservedPeriods: { revision: 0, periods: [], damaged: "" },   // damaged: spec C §4.6, the server's problem or ""
     ganttZoom: "quarter",   // captain R3-3: three months by default
     gantt: null,
     ganttOpen: false,       // R3-5: the band has been expanded over a page other than Charter Admin (reset on every charter render)
@@ -158,7 +158,7 @@
     const contentType = response.headers.get("content-type") || "";
     const payload = contentType.includes("application/json") ? await response.json() : await response.text();
     if (!response.ok) {
-      throwAdminApiError(response, payload, "Request failed");
+      throwAdminApiError(response, payload, "Request failed", options && options.method);
     }
     markAdminSessionActivityFromClient(path);
     return payload;
@@ -230,13 +230,14 @@
     const contentType = response.headers.get("content-type") || "";
     const payload = contentType.includes("application/json") ? await response.json() : await response.text();
     if (!response.ok) {
-      throwAdminApiError(response, payload, "Image upload failed");
+      throwAdminApiError(response, payload, "Image upload failed", "POST");
     }
     markAdminSessionActivityFromClient("/api/admin/sites/images/upload");
     return payload;
   }
 
-  function throwAdminApiError(response, payload, fallbackMessage) {
+  // method: the request's. A refusal of a damaged file (spec C §4.6) on anything but a GET also shows the banner.
+  function throwAdminApiError(response, payload, fallbackMessage, method = "GET") {
     const message = payload && payload.error ? payload.error : String(payload || fallbackMessage);
     if (response.status === 401 && message === "Login required") {
       showOnboardingForLoginRequired();
@@ -247,6 +248,10 @@
     const error = new Error(message);
     error.status = response.status;
     error.payload = payload;
+    const refused = String(method || "GET").toUpperCase() !== "GET" ? damagedCore().refusal(error) : null;
+    if (refused) {
+      showDamagedBanner(refused);
+    }
     throw error;
   }
 
@@ -1660,7 +1665,8 @@
       const data = await api("/api/admin/reserved-periods");
       state.reservedPeriods = {
         revision: Number.isInteger(data && data.revision) ? data.revision : 0,
-        periods: Array.isArray(data && data.periods) ? data.periods : []
+        periods: Array.isArray(data && data.periods) ? data.periods : [],
+        damaged: damagedCore().damagedIn(data)
       };
     } catch (error) {
       setStatus(error.message, "error");
@@ -3061,6 +3067,15 @@
     return Object.prototype.hasOwnProperty.call(seenRevisions, file) ? seenRevisions[file] : null;
   }
 
+  // What the page saw of a file's damage (spec C §4.6): its problem, "" when it read fine, null when it has not loaded it.
+  function knownDamageOf(file, charterId) {
+    const bundle = state.bundle && state.bundle.charter_id === charterId ? state.bundle : null;
+    if (bundle && bundle[file]) {
+      return damagedCore().damagedIn(bundle[file]);
+    }
+    return Object.prototype.hasOwnProperty.call(seenDamage, file) ? seenDamage[file] : null;
+  }
+
   async function checkFreshness() {
     const section = state.selectedSection;
     const files = ((FRESHNESS_PANEL_FILES[section] || {})[state.sectionPanels[section]]) || [];
@@ -3077,8 +3092,14 @@
       const stamps = await response.json();
       const served = { ...(stamps.library || {}), ...(stamps.charter || {}) };
       const moved = files.some(file => {
+        const now = served[file];
+        if (!now) {
+          return false;
+        }
         const known = knownRevision(file, charterId);
-        return known !== null && served[file] && served[file].revision !== known;
+        const seen = knownDamageOf(file, charterId);
+        // A revision someone else saved, or a file fixed or broken since the page drew it (SC-D16's damaged on the stamp).
+        return (known !== null && now.revision !== known) || (seen !== null && damagedCore().damagedIn(now) !== seen);
       });
       if (moved && !busy() && state.selectedSection === section && state.selectedCharter === charterId) {
         await ({ charter: renderCharter, galley: renderGalley, hotel: renderHotel })[section]();
@@ -3505,6 +3526,7 @@
     const served = await api("/api/admin/sites");
     sitesBase = cloneData(served);
     seenRevisions["sites.json"] = mergeCore().revisionOf(served);
+    seenDamage["sites.json"] = damagedCore().damagedIn(served);
     const siteLibrary = normalizeSiteLibrary(served);
     state.sites = siteLibrary.sites;
     return siteLibrary;
@@ -3936,6 +3958,15 @@
     return charter && (charter.name || charter.id) ? (charter.name || charter.id) : "Charter";
   }
 
+  // Spec C 4.6: "" when the source charter's file reads fine, else the picker's refusal text for it.
+  function damagedSourceMessage(bundle, file, sourceCharters, id) {
+    if (!damagedCore().damagedIn(bundle[file])) {
+      return "";
+    }
+    const source = sourceCharters.find(charter => charter.id === id);
+    return damagedCore().pickerMessage(charterDisplayLabel(source || { id }), file);
+  }
+
   function suggestionValuesFrom(value, splitList) {
     if (Array.isArray(value)) {
       return value.flatMap(entry => suggestionValuesFrom(entry, splitList));
@@ -4328,6 +4359,14 @@
       errorField.textContent = "";
       try {
         const bundle = await api(`/api/admin/charter/${encodeURIComponent(selected.value)}`);
+        // Spec C §4.6: a source crew list the server can't read is not taken for an empty one. The refusal goes to the
+        // modal's error field only: a status line behind a modal is noise, so don't "fix" the asymmetry with the catch block.
+        const refused = damagedSourceMessage(bundle, "crew_list.json", sourceCharters, selected.value);
+        if (refused) {
+          errorField.textContent = refused;
+          importButton.disabled = false;
+          return;
+        }
         const sourceCrewList = normalizeCrewEditorList(bundle["crew_list.json"]);
         const imported = importedCrewMembers(crewList, sourceCrewList);
         if (!imported.length) {
@@ -4641,6 +4680,7 @@
     const normalized = validateSiteLibrary(siteLibrary);
     const result = await saveRevisioned({
       path: "/api/admin/sites/save",
+      file: "sites.json",
       schema: "sites",
       base: () => sitesBase,
       mine: normalized,
@@ -4654,6 +4694,7 @@
     const served = result.ok ? result.saved : result.theirs;
     sitesBase = cloneData(served);
     seenRevisions["sites.json"] = mergeCore().revisionOf(served);
+    seenDamage["sites.json"] = damagedCore().damagedIn(served);
     const normalizedSaved = normalizeSiteLibrary(served);
     siteLibrary.sites = normalizedSaved.sites;
     state.sites = normalizedSaved.sites;
@@ -5027,7 +5068,9 @@
       const nights = core.nights({ start_date: startInput.value, end_date: endInput.value });
       modal.querySelector("#new-charter-nights").textContent = nights === null ? "" : `${nights} ${nights === 1 ? "night" : "nights"}`;
       const clashes = core.findOverlaps({ id: "", start_date: startInput.value, end_date: endInput.value }, core.overlapEntries(state.charters, state.reservedPeriods.periods), "charter");
-      const message = dateOrderMessage(core, { start_date: startInput.value, end_date: endInput.value }) || (clashes.length ? `${core.overlapMessage(clashes)}. Choose other dates.` : "");
+      const range = { start_date: startInput.value, end_date: endInput.value };
+      const message = dateOrderMessage(core, range) || charterDatesHeldMessage(core, range, {})
+        || (clashes.length ? `${core.overlapMessage(clashes)}. Choose other dates.` : "");
       modal.querySelector("#new-charter-overlap").textContent = message;
       modal.querySelector("#create-charter-submit").disabled = Boolean(message);
     };
@@ -5155,6 +5198,12 @@
       setStatus("Only Charter Admin on Bridge can edit reserved periods.", "error");
       return;
     }
+    if (state.reservedPeriods.damaged) {
+      // Spec C §4.6: the editor would start from no periods, and its save would be refused.
+      const text = damagedCore().stripText("reserved-periods.json", state.reservedPeriods.damaged);
+      showAdminMessage({ title: "Reserved periods", message: `${text.lead} ${text.rest}`, tone: "danger" });
+      return;
+    }
     const core = window.IolantheChartersCore;
     const existing = periodId ? state.reservedPeriods.periods.find(period => period.id === periodId) : null;
     const period = existing || { id: "", type: "maintenance", title: "", start_date: "", end_date: "", description: "" };
@@ -5255,7 +5304,7 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ periods, base_revision: state.reservedPeriods.revision })
       });
-      state.reservedPeriods = { revision: saved.revision, periods: Array.isArray(saved.periods) ? saved.periods : [] };
+      state.reservedPeriods = { revision: saved.revision, periods: Array.isArray(saved.periods) ? saved.periods : [], damaged: "" };
       refreshCharterGantt();
       return true;
     } catch (error) {
@@ -6618,6 +6667,15 @@
       : "";
   }
 
+  // Spec C §4.6: while reserved-periods.json can't be read, dates that differ from the stored ones can't be checked
+  // against the periods, so they wait with this message. Mirrors the server's S3 refusal, so the form says it before
+  // the save does. "" otherwise.
+  function charterDatesHeldMessage(core, candidate, stored) {
+    const changed = String(candidate.start_date || "") !== String(stored.start_date || "")
+      || String(candidate.end_date || "") !== String(stored.end_date || "");
+    return state.reservedPeriods.damaged && changed && core.nights(candidate) !== null ? damagedCore().DATES_MESSAGE : "";
+  }
+
   // Spec-charters §4: the live overlap check. Returns the message ("" when clear) and toggles Save.
   function syncCharterInfoOverlap() {
     const core = window.IolantheChartersCore;
@@ -6628,7 +6686,9 @@
     }
     const candidate = { id: state.selectedCharter, start_date: document.getElementById("charter-info-start-date").value, end_date: document.getElementById("charter-info-end-date").value };
     const clashes = core.findOverlaps(candidate, core.overlapEntries(state.charters, state.reservedPeriods.periods), "charter");
-    const message = dateOrderMessage(core, candidate) || (clashes.length ? `${core.overlapMessage(clashes)}. Choose other dates.` : "");
+    const stored = state.bundle && state.bundle["charter.json"] ? state.bundle["charter.json"] : {};
+    const message = dateOrderMessage(core, candidate) || charterDatesHeldMessage(core, candidate, stored)
+      || (clashes.length ? `${core.overlapMessage(clashes)}. Choose other dates.` : "");
     warning.textContent = message;
     if (save) {
       save.disabled = Boolean(message);
@@ -6696,14 +6756,16 @@
       startDirty: Boolean(infoClash),
       readState: () => readCharterInfoForm(charterInfo),
       save: async () => {
-        if (syncCharterInfoOverlap()) {
-          throw new Error("These dates overlap another charter or a reserved period.");
+        const overlap = syncCharterInfoOverlap();
+        if (overlap) {
+          throw new Error(overlap === damagedCore().DATES_MESSAGE ? overlap : "These dates overlap another charter or a reserved period.");
         }
         Object.assign(charterInfo, readCharterInfoForm(charterInfo));
         // Not saveCharterFile(): its catch would swallow the server's message, and the controller needs the throw to keep the form dirty.
         const result = await saveRevisioned({
           path: `/api/admin/charter/${encodeURIComponent(state.selectedCharter)}/save`,
           queue: `${state.selectedCharter}/charter.json`,
+          file: "charter.json",
           schema: "charter",
           base: () => (state.bundle && state.bundle["charter.json"] ? state.bundle["charter.json"] : {}),
           mine: charterInfo,
@@ -6984,8 +7046,17 @@
       state.charterContext = { charterId: state.selectedCharter, charter: charterInfo, itinerary, siteLibrary };
       const guestList = normalizeGuestList(bundle["guest_list.json"]);
       const crewList = normalizeCrewEditorList(bundle["crew_list.json"]);
+      // Spec C §4.6: the notice instead of a page that needs a file the server can't read. Route & Itinerary needs this
+      // charter's files only on this charter's route; the library routes stay usable. The Charter Pack checks its own.
+      const blocked = activePanel === "routes" && state.routesSubject !== "charter" ? [] : pageDamage("charter", activePanel);
+      if (blocked.length) {
+        state.charterInfoClash = null;
+        paint(reservedPeriodsStripHtml() + damagedNoticeHtml(blocked, { libraryRoutes: activePanel === "routes" }));
+        bindDamagedNotice(els.workspace);
+        return;
+      }
       const content = charterPanelContent(activePanel, charterInfo, itinerary, guestList, crewList, siteLibrary);
-      paint(content);
+      paint(reservedPeriodsStripHtml() + content);
       bindCharterPanel(activePanel, charterInfo, itinerary, guestList, crewList, siteLibrary);
     } catch (error) {
       setStatus(error.message, "error");
@@ -7025,6 +7096,10 @@
       // The same guest-count adjustment as Hotel → Guests, so both show the same active guests
       const guestList = normalizeGuestListForCount(bundle["guest_list.json"], charterInfo.guest_count);
       const itinerary = bundle["itinerary.json"] || {};
+      // Spec C §4.6: the notice instead of the page, before the menu sync. 0 days from a damaged charter.json would make
+      // every filled day inactive and save that.
+      const blocked = pageDamage("galley", activePanel);
+      if (drawDamagedPage("galley", galleyPanelsForGuestList(guestList), activePanel, blocked, renderGalley)) return;
       const activeItineraryDayCount = window.IolantheItineraryCore
         ? window.IolantheItineraryCore.charterDayCount(charterInfo)
         : charterDurationDays(charterInfo);
@@ -8136,19 +8211,28 @@
         return;
       }
       const sourceCharter = sourceCharters.find(charter => charter.id === selected.value);
-      if (!await showAdminConfirm({
-        title: "Import Menu",
-        message: "Importing this menu will overwrite the current charter menu data.",
-        confirmLabel: "Import",
-        cancelLabel: "Cancel",
-        tone: "warning"
-      })) {
-        return;
-      }
       importButton.disabled = true;
       errorField.textContent = "";
       try {
+        // Spec C §4.6: the source is read before the overwrite question, and one whose menus.json the server can't read
+        // is refused (it used to replace this charter's menus with blank days).
         const bundle = await api(`/api/admin/charter/${encodeURIComponent(selected.value)}`);
+        const refused = damagedSourceMessage(bundle, "menus.json", sourceCharters, selected.value);
+        if (refused) {
+          errorField.textContent = refused;
+          importButton.disabled = false;
+          return;
+        }
+        if (!await showAdminConfirm({
+          title: "Import Menu",
+          message: "Importing this menu will overwrite the current charter menu data.",
+          confirmLabel: "Import",
+          cancelLabel: "Cancel",
+          tone: "warning"
+        })) {
+          importButton.disabled = false;
+          return;
+        }
         const nextMenus = importedMenusForItinerary(bundle["menus.json"], itineraryDayCount);
         const saved = await saveMenusAndRender(
           nextMenus,
@@ -8811,6 +8895,7 @@
   async function saveLibraryCopy({ path, file, schema, workingCopy, mine, normalize, adopt, label, successMessage, options }) {
     const result = await saveRevisioned({
       path,
+      file,
       schema,
       base: () => libraryBases.get(workingCopy) || {},
       mine,
@@ -14197,6 +14282,12 @@
       const availableDrinkStocks = activePanel === "available-alcohol" ? await loadDrinkStocks() : null;
       const availableAlcohol = activePanel === "available-alcohol" ? await loadAvailableAlcohol(state.selectedCharter) : null;
       const purchases = activePanel === "purchased-alcohol" ? await loadCharterAlcoholPurchases(state.selectedCharter) : null;
+      if (activePanel === "purchased-alcohol") {
+        await noteRevisionDamage(state.selectedCharter, ["drink-stocks.json", "available-alcohol.json"]);
+      }
+      // Spec C §4.6: the notice instead of a page that needs a file the server can't read.
+      const blocked = pageDamage("hotel", activePanel);
+      if (drawDamagedPage("hotel", panels, activePanel, blocked, renderHotel)) return;
       let content = "";
       if (activePanel === "guests") {
         content = renderGuestsPanel({
@@ -14354,6 +14445,7 @@
   // base is kept per working copy (libraryBases): the drink stock picker loads its own copy while a page holds an older
   // one. After a clash the working copy holds theirs, so a stale copy is never sent with the new revision.
   const mergeCore = () => window.IolantheMerge;
+  const damagedCore = () => window.IolantheDamaged;
   const CHARTER_FILE_SCHEMAS = Object.freeze({
     "charter.json": "charter",
     "crew_list.json": "crew",
@@ -14379,11 +14471,150 @@
   // The revision of each library file (and available-alcohol.json, which is not in the bundle) last loaded or saved,
   // for the freshness check on tab focus (§4.4).
   const seenRevisions = {};
+  // Spec C §4.6: what each library file's (and Available Alcohol's) last load said of its damage: the problem, or "".
+  const seenDamage = {};
 
   function rememberLibraryBase(workingCopy, served, file) {
     libraryBases.set(workingCopy, cloneData(served));
     seenRevisions[file] = mergeCore().revisionOf(served);
+    seenDamage[file] = damagedCore().damagedIn(served);
     return workingCopy;
+  }
+
+  // ---- A file the server can't read (spec C §4.6, SC-D16) ---------------------------------------------------------
+  // Its GET marks it `damaged` (the bundle on each file's object, a single-file GET at its top level), and a save over it
+  // is refused with {code: "damaged", file, damaged}. A page that needs such a file (damaged-core.js PAGE_FILES) draws
+  // the notice instead of its editor, before any editor or auto-save is bound.
+
+  // The files the open page needs that this render's loads found damaged: [{file, problem}] in the page's order.
+  function pageDamage(section, panel) {
+    return damagedCore().pageDamage(section, panel, { ...seenDamage, ...damagedCore().bundleDamage(state.bundle) });
+  }
+
+  // The card a page shows instead of its editor. options.embedded: inside another card (the Route planner, the Charter
+  // Pack). options.libraryRoutes: the Route page's way to the library routes, which don't use this charter's files.
+  function damagedNoticeHtml(list, options = {}) {
+    const text = damagedCore().noticeText(list);
+    const tag = options.embedded ? "div" : "section";
+    return `
+      <${tag} class="${options.embedded ? "" : "card full "}damaged-notice" role="alert">
+        <h2>${escapeHtml(text.heading)}</h2>
+        <p>${escapeHtml(text.body)}</p>
+        ${text.details.length ? `<ul class="damaged-details">${text.details.map(line => `<li>${escapeHtml(line)}</li>`).join("")}</ul>` : ""}
+        <div class="button-row">
+          ${iconButtonHtml("refresh", "Try again", " data-damaged-retry")}
+          ${options.libraryRoutes ? `<button type="button" data-damaged-library-routes>Work on the library routes</button>` : ""}
+        </div>
+      </${tag}>
+    `;
+  }
+
+  // Try again draws the page again; "Work on the library routes" opens the Route page's library subject.
+  function bindDamagedNotice(container) {
+    container.querySelectorAll("[data-damaged-retry]").forEach(button => button.addEventListener("click", () => renderSection()));
+    container.querySelectorAll("[data-damaged-library-routes]").forEach(button => button.addEventListener("click", () => showCharterPanel("routes", { subject: "library" })));
+  }
+
+  // Draws the notice instead of the page when one of its files can't be read; true when it did, so the renderer returns.
+  function drawDamagedPage(section, panels, activePanel, blocked, rerender) {
+    if (!blocked.length) {
+      return false;
+    }
+    els.workspace.innerHTML = sectionShell(section, panels, activePanel, damagedNoticeHtml(blocked), sectionToolbarHtml(section));
+    bindSectionNav(section, rerender);
+    bindSectionToolbar(section, rerender);
+    bindDamagedNotice(els.workspace);
+    return true;
+  }
+
+  // A save refused because its file can't be read: it broke after the page loaded, or the page loaded it damaged. The
+  // banner goes at the top of the open page (under the band, the charter selector and any strip), replacing an earlier
+  // one for a different refusal (the same refusal again, as an autosaving page makes on every keystroke, leaves the
+  // banner alone). What was typed stays on screen; Reload draws the page again, after the usual question when there are
+  // unsaved changes.
+  function showDamagedBanner(refused) {
+    const content = els.workspace.querySelector(".section-content");
+    if (!content) {
+      return;
+    }
+    const file = String(refused.file);
+    const problem = String(refused.problem);
+    const earlier = Array.from(content.querySelectorAll(":scope > .damaged-banner"));
+    if (earlier.some(old => old.getAttribute("data-damaged-file") === file && old.getAttribute("data-damaged-problem") === problem)) {
+      return;
+    }
+    earlier.forEach(old => old.remove());
+    const text = damagedCore().bannerText(refused.file, refused.problem);
+    const banner = document.createElement("div");
+    banner.className = "damaged-banner";
+    banner.setAttribute("data-damaged-file", file);
+    banner.setAttribute("data-damaged-problem", problem);
+    banner.setAttribute("role", "alert");
+    banner.innerHTML = `
+      <div class="damaged-text">
+        <p><strong>${escapeHtml(text.lead)}</strong> ${escapeHtml(text.rest)}</p>
+        ${text.detail ? `<p class="damaged-detail">${escapeHtml(text.detail)}</p>` : ""}
+      </div>
+      ${iconButtonHtml("refresh", "Reload this page", " data-damaged-reload")}
+    `;
+    const top = Array.from(content.children).find(child => !child.matches(".charter-gantt-host, .section-toolbar, .damaged-strip"));
+    content.insertBefore(banner, top || null);
+    banner.querySelector("[data-damaged-reload]").addEventListener("click", async () => {
+      if (await confirmDiscardPageChanges()) {
+        renderSection();
+      }
+    });
+  }
+
+  // What a save gets when its page loaded the file damaged (saveRevisioned): the banner, and an error shaped like the
+  // server's 500 for a damaged file.
+  function damagedBaseError(file, problem) {
+    showDamagedBanner({ file, problem });
+    const text = damagedCore().bannerText(file, problem);
+    const error = new Error(`${text.lead} ${text.rest}`);
+    error.status = 500;
+    error.payload = { error: error.message, code: "damaged", file, damaged: problem };
+    return error;
+  }
+
+  // A one-line notice above a page that otherwise works (spec C §4.6): reserved periods, anchorages.
+  function damagedStripHtml(file, problem) {
+    const text = damagedCore().stripText(file, problem);
+    return `
+      <div class="damaged-strip" role="status">
+        <div class="damaged-text">
+          <p><strong>${escapeHtml(text.lead)}</strong> ${escapeHtml(text.rest)}</p>
+          ${text.detail ? `<p class="damaged-detail">${escapeHtml(text.detail)}</p>` : ""}
+        </div>
+      </div>
+    `;
+  }
+
+  // Under the Gantt band on every Charter page while reserved-periods.json can't be read.
+  function reservedPeriodsStripHtml() {
+    return state.reservedPeriods.damaged ? damagedStripHtml("reserved-periods.json", state.reservedPeriods.damaged) : "";
+  }
+
+  // Purchased Alcohol loads neither the drink stocks nor Available Alcohol, so it reads their state from the revisions,
+  // whose stamps carry `damaged` (SC-D16).
+  // Fails open, like checkFreshness: if the revisions can't be read, the entries for these files are dropped (an earlier
+  // load's "damaged" must not keep blocking the page) and it draws as it did before this check existed; the server
+  // refuses a save over a damaged file anyway.
+  async function noteRevisionDamage(charterId, files) {
+    let stamps;
+    try {
+      stamps = await api(`/api/admin/revisions?charter=${encodeURIComponent(charterId)}`);
+    } catch (error) {
+      console.warn("Could not read the file revisions to check for damaged files:", error);
+      files.forEach(file => {
+        delete seenDamage[file];
+      });
+      return;
+    }
+    const served = { ...(stamps && stamps.library), ...(stamps && stamps.charter) };
+    files.forEach(file => {
+      seenDamage[file] = damagedCore().damagedIn(served[file]);
+    });
   }
 
   const saveQueues = new Map();
@@ -14392,7 +14623,14 @@
   // merged, rebased, savedBy, savedAt }. Any other error is thrown. Saves of one file (queue) run one at a time, so a
   // second quick save (two drags) starts from the first one's result instead of clashing with it: base is a function,
   // read when this save's turn comes, and mine is copied now.
-  function saveRevisioned({ path, queue, schema, base, mine, normalize, wrap, unwrap }) {
+  // file is the file's name, for the damaged-copy refusal below.
+  function saveRevisioned({ path, queue, schema, base, mine, normalize, wrap, unwrap, file }) {
+    // Spec C §4.6: a page never saves a file it loaded while the file was damaged, not even once it is repaired. A
+    // repaired file at revision 0 would pass the server's revision check, and this page's copy was made from the defaults.
+    const problem = damagedCore().damagedIn(base());
+    if (problem) {
+      return Promise.reject(damagedBaseError(file, problem));
+    }
     const snapshot = cloneData(mine);
     const atQueue = cloneData(base());
     const key = queue || path;
@@ -14572,6 +14810,7 @@ ${text}` : text;
       const result = await saveRevisioned({
         path: `/api/admin/charter/${encodeURIComponent(charterId)}/save`,
         queue: `${charterId}/${file}`,
+        file,
         schema: CHARTER_FILE_SCHEMAS[file] || "charter",
         base: () => (state.bundle && state.bundle[file] ? state.bundle[file] : {}),
         mine: data,
@@ -14715,10 +14954,26 @@ ${text}` : text;
   });
   els.resetSessionButton.addEventListener("click", resetSessionForDevelopment);
 
-  // Helpers for panels that live in their own files (routes.js). Read-only; add to it only what those files need.
+  // A strip at the top of a part of the page that otherwise works (the Route panel while anchorages.json can't be read),
+  // after its header, replacing an earlier one.
+  function showDamagedStrip(container, file, problem) {
+    container.querySelectorAll(":scope > .damaged-strip").forEach(old => old.remove());
+    const holder = document.createElement("div");
+    holder.innerHTML = damagedStripHtml(file, problem);
+    const header = container.querySelector(":scope > .card-header");
+    if (header) {
+      header.after(holder.firstElementChild);
+    } else {
+      container.prepend(holder.firstElementChild);
+    }
+  }
+
+  // Helpers for panels that live in their own files (routes.js); add only what they need. Not all are read-only:
+  // throwAdminApiError shows the banner and handles the login redirect.
   window.IolantheAdmin = Object.freeze({
     api,
     apiUrl,
+    throwAdminApiError, // used by charter-pack.js
     setStatus,
     escapeHtml,
     showAdminConfirm,
@@ -14730,7 +14985,10 @@ ${text}` : text;
     saveSitesLibrary,
     normalizeSiteLibrary,
     showCharterPanel,
-    getCharterContext
+    getCharterContext,
+    damagedNoticeHtml,
+    bindDamagedNotice,
+    showDamagedStrip
   });
 
   // Start on DOMContentLoaded, once every deferred script has run: the first render reads modules that load after this

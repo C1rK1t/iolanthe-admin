@@ -722,5 +722,7 @@ save could undo it. Spec: [spec-c.md](spec-c.md). Mockup `.superpowers/brainstor
   with what was edited from the defaults. Rule (spec C §2.2): a save of a file that is there but does not parse answers
   500 "<file> can't be read. Fix or restore it before saving." before the revision check, and writes nothing; its GET
   still answers with the defaults at revision 0 plus `damaged` (the problem, never the file's text), and
-  `GET /api/admin/revisions` adds `damaged` to the stamp. What the admin shows for a damaged file is not specified
-  yet (§4). Not built yet.
+  `GET /api/admin/revisions` adds `damaged` to the stamp. Server side: iolanthe-server#16. What the admin shows for a
+  damaged file: §4.6 and its design,
+  [The admin says when a file can't be read](../superpowers/specs/2026-10-10-damaged-file-notice-design.md)
+  (2026-10-10, approved by David).

@@ -246,6 +246,13 @@ Shared classes in `admin.css`: `.clash-banner` (amber, as the reserved-period wa
 `.field-theirs`, with the existing `.status-pill` department colours for the pill. No new buttons; the Route-panel
 icon buttons and D7's "little text" rule hold. Every time shown is 24-hour (R3b-2).
 
+### 4.6 A damaged file (SC-D16)
+
+A page that needs a file its GET marks `damaged` shows a notice instead of its editor and runs none of its auto-saves.
+A save refused for a damaged file shows a banner at the top of the page. The design, including the files outside spec C
+(the itinerary, the pack, reserved periods, the route library) and the server's part:
+[The admin says when a file can't be read](../superpowers/specs/2026-10-10-damaged-file-notice-design.md) (2026-10-10).
+
 ---
 
 ## 5. Out of scope

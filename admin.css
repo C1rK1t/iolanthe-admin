@@ -14,6 +14,8 @@
   --ok: #28724c;
   --warn: #9a6400;
   --warn-bg: #fff4dc;
+  --error-border: #f0b8b1;
+  --error-bg: #f7e3e1;
   --shadow: 0 12px 30px rgba(16, 32, 40, 0.18);
   --admin-icon-button-size: 40px;
   --admin-icon-button-icon-size: 21px;
@@ -594,9 +596,9 @@ body[data-admin-section] .status-panel {
   min-height: 0;
   margin: max(2rem, 22vh) auto 0;
   padding: 1.1rem 1.4rem;
-  border: 1px solid #f0b8b1;
+  border: 1px solid var(--error-border);
   border-radius: 8px;
-  background: #f7e3e1;
+  background: var(--error-bg);
   box-shadow: var(--shadow);
   color: var(--danger);
   font-size: 1.1rem;
@@ -604,6 +606,86 @@ body[data-admin-section] .status-panel {
   line-height: 1.4;
   text-align: center;
   text-wrap: balance;
+}
+
+/* Spec C §4.6 (SC-D16): a data file the server can't read. The notice takes the place of a page's editor; a strip sits
+   above a page that otherwise works; a banner follows a refused save. The refused-access card's error tone. */
+/* .card is declared later and would otherwise win on border and background */
+.damaged-notice,
+.card.damaged-notice,
+.damaged-strip,
+.damaged-banner {
+  border: 1px solid var(--error-border);
+  border-radius: 8px;
+  background: var(--error-bg);
+  color: var(--ink);
+}
+
+.damaged-notice,
+.card.damaged-notice {
+  display: grid;
+  justify-items: start;
+  gap: 0.6rem;
+  padding: 1rem 1.1rem;
+}
+
+.damaged-notice h2 {
+  margin: 0;
+  color: var(--danger);
+  font-size: 1.15rem;
+}
+
+.damaged-notice p,
+.damaged-strip p,
+.damaged-banner p {
+  margin: 0;
+  line-height: 1.4;
+}
+
+.damaged-details {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--ink);
+  opacity: 0.8;
+  font-size: 0.86rem;
+}
+
+.damaged-strip,
+.damaged-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.9rem;
+}
+
+.damaged-text {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.damaged-strip strong,
+.damaged-banner strong {
+  color: var(--danger);
+}
+
+.damaged-detail {
+  color: var(--ink);
+  opacity: 0.8;
+  font-size: 0.82rem;
+}
+
+.damaged-banner > .admin-icon-button {
+  flex: none;
+  margin-left: auto;
+}
+
+@media (max-width: 640px) {
+  .damaged-strip,
+  .damaged-banner {
+    flex-wrap: wrap;
+  }
 }
 
 /* Login dialog (style rollout B): the department's name and icon, a larger password field with show / hide,
