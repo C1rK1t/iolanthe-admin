@@ -158,7 +158,7 @@
     const contentType = response.headers.get("content-type") || "";
     const payload = contentType.includes("application/json") ? await response.json() : await response.text();
     if (!response.ok) {
-      throwAdminApiError(response, payload, "Request failed");
+      throwAdminApiError(response, payload, "Request failed", options && options.method);
     }
     markAdminSessionActivityFromClient(path);
     return payload;
@@ -230,13 +230,14 @@
     const contentType = response.headers.get("content-type") || "";
     const payload = contentType.includes("application/json") ? await response.json() : await response.text();
     if (!response.ok) {
-      throwAdminApiError(response, payload, "Image upload failed");
+      throwAdminApiError(response, payload, "Image upload failed", "POST");
     }
     markAdminSessionActivityFromClient("/api/admin/sites/images/upload");
     return payload;
   }
 
-  function throwAdminApiError(response, payload, fallbackMessage) {
+  // method: the request's. A refusal of a damaged file (spec C §4.6) on anything but a GET also shows the banner.
+  function throwAdminApiError(response, payload, fallbackMessage, method = "GET") {
     const message = payload && payload.error ? payload.error : String(payload || fallbackMessage);
     if (response.status === 401 && message === "Login required") {
       showOnboardingForLoginRequired();
@@ -247,6 +248,10 @@
     const error = new Error(message);
     error.status = response.status;
     error.payload = payload;
+    const refused = String(method).toUpperCase() !== "GET" && damagedCore() ? damagedCore().refusal(error) : null;
+    if (refused) {
+      showDamagedBanner(refused);
+    }
     throw error;
   }
 
@@ -4759,6 +4764,7 @@
     const normalized = validateSiteLibrary(siteLibrary);
     const result = await saveRevisioned({
       path: "/api/admin/sites/save",
+      file: "sites.json",
       schema: "sites",
       base: () => sitesBase,
       mine: normalized,
@@ -6843,6 +6849,7 @@
         const result = await saveRevisioned({
           path: `/api/admin/charter/${encodeURIComponent(state.selectedCharter)}/save`,
           queue: `${state.selectedCharter}/charter.json`,
+          file: "charter.json",
           schema: "charter",
           base: () => (state.bundle && state.bundle["charter.json"] ? state.bundle["charter.json"] : {}),
           mine: charterInfo,
@@ -8963,6 +8970,7 @@
   async function saveLibraryCopy({ path, file, schema, workingCopy, mine, normalize, adopt, label, successMessage, options }) {
     const result = await saveRevisioned({
       path,
+      file,
       schema,
       base: () => libraryBases.get(workingCopy) || {},
       mine,
@@ -14594,6 +14602,48 @@
     return true;
   }
 
+  // A save refused because its file can't be read: it broke after the page loaded, or the page loaded it damaged. The
+  // banner goes at the top of the open page (under the band, the charter selector and any strip), replacing an earlier
+  // one. What was typed stays on screen; Reload draws the page again, after the usual question when there are unsaved
+  // changes.
+  function showDamagedBanner(refused) {
+    const content = els.workspace.querySelector(".section-content");
+    if (!content) {
+      return;
+    }
+    content.querySelectorAll(":scope > .damaged-banner").forEach(old => old.remove());
+    const text = damagedCore().bannerText(refused.file, refused.problem);
+    const banner = document.createElement("div");
+    banner.className = "damaged-banner";
+    banner.setAttribute("role", "alert");
+    banner.innerHTML = `
+      <div class="damaged-text">
+        <p><strong>${escapeHtml(text.lead)}</strong> ${escapeHtml(text.rest)}</p>
+        ${text.detail ? `<p class="damaged-detail">${escapeHtml(text.detail)}</p>` : ""}
+      </div>
+      ${iconButtonHtml("refresh", "Reload this page", " data-damaged-reload")}
+    `;
+    const top = Array.from(content.children).find(child => !child.matches(".charter-gantt-host, .section-toolbar, .damaged-strip"));
+    content.insertBefore(banner, top || null);
+    banner.querySelector("[data-damaged-reload]").addEventListener("click", async () => {
+      if (await confirmDiscardPageChanges()) {
+        renderSection();
+      }
+    });
+  }
+
+  // What a save gets when its page loaded the file damaged (saveRevisioned): the banner, and an error shaped like the
+  // server's 500 for a damaged file.
+  function damagedBaseError(file, problem) {
+    const name = file || "This file";
+    showDamagedBanner({ file: name, problem });
+    const text = damagedCore().bannerText(name, problem);
+    const error = new Error(`${text.lead} ${text.rest}`);
+    error.status = 500;
+    error.payload = { error: error.message, code: "damaged", file: name, damaged: problem };
+    return error;
+  }
+
   // A one-line notice above a page that otherwise works (spec C §4.6): reserved periods, anchorages.
   function damagedStripHtml(file, problem) {
     const text = damagedCore().stripText(file, problem);
@@ -14636,7 +14686,14 @@
   // merged, rebased, savedBy, savedAt }. Any other error is thrown. Saves of one file (queue) run one at a time, so a
   // second quick save (two drags) starts from the first one's result instead of clashing with it: base is a function,
   // read when this save's turn comes, and mine is copied now.
-  function saveRevisioned({ path, queue, schema, base, mine, normalize, wrap, unwrap }) {
+  // file: the file's name, for the refusal below.
+  function saveRevisioned({ path, queue, schema, base, mine, normalize, wrap, unwrap, file }) {
+    // Spec C §4.6: a page never saves a file it loaded while the file was damaged, not even once it is repaired. A
+    // repaired file at revision 0 would pass the server's revision check, and this page's copy was made from the defaults.
+    const problem = damagedCore().damagedIn(base());
+    if (problem) {
+      return Promise.reject(damagedBaseError(file, problem));
+    }
     const snapshot = cloneData(mine);
     const atQueue = cloneData(base());
     const key = queue || path;
@@ -14816,6 +14873,7 @@ ${text}` : text;
       const result = await saveRevisioned({
         path: `/api/admin/charter/${encodeURIComponent(charterId)}/save`,
         queue: `${charterId}/${file}`,
+        file,
         schema: CHARTER_FILE_SCHEMAS[file] || "charter",
         base: () => (state.bundle && state.bundle[file] ? state.bundle[file] : {}),
         mine: data,
@@ -14963,6 +15021,7 @@ ${text}` : text;
   window.IolantheAdmin = Object.freeze({
     api,
     apiUrl,
+    throwAdminApiError,
     setStatus,
     escapeHtml,
     showAdminConfirm,

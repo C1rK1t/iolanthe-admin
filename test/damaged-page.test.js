@@ -403,3 +403,15 @@ test("the notice's \"Work on the library routes\" button switches to the library
   assert.equal(page.workspace.innerHTML.includes("data-damaged-library-routes"), false);
   assert.deepEqual(saves(page.requests), []);
 });
+
+test("a save from a copy loaded while its file was damaged is refused before it is sent, even once the file is repaired", async () => {
+  const page = await openAdmin(CHARTER_ADMIN, charterAnswers(bundleWith(DATED), {
+    "/api/admin/sites": { sites: [], revision: 0, saved_by: "", saved_at: "", damaged: "is empty" }
+  }));
+  // The Route page's Edit site saves through saveSitesLibrary from this load (the Site Editor shows the notice instead).
+  await assert.rejects(
+    page.window.IolantheAdmin.saveSitesLibrary({ sites: [{ id: "coron", title: "Coron", latitude: 11.9975, longitude: 120.201 }] }, "Site saved."),
+    { message: /^sites\.json can't be read, so your change wasn't saved\./ }
+  );
+  assert.deepEqual(saves(page.requests), []);
+});
