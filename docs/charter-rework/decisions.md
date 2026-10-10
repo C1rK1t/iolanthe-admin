@@ -726,3 +726,8 @@ save could undo it. Spec: [spec-c.md](spec-c.md). Mockup `.superpowers/brainstor
   damaged file: §4.6 and its design,
   [The admin says when a file can't be read](../superpowers/specs/2026-10-10-damaged-file-notice-design.md)
   (2026-10-10, approved by David).
+- **B-D1 amended, no page-level eye buttons (2026-10-10, captain feedback item 02):** the Guest view button in the
+  Charter section menu is the only entry to the Guest view. The eye icon buttons on the Charter Info and Route headers
+  (B-D1, B-D3, §3.1) are removed: with the button in the menu on the left, extra icons at page level made no sense. The
+  Route header's button also handed the open stop card's day to the slider (`previewDay`); the slider now opens on the
+  remembered date or today's step, as it does from the menu.

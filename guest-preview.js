@@ -58,7 +58,7 @@
     teardown = null;
   }
 
-  // ctx: { charterId, charter, points, pill: { tone, text }, today: "YYYY-MM-DD", focusDay: n | 0, onOpenInfo(),
+  // ctx: { charterId, charter, points, pill: { tone, text }, today: "YYYY-MM-DD", onOpenInfo(),
   //        initialTab: the guest tab a fresh frame opens on (Charter: itinerary, Galley: menu, Hotel: drinks) }
   function bind(ctx) {
     destroy();
@@ -207,10 +207,6 @@
 
   function pickIndex(steps, ctx) {
     const c = core();
-    if (ctx.focusDay) {
-      const i = c.stepIndexForDay(steps, ctx.focusDay);
-      if (i >= 0) return i;
-    }
     const remembered = c.stepIndexForDate(steps, chosenDate.get(ctx.charterId));
     return remembered >= 0 ? remembered : c.defaultStepIndex(steps, ctx.today);
   }

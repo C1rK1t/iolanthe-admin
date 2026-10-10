@@ -4768,7 +4768,6 @@
           <div class="header-actions">
             <span class="status-pill status-pill--${pill.tone}" id="charter-info-pill">${escapeHtml(pill.text)}</span>
             ${iconButtonHtml("star", makeActiveTitle, ` id="charter-make-active"${makeActiveDisabled ? " disabled" : ""}`)}
-            ${iconButtonHtml("preview", "Guest view", ` id="charter-guest-view"`)}
             <span class="header-sep"></span>
             ${iconSubmitButtonHtml("save", "Save Charter Information", ` form="charter-info-form" id="charter-info-save"`)}
             ${iconButtonHtml("cancel", "Cancel changes", ` id="cancel-charter-info"`)}
@@ -5933,8 +5932,31 @@
     ];
   }
 
-  function renderGalleyGuestsPanel(guestList) {
+  // Captain feedback item 04 (docs/superpowers/specs/2026-10-10-inactive-rows-design.md): the divider drawn once, just
+  // before the first inactive row of Galley → Menus, Hotel → Guests and Galley → Guests, with a hint saying why the rows
+  // are there. The rows below it are inactive, so they carry no label of their own.
+  function inactiveDividerHtml(hint) {
+    return `
+      <div class="inactive-divider">
+        <h3>Inactive</h3>
+        <p>${escapeHtml(hint)}</p>
+      </div>
+    `;
+  }
+
+  function menuInactiveHint(itineraryDayCount) {
+    return itineraryDayCount > 0
+      ? `Beyond the charter's ${itineraryDayCount} ${itineraryDayCount === 1 ? "day" : "days"}. Not shown to guests.`
+      : "The charter has no days yet. Not shown to guests.";
+  }
+
+  function guestInactiveHint(guestCount) {
+    return `Beyond the guest count of ${normalizeGuestCount(guestCount)}. Not shown to guests.`;
+  }
+
+  function renderGalleyGuestsPanel(guestList, guestCount) {
     const guests = galleyGuestDietaryRows(guestList);
+    const firstInactive = guests.findIndex(guest => guest.active === false);
     if (!guests.length) {
       return `
         <section class="card full">
@@ -5958,11 +5980,11 @@
             const displayName = displayNames[index];
             const nothing = label => `<span class="guest-nothing" title="${label}">—</span>`;
             return `
+              ${index === firstInactive ? inactiveDividerHtml(guestInactiveHint(guestCount)) : ""}
               <div class="galley-guest-row${guest.active === false ? " inactive" : ""}${guest.allergies ? " has-allergy" : ""}">
                 <div class="galley-guest-name">
                   <strong>${escapeHtml(displayName)}</strong>
                   ${guest.principal ? `<span class="principal-crown" title="Principal guest" aria-label="Principal guest">&#x265B;</span>` : ""}
-                  ${guest.active === false ? `<span class="inactive-label">Inactive</span>` : ""}
                 </div>
                 <div class="galley-guest-cell galley-guest-allergies">${guest.allergies
                   ? `<span class="allergy-pill"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l10 18H2z"></path><path d="M12 10v5M12 18v.01"></path></svg>${escapeHtml(guest.allergies)}</span>`
@@ -6264,12 +6286,12 @@
     }
     // Style rollout B: tap a guest to edit (clear / delete live in the dialog); the principal stays first with no grip;
     // other active guests drag to reorder, which decides who goes inactive first if the guest count drops
-    let inactiveHeadingShown = false;
+    let dividerDrawn = false;
     guestList.guests.forEach((guest, index) => {
       const inactive = guest.active === false;
-      if (inactive && !inactiveHeadingShown) {
-        container.insertAdjacentHTML("beforeend", `<h3 class="guest-group-title">Inactive</h3>`);
-        inactiveHeadingShown = true;
+      if (inactive && !dividerDrawn) {
+        container.insertAdjacentHTML("beforeend", inactiveDividerHtml(guestInactiveHint(settings.charterInfo?.guest_count)));
+        dividerDrawn = true;
       }
       container.appendChild(guestRowElement(guestList, guest, index, settings));
     });
@@ -6811,11 +6833,6 @@
       showClashMarks(form.parentElement, pageClash(infoClash, "the charter info"), CHARTER_INFO_CLASH_FIELDS, form);
     }
 
-    const guestViewButton = document.getElementById("charter-guest-view");
-    if (guestViewButton) {
-      guestViewButton.addEventListener("click", () => showCharterPanel("preview"));   // spec B §3.1; the form's unsaved guard asks first
-    }
-
     const deleteButton = document.getElementById("charter-delete");
     if (deleteButton) {
       deleteButton.addEventListener("click", openDeleteCharterModal);   // moved here from the band toolbar (captain 2026-10-08)
@@ -6965,12 +6982,10 @@
         points: Array.isArray(route.points) ? route.points : [],
         pill: charterInfoHeaderState(charterInfo).pill,
         today: adminToday(),
-        focusDay: state.previewFocusDay || 0,
         initialTab,
         onOpenInfo: () => (canManageCharterAdmin() ? showCharterPanel("info") : setStatus("Ask Charter Admin to set the charter dates.", "error"))
       });
     }
-    state.previewFocusDay = 0;
   }
 
   function guestPreviewPanelHtml() {
@@ -7076,7 +7091,6 @@
     if (options.focusStopId) state.routesFocusStopId = options.focusStopId;
     if (options.routeId !== undefined) state.routesRouteId = options.routeId;
     if (options.startFrom !== undefined) state.routesStartFrom = options.startFrom;
-    if (options.previewDay !== undefined) state.previewFocusDay = options.previewDay;
     state.sectionPanels.charter = panelId;
     await renderCharter();
     return true;
@@ -7106,7 +7120,7 @@
 
       let content = "";
       if (activePanel === "guests") {
-        content = renderGalleyGuestsPanel(guestList);
+        content = renderGalleyGuestsPanel(guestList, charterInfo.guest_count);
       } else if (activePanel === "preview") {
         content = guestPreviewPanelHtml();
       } else {
@@ -8268,8 +8282,13 @@
       return;
     }
     // Style rollout B: tap a day to edit it (Clear lives in the dialog); drag the grip to move a day's menu
+    let dividerDrawn = false;
     rows.forEach(({ day, index }) => {
       const inactive = day.active === false;
+      if (inactive && !dividerDrawn) {
+        container.insertAdjacentHTML("beforeend", inactiveDividerHtml(menuInactiveHint(itineraryDayCount)));
+        dividerDrawn = true;
+      }
       const dayNumber = day.charter_day || index + 1;
       const dateLabel = menuDayShortDateLabel(charterInfo, day, index);
       const notes = menuDayNotesValue(day);
@@ -8287,7 +8306,6 @@
         </span>
         <span class="menu-day-chips">
           ${menuSectionChipsHtml(day)}
-          ${inactive ? `<span class="inactive-label">Inactive</span>` : ""}
         </span>
         <span class="menu-day-actions">
           ${inactive && itineraryDayCount > 0 ? iconButtonHtml("promote", "Move menu to active", ` data-action="promote-menu"`) : ""}

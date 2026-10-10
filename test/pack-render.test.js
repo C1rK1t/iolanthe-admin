@@ -73,3 +73,10 @@ test("sectionHead: a continued page says so", () => {
 test("coverPageHtml wraps the cover", () => {
   assert.equal(render.coverPageHtml("<div>c</div>"), '<section class="pack-page pack-page--cover"><div>c</div></section>');
 });
+
+test("renderPack: the cover photo is cropped around the chosen focus", () => {
+  const centred = render.renderPack(model(), OPTS).cover;
+  assert.match(centred, /<img class="pack-cover-photo" src="[^"]*" style="object-position: 50% 50%" alt="">/);
+  const moved = render.renderPack(model({ cover_focus: { x: 0.2, y: 0.75 } }), OPTS).cover;
+  assert.match(moved, /style="object-position: 20% 75%"/);
+});

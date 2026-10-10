@@ -91,7 +91,7 @@ whose arrival day ≤ the day; on a passage day, "passage to <next stop>"), from
 |---|---|
 | `previewSteps(charter, record)` | `[{ date: "YYYY-MM-DD", kind: "before" \| "day" \| "after", day: n \| null, label: "Tue 3 Nov", sub: "Day 3 of 9 · Apo Island" }]`, or `[]` without both dates |
 | `defaultStepIndex(steps, todayIso)` | index of today if present, else of the first `kind: "day"` step |
-| `stepIndexForDay(steps, day)` | index of that charter day's step, or -1 |
+| ~~`stepIndexForDay(steps, day)`~~ | removed 2026-10-10 with the page-level eye buttons (decisions.md, B-D1 amended): it only served the Route header's eye button |
 | `previewUrl({ date, charterId, hash })` | `/?preview=…&charter=…` (URL-encoded) plus `#hash` when it is a plain tab id (`/^[a-z-]+$/`) |
 | `fitScale(device, availW, availH)` | `min(1, availW / w, availH / h)` |
 
