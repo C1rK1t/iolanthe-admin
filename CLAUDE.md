@@ -108,22 +108,27 @@ white for any body that has it.
   out from), the readers of the server's `damaged` marker (`damagedIn`, `bundleDamage`, `pageDamage`) and of a refusal
   (`refusal`: 500 `{code: "damaged", file, damaged}`), and the wording.
 - **A damaged file** (spec C §4.6): each render keeps what its loads said (`state.bundle` holds the bundle's markers,
-  `seenDamage` the library GETs', `noteRevisionDamage` the revisions for Purchased Alcohol). Before it binds any editor
-  or auto-save, a page that needs a damaged file draws the notice card instead (`pageDamage`, `damagedNoticeHtml`: the
-  files, "Nothing has been changed", the server's problem, Try again; Galley and Hotel draw it through
-  `drawDamagedPage`, the Charter pages paint it with the reserved-periods strip). So Galley Menus' day sync can no
-  longer save menus made from a damaged `charter.json`'s missing days. Route & Itinerary blocks only this charter's
-  route ("Work on the library routes"). A damaged `routes.json` puts the card in the planner and `anchorages.json` a
-  strip. The Charter Pack draws the card itself. `reserved-periods.json` gets a strip under the band on every Charter
-  page, the period editor won't open, and Charter Admin and the create dialog hold new dates
-  (`charterDatesHeldMessage`). A save the server refuses for a damaged file shows a banner (`throwAdminApiError` →
-  `showDamagedBanner`) and keeps what was typed. A page never saves a file it loaded damaged: `saveRevisioned`
-  refuses such a base before sending (a repaired file at revision 0 would pass the server's revision check),
-  merge-core never merges the marker, and the anchorages save waits for its load. The crew and menu import pickers
-  refuse a damaged source (`damagedSourceMessage`). Coming back to the tab redraws a page whose file's `damaged`
-  changed (`checkFreshness`, comparing `knownDamageOf`). Against a server without the marker, everything behaves as
-  before.
-- `node --test` runs the tests in `test/` (258 tests), which cover `routes-core`, `itinerary-core`, `charters-core`,
+  `seenDamage` the library GETs', `noteRevisionDamage` the revisions for Purchased Alcohol).
+  - The notice: before it binds any editor or auto-save, a page that needs a damaged file draws the notice card instead
+    (`pageDamage`, `damagedNoticeHtml`: the files, "Nothing has been changed", the server's problem, Try again; Galley
+    and Hotel draw it through `drawDamagedPage`, the Charter pages paint it with the reserved-periods strip). So Galley
+    Menus' day sync can no longer save menus made from a damaged `charter.json`'s missing days. Route & Itinerary blocks
+    only this charter's route ("Work on the library routes"). A damaged `routes.json` puts the card in the planner. The
+    Charter Pack draws the card itself.
+  - The strips: `anchorages.json` gets a strip. `reserved-periods.json` gets a strip under the band on every Charter
+    page, the period editor won't open, and Charter Admin and the create dialog hold new dates
+    (`charterDatesHeldMessage`).
+  - The save guard: a save the server refuses for a damaged file shows a banner (`throwAdminApiError` →
+    `showDamagedBanner`) and keeps what was typed. A page never saves a file it loaded damaged: `saveRevisioned` refuses
+    such a base before sending (a repaired file at revision 0 would pass the server's revision check), merge-core never
+    merges the marker, and the anchorages save waits for its load.
+  - The pickers: the crew and menu import pickers refuse a damaged source (`damagedSourceMessage`).
+  - The freshness check: coming back to the tab redraws a page whose file's `damaged` changed (`checkFreshness`,
+    comparing `knownDamageOf`).
+  - A server without the marker simply lacks the marker-driven behaviour above. Three things changed for every server:
+    the anchorages save waits for its load, the menu import reads the source before the overwrite question, and the
+    pack cover upload goes through `throwAdminApiError` (login handling and the banner).
+- `node --test` runs the tests in `test/` (259 tests), which cover `routes-core`, `itinerary-core`, `charters-core`,
   `guest-preview-core`, `pack-core`, `pack-render`, `drag-reorder`, `merge-core`, `damaged-core`, the damaged-file
   pages (`damaged-page.test.js`, `admin.js` in a `vm` sandbox), the anchorages save guard
   (`routes-places-guard.test.js`), the startup order (`startup-order.test.js` runs `admin.js` alone in a `vm` sandbox)
