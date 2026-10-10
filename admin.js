@@ -3622,6 +3622,7 @@
     const served = await api("/api/admin/sites");
     sitesBase = cloneData(served);
     seenRevisions["sites.json"] = mergeCore().revisionOf(served);
+    seenDamage["sites.json"] = damagedCore().damagedIn(served);
     const siteLibrary = normalizeSiteLibrary(served);
     state.sites = siteLibrary.sites;
     return siteLibrary;
@@ -4771,6 +4772,7 @@
     const served = result.ok ? result.saved : result.theirs;
     sitesBase = cloneData(served);
     seenRevisions["sites.json"] = mergeCore().revisionOf(served);
+    seenDamage["sites.json"] = damagedCore().damagedIn(served);
     const normalizedSaved = normalizeSiteLibrary(served);
     siteLibrary.sites = normalizedSaved.sites;
     state.sites = normalizedSaved.sites;
@@ -7121,6 +7123,15 @@
       state.charterContext = { charterId: state.selectedCharter, charter: charterInfo, itinerary, siteLibrary };
       const guestList = normalizeGuestList(bundle["guest_list.json"]);
       const crewList = normalizeCrewEditorList(bundle["crew_list.json"]);
+      // Spec C §4.6: the notice instead of a page that needs a file the server can't read. Route & Itinerary needs this
+      // charter's files only on this charter's route; the library routes stay usable. The Charter Pack checks its own.
+      const blocked = activePanel === "routes" && state.routesSubject !== "charter" ? [] : pageDamage("charter", activePanel);
+      if (blocked.length) {
+        state.charterInfoClash = null;
+        paint(reservedPeriodsStripHtml() + damagedNoticeHtml(blocked, { libraryRoutes: activePanel === "routes" }));
+        bindDamagedNotice(els.workspace);
+        return;
+      }
       const content = charterPanelContent(activePanel, charterInfo, itinerary, guestList, crewList, siteLibrary);
       paint(reservedPeriodsStripHtml() + content);
       bindCharterPanel(activePanel, charterInfo, itinerary, guestList, crewList, siteLibrary);

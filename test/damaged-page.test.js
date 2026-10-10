@@ -328,3 +328,47 @@ test("Charter Admin with reserved-periods.json marked damaged: new dates wait wi
   assert.equal(save.disabled, false);
   assert.deepEqual(saves(page.requests), []);
 });
+
+test("Charter Admin with charter.json marked damaged: the notice instead of the form", async () => {
+  const page = await openAdmin(CHARTER_ADMIN, charterAnswers(bundleWith(DAMAGED)));
+  assert.match(page.workspace.innerHTML, /charter\.json can&#39;t be read/);
+  assert.equal(everDrawn(page, /id="charter-info-form"/), false);
+});
+
+test("Charter Admin with a good bundle draws the form", async () => {
+  const page = await openAdmin(CHARTER_ADMIN, charterAnswers(bundleWith(DATED)));
+  assert.ok(everDrawn(page, /id="charter-info-form"/));
+  assert.equal(everDrawn(page, /can&#39;t be read/), false);
+});
+
+// The next three start on Charter Admin with charter.json damaged, so that page binds no form, and no unsaved-changes
+// question (which nobody answers in the sandbox) stops showCharterPanel. Each heading names only the files its page needs.
+test("Crew with a plain-list crew_list.json (marked damaged): the notice instead of the crew editor", { timeout: 5000 }, async () => {
+  const bundle = { ...bundleWith(DAMAGED), "crew_list.json": { crew: [], revision: 0, saved_by: "", saved_at: "", damaged: "is not a JSON object" } };
+  const page = await openAdmin(CHARTER_ADMIN, charterAnswers(bundle));
+  await page.window.IolantheAdmin.showCharterPanel("crew");
+  await settleAll();
+  assert.match(page.workspace.innerHTML, /<h2>crew_list\.json can&#39;t be read<\/h2>/);
+  assert.match(page.workspace.innerHTML, /crew_list\.json is not a JSON object\./);
+  assert.doesNotMatch(page.workspace.innerHTML, /id="crew-editor-list"/);
+});
+
+test("Site Editor with sites.json marked damaged: the notice instead of the sites", { timeout: 5000 }, async () => {
+  const page = await openAdmin(CHARTER_ADMIN, charterAnswers(bundleWith(DAMAGED), {
+    "/api/admin/sites": { sites: [], revision: 0, saved_by: "", saved_at: "", damaged: "is empty" }
+  }));
+  await page.window.IolantheAdmin.showCharterPanel("sites");
+  await settleAll();
+  assert.match(page.workspace.innerHTML, /<h2>sites\.json can&#39;t be read<\/h2>/);
+  assert.doesNotMatch(page.workspace.innerHTML, /id="site-editor-list"/);
+});
+
+test("this charter's route with itinerary.json and charter.json marked damaged: one notice for both, and the way to the library routes", { timeout: 5000 }, async () => {
+  const bundle = { ...bundleWith(DAMAGED), "itinerary.json": { version: 2, revision: 0, route: { points: [] }, activities: [], dirty_stop_ids: [], damaged: "is empty" } };
+  const page = await openAdmin(CHARTER_ADMIN, charterAnswers(bundle));
+  await page.window.IolantheAdmin.showCharterPanel("routes");
+  await settleAll();
+  assert.match(page.workspace.innerHTML, /<h2>itinerary\.json and charter\.json can&#39;t be read<\/h2>/);
+  assert.match(page.workspace.innerHTML, /until they&#39;re fixed or restored/);
+  assert.match(page.workspace.innerHTML, /data-damaged-library-routes/);
+});
