@@ -3,7 +3,6 @@
 (function () {
   "use strict";
 
-  const SNAP_PX = 24; // a dropped point within this screen distance of an anchorage marker snaps to it (spec §7 Q4)
   const ANCHOR_PATH = '<circle cx="12" cy="5" r="2"/><path d="M12 7v14M5 13a7 7 0 0 0 14 0M8 10h8"/>';
   const DEFAULT_ANCHORAGE_NAME = "Anchorage";
   const ANCHOR_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true">${ANCHOR_PATH}</svg>`;
@@ -58,16 +57,13 @@
       });
     }
 
-    // The nearest visible anchorage marker within SNAP_PX of latlng (screen distance, so it works at any zoom), or null.
+    // The nearest visible anchorage marker within core.SNAP_PX of latlng (screen distance, so it works at any zoom), or null.
     function anchorageUnder(map, latlng) {
       if (!map || (!shownLayers.anchorages && !shownLayers.stops)) return null;
       const pt = map.latLngToContainerPoint(latlng);
-      const hits = anchorageList
+      return core.nearestWithin(anchorageList
         .filter((a) => (a.kind === "stop" ? shownLayers.stops : shownLayers.anchorages))
-        .map((a) => ({ a, px: pt.distanceTo(map.latLngToContainerPoint(ll(a))) }))
-        .filter((x) => x.px <= SNAP_PX)
-        .sort((x, y) => x.px - y.px);
-      return hits.length ? hits[0].a : null;
+        .map((a) => ({ anchorage: a, px: pt.distanceTo(map.latLngToContainerPoint(ll(a))) })));
     }
 
     // Saves run one at a time, each building its library from the latest list, so overlapping saves cannot revert each other.

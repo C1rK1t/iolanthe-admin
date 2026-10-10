@@ -192,7 +192,7 @@ This replaces draft 1's "side panel above the map" (decided 2026-10-07, §7 Q1).
 | **Anchorage** | new anchorage here (modal) | — | edit anchorage | — |
 
 - Points are **draggable in every mode except Delete**. Map panning is paused while a point is held.
-- **Snap to anchorage**: a point dropped within 24 px of an anchorage marker becomes a **stop** at that anchorage.
+- **Snap to anchorage**: a point dropped within 32 px of an anchorage marker becomes a **stop** at that anchorage.
   It takes the anchorage's position and name and links the sites within 2 nm. Dragging a stop away elsewhere keeps
   its anchorage link and shows the "moved" warning.
 - **Insert**: each leg shows a faint midpoint handle. Dragging it creates a new point there.
@@ -318,6 +318,6 @@ Decided (David, 2026-10-07):
 | # | Decision |
 |---|---|
 | Q1 | On narrow screens the map comes straight after the route picker, then the rest of the side panel (§4.1). |
-| Q4 | The default distances stand: sites are auto-linked within 2 nm, "Make stop at" is offered within 2 nm, the sites-served picker highlights sites within 5 nm, and snapping works within 24 px. |
+| Q4 | The default distances stand: sites are auto-linked within 2 nm, "Make stop at" is offered within 2 nm, the sites-served picker highlights sites within 5 nm, and snapping works within 24 px (widened to 32 px on 2026-10-10, captain item 10: a stop dropped on an anchorage marker it visibly overlaps must link to it). |
 | Q3 | **Merge** (decided 2026-10-07). Making a point a stop at an anchorage that is already the next or previous stop (by snapping, "Make stop at", or Add mode on the last stop) removes that point instead of creating a second stop. |
 | Q5 | The route speed is saved with the route (`speed_kn`, §2.1). New routes start at the last speed used in that browser. |

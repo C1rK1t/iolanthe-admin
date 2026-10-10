@@ -67,7 +67,7 @@ charters from the Itinerary page.
    aren't stops.
 3. A waypoint becomes a stop at an anchorage in two ways:
    - the waypoint popup offers **Make stop at <anchorage>** for anchorages within 2 nm
-   - **dragging** a point onto an anchorage marker (within 24 px) snaps it there as a stop
+   - **dragging** a point onto an anchorage marker (within 32 px, was 24 px until 2026-10-10) snaps it there as a stop
 4. **Undo / Redo** are square icon buttons in the header row, next to Save / Cancel. Ctrl+Z / Ctrl+Y still work.
 5. **Add another route** (the join icon in the header) appends or prepends a library route or a charter copy, with
    an option to reverse it. A duplicate point where the two routes meet is dropped. Then use Save As to keep the
