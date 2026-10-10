@@ -19,12 +19,20 @@ test("PAGE_FILES: each page's files, in the order the notice names them", () => 
       cocktails: ["cocktails.json"]
     }
   });
-  assert.ok(Object.isFrozen(core.PAGE_FILES.galley));
+  for (const table of [core.PAGE_FILES, core.PAGE_FILES.charter, core.PAGE_FILES.galley, core.PAGE_FILES.hotel]) {
+    assert.ok(Object.isFrozen(table));
+  }
   assert.ok(Object.isFrozen(core.PAGE_FILES.galley.menus));
+  assert.ok(Object.isFrozen(core.PAGE_FILES.hotel["purchased-alcohol"]));
+  // Names a file name from a server payload could carry: never an inherited key.
+  assert.deepEqual(core.pageDamage("__proto__", "toString", { "charter.json": PROBLEM }), []);
+  assert.deepEqual(core.pageDamage("galley", "constructor", { "charter.json": PROBLEM }), []);
 });
 
 test("damagedIn: a copy's problem, or \"\" when it is not marked", () => {
   assert.equal(core.damagedIn({ menus: [], revision: 0, damaged: PROBLEM }), PROBLEM);
+  // The server always gives a reason (describeReadError), so an empty one counts as not marked.
+  assert.equal(core.damagedIn({ damaged: "" }), "");
   for (const copy of [{ menus: [] }, { damaged: 7 }, { damaged: null }, null, undefined, "csaba", [{ damaged: PROBLEM }]]) {
     assert.equal(core.damagedIn(copy), "", JSON.stringify(copy));
   }
@@ -102,6 +110,8 @@ test("stripText, bannerText, pickerMessage and DATES_MESSAGE", () => {
   });
   assert.equal(core.stripText("anchorages.json", "").rest, "Anchorages aren't shown, and can't be added or changed until it's fixed or restored.");
   assert.equal(core.stripText("anchorages.json", "").detail, "");
+  assert.equal(core.stripText("sites.json", "").rest, "It can't be shown or changed until it's fixed or restored.");
+  assert.equal(core.stripText("constructor", "").rest, "It can't be shown or changed until it's fixed or restored.");
   assert.deepEqual(core.bannerText("cocktails.json", "is not a JSON object or list"), {
     lead: "cocktails.json can't be read, so your change wasn't saved.",
     rest: "Copy anything you need from this page, then reload it once the file is fixed or restored.",
@@ -109,5 +119,7 @@ test("stripText, bannerText, pickerMessage and DATES_MESSAGE", () => {
   });
   assert.equal(core.pickerMessage("Larry", "menus.json"), "Larry's menus.json can't be read, so its menus can't be imported. Fix or restore it first.");
   assert.equal(core.pickerMessage("Larry", "crew_list.json"), "Larry's crew_list.json can't be read, so its crew can't be imported. Fix or restore it first.");
+  assert.equal(core.pickerMessage("Larry", "pack.json"), "Larry's pack.json can't be read, so it can't be imported. Fix or restore it first.");
+  assert.equal(core.pickerMessage("Larry", "constructor"), "Larry's constructor can't be read, so it can't be imported. Fix or restore it first.");
   assert.equal(core.DATES_MESSAGE, "reserved-periods.json can't be read, so new dates can't be checked against the reserved periods. Fix or restore it first.");
 });

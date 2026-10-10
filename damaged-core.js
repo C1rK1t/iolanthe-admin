@@ -68,7 +68,8 @@
 
   // The page's damaged files, [{file, problem}] in the page's order, from known ({file: problem}).
   function pageDamage(section, panel, known) {
-    const files = (PAGE_FILES[section] && PAGE_FILES[section][panel]) || [];
+    const table = Object.hasOwn(PAGE_FILES, section) ? PAGE_FILES[section] : null;
+    const files = table && Object.hasOwn(table, panel) ? table[panel] : [];
     const map = isRecord(known) ? known : {};
     return files.filter((file) => typeof map[file] === "string" && map[file] !== "").map((file) => ({ file, problem: map[file] }));
   }
@@ -108,7 +109,7 @@
   function stripText(file, problem) {
     return {
       lead: `${file} can't be read.`,
-      rest: STRIPS[file] || "It can't be shown or changed until it's fixed or restored.",
+      rest: Object.hasOwn(STRIPS, file) ? STRIPS[file] : "It can't be shown or changed until it's fixed or restored.",
       detail: detailLine(file, problem)
     };
   }
@@ -124,7 +125,8 @@
 
   // An import picker's refusal of a source file the server can't read.
   function pickerMessage(charterName, file) {
-    return `${charterName}'s ${file} can't be read, so ${PICKED[file] || "it"} can't be imported. Fix or restore it first.`;
+    const what = Object.hasOwn(PICKED, file) ? PICKED[file] : "it";
+    return `${charterName}'s ${file} can't be read, so ${what} can't be imported. Fix or restore it first.`;
   }
 
   return { PAGE_FILES, DATES_MESSAGE, damagedIn, bundleDamage, pageDamage, refusal, fileList, noticeText, stripText, bannerText, pickerMessage };
