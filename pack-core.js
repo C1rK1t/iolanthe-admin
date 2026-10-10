@@ -27,7 +27,36 @@
   const text = (v) => (typeof v === "string" ? v.trim() : "");
 
   function defaultPack() {
-    return { theme: "a", type: "proposal", prepared_for: "", cover_note: "", sections: [...SECTIONS], cover_image: null };
+    return { theme: "a", type: "proposal", prepared_for: "", cover_note: "", sections: [...SECTIONS], cover_image: null, cover_focus: centre() };
+  }
+
+  // The cover photo's focal point (captain 06): where in the photo to keep in view when it is cropped, as a point in 0..1
+  // across and down (mirror of the server's lib/charter-pack.js). 0.5, 0.5 is the centre, the browser's own default.
+  const FOCUS_DECIMALS = 1000;
+  const isFraction = (n) => typeof n === "number" && Number.isFinite(n) && n >= 0 && n <= 1;
+  const clamp01 = (n) => Math.min(1, Math.max(0, n));
+  const round3 = (n) => Math.round(n * FOCUS_DECIMALS) / FOCUS_DECIMALS;
+  const centre = () => ({ x: 0.5, y: 0.5 });
+  const validFocus = (f) => Boolean(f) && typeof f === "object" && !Array.isArray(f) && isFraction(f.x) && isFraction(f.y);
+  const normalizeFocus = (f) => (validFocus(f) ? { x: round3(f.x), y: round3(f.y) } : centre());
+
+  // A pointer position over the photo (rect: its bounding box) -> the focal point, clamped to the photo.
+  function focusFromPoint(rect, clientX, clientY) {
+    const r = toObj(rect);
+    if (!(r.width > 0) || !(r.height > 0)) return centre();
+    return { x: round3(clamp01((clientX - r.left) / r.width)), y: round3(clamp01((clientY - r.top) / r.height)) };
+  }
+
+  // The point moved by (dx, dy) as fractions of the photo, for the arrow keys.
+  function nudgeFocus(focus, dx, dy) {
+    const f = normalizeFocus(focus);
+    return { x: round3(clamp01(f.x + dx)), y: round3(clamp01(f.y + dy)) };
+  }
+
+  // The CSS object-position that keeps the point in view: "50% 50%".
+  function focusCss(focus) {
+    const f = normalizeFocus(focus);
+    return `${round3(f.x * 100)}% ${round3(f.y * 100)}%`;
   }
 
   function normalizePack(raw) {
@@ -39,7 +68,8 @@
       prepared_for: typeof p.prepared_for === "string" ? p.prepared_for.slice(0, PREPARED_FOR_MAX) : "",
       cover_note: typeof p.cover_note === "string" ? p.cover_note.slice(0, COVER_NOTE_MAX) : "",
       sections: sections.length ? sections : [...SECTIONS],
-      cover_image: typeof p.cover_image === "string" && COVER_NAME_RE.test(p.cover_image) ? p.cover_image : null
+      cover_image: typeof p.cover_image === "string" && COVER_NAME_RE.test(p.cover_image) ? p.cover_image : null,
+      cover_focus: normalizeFocus(p.cover_focus)
     };
   }
 
@@ -235,6 +265,7 @@
       dates: formatDateRange(itinerary.start_date, itinerary.end_date),
       preparedFor,
       coverNote: text(pack.cover_note),
+      coverPosition: focusCss(pack.cover_focus),
       footer: preparedFor ? `${kicker} · ${preparedFor}` : kicker,
       subjectToChange: pack.type === "proposal",
       stats: [
@@ -248,7 +279,7 @@
 
   return {
     THEMES, TYPES, SECTIONS, SECTION_TITLES, PREPARED_FOR_MAX, COVER_NOTE_MAX,
-    defaultPack, normalizePack, toggleSection, pageKeyStep, formatDateRange, routeSummary, dayLabel,
+    defaultPack, normalizePack, focusFromPoint, nudgeFocus, focusCss, toggleSection, pageKeyStep, formatDateRange, routeSummary, dayLabel,
     mapMarkers, mapKey, mergeMarkers, buildPackModel
   };
 });

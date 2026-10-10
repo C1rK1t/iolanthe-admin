@@ -12,6 +12,8 @@
   const SAVE_DELAY_MS = 800;
   const TEXT_REDRAW_MS = 250;
   const MAP_TIMEOUT_MS = 15000;
+  const FOCUS_STEP = 0.02;          // arrow-key nudge of the cover focus, as a fraction of the photo (Shift = 5 x)
+  const FOCUS_STEP_BIG = 0.1;
   const MERGE_PX = 18;
   // A light, low-detail base map (spec P §3): the Route page's satellite tiles print dark and busy.
   const TILE_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}";
@@ -116,9 +118,17 @@
     const typeSeg = segmented("Pack type", core().TYPES.map((t) => [t, TYPE_LABELS[t]]), () => pack.type, (v) => update({ type: v }));
     const preparedInput = el("input", { type: "text", maxlength: String(core().PREPARED_FOR_MAX), placeholder: "Mr & Mrs Smith · via the agent", oninput: (e) => update({ prepared_for: e.target.value }, true) });
     const noteInput = el("textarea", { rows: "4", maxlength: String(core().COVER_NOTE_MAX), placeholder: "A short note for the cover", oninput: (e) => update({ cover_note: e.target.value }, true) });
-    const coverThumb = el("img", { class: "cp-cover-thumb", alt: "Cover photo" });
+    // The focal-point picker (captain 06): the whole cover photo with a dot; click or drag to say what to keep in view when
+    // the cover crops it, or nudge with the arrow keys. The pages follow live; the point saves with the pack.
+    const coverThumb = el("img", { class: "cp-focus-img", alt: "Cover photo", draggable: "false" });
+    const focusDot = el("span", { class: "cp-focus-dot", "aria-hidden": "true" });
+    const focusPicker = el("div", {
+      class: "cp-focus", tabindex: "0", role: "group",
+      "aria-label": "Cover photo focus point. Click or drag to choose what stays in view; the arrow keys nudge it.",
+      title: "Click or drag to choose what stays in view on the cover"
+    }, coverThumb, focusDot);
     const fileInput = el("input", { type: "file", accept: "image/jpeg,image/png,image/webp", hidden: true, onchange: (e) => uploadCover(e.target.files && e.target.files[0]) });
-    const resetBtn = iconBtn("reset", "Use the default cover photo", () => update({ cover_image: null }));
+    const resetBtn = iconBtn("reset", "Use the default cover photo", () => update({ cover_image: null, cover_focus: core().defaultPack().cover_focus }));
     const sectionBoxes = core().SECTIONS.map((id) => {
       const box = el("input", { type: "checkbox", "data-section": id, onchange: () => update({ sections: core().toggleSection(pack.sections, id) }) });
       return el("label", { class: "inline-check" }, box, core().SECTION_TITLES[id]);
@@ -130,6 +140,7 @@
       if (preparedInput.value !== pack.prepared_for) preparedInput.value = pack.prepared_for;
       if (noteInput.value !== pack.cover_note) noteInput.value = pack.cover_note;
       coverThumb.src = coverUrl();
+      syncFocusDot();
       resetBtn.disabled = !pack.cover_image;
       sectionBoxes.forEach((label) => {
         const box = label.querySelector("input");
@@ -161,13 +172,60 @@
           el("div", { class: "form-section" }, el("h3", {}, "Cover"),
             el("label", {}, "Prepared for", preparedInput),
             el("label", {}, "Cover note", noteInput),
-            el("div", { class: "cp-cover-row" }, coverThumb, iconBtn("upload", "Upload a cover photo", () => fileInput.click()), resetBtn, fileInput)),
+            focusPicker,
+            el("div", { class: "cp-cover-row" }, iconBtn("upload", "Upload a cover photo", () => fileInput.click()), resetBtn, fileInput)),
           el("div", { class: "form-section" }, el("h3", {}, "Sections"), ...sectionBoxes)),
         stage));
 
     function pages() {
       return [...scaler.querySelectorAll(".pack-page")];
     }
+
+    function syncFocusDot() {
+      focusDot.style.left = `${pack.cover_focus.x * 100}%`;
+      focusDot.style.top = `${pack.cover_focus.y * 100}%`;
+    }
+
+    // Moves the dot and the cover photos already on the pages without redrawing them; commit also saves the point.
+    function previewFocus(focus) {
+      pack = { ...pack, cover_focus: focus };
+      syncFocusDot();
+      const position = core().focusCss(focus);
+      document.querySelectorAll(".pack-cover-photo").forEach((img) => { img.style.objectPosition = position; });
+    }
+
+    function commitFocus(focus) {
+      update({ cover_focus: focus }, true);
+    }
+
+    let dragging = false;
+    const pointFocus = (event) => core().focusFromPoint(coverThumb.getBoundingClientRect(), event.clientX, event.clientY);
+    focusPicker.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      dragging = true;
+      try { focusPicker.setPointerCapture(event.pointerId); } catch (error) { /* a pointer that is already gone: the drag still ends on pointerup */ }
+      focusPicker.focus();
+      previewFocus(pointFocus(event));
+      event.preventDefault();
+    });
+    focusPicker.addEventListener("pointermove", (event) => { if (dragging) previewFocus(pointFocus(event)); });
+    const endDrag = (event) => {
+      if (!dragging) return;
+      dragging = false;
+      try { focusPicker.releasePointerCapture(event.pointerId); } catch (error) { /* not captured */ }
+      commitFocus(pack.cover_focus);
+    };
+    focusPicker.addEventListener("pointerup", endDrag);
+    focusPicker.addEventListener("pointercancel", endDrag);
+    focusPicker.addEventListener("keydown", (event) => {
+      const arrows = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+      const dir = arrows[event.key];
+      if (!dir || event.ctrlKey || event.altKey || event.metaKey) return;
+      event.preventDefault();
+      event.stopPropagation();   // not also a page turn (the preview's window key handler)
+      const step = event.shiftKey ? FOCUS_STEP_BIG : FOCUS_STEP;
+      commitFocus(core().nudgeFocus(pack.cover_focus, dir[0] * step, dir[1] * step));
+    });
 
     function showPage(index) {
       const all = pages();
@@ -442,7 +500,7 @@
         const result = await response.json().catch(() => ({}));
         // throwAdminApiError: the server's message, and the banner when pack.json can't be read (spec C §4.6)
         if (!response.ok) A().throwAdminApiError(response, result && result.error ? result : "", "The cover photo could not be uploaded.", "POST");
-        update({ cover_image: result.cover_image });
+        update({ cover_image: result.cover_image, cover_focus: core().defaultPack().cover_focus });   // a new photo starts centred
         await save();
       } catch (error) {
         A().setStatus(error.message, "error");

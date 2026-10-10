@@ -9,7 +9,7 @@ const ALL = ["summary", "route", "crew", "menus"];
 const pack = (extra) => ({ ...core.defaultPack(), ...(extra || {}) });
 
 test("defaultPack and normalizePack mirror the server rules", () => {
-  assert.deepEqual(core.defaultPack(), { theme: "a", type: "proposal", prepared_for: "", cover_note: "", sections: ALL, cover_image: null });
+  assert.deepEqual(core.defaultPack(), { theme: "a", type: "proposal", prepared_for: "", cover_note: "", sections: ALL, cover_image: null, cover_focus: { x: 0.5, y: 0.5 } });
   assert.deepEqual(core.normalizePack(null), core.defaultPack());
   const n = core.normalizePack({ theme: "c", type: "brief", prepared_for: "x".repeat(130), sections: ["menus", "route", "bogus"], cover_image: "cover-1700000000000.jpg" });
   assert.equal(n.theme, "c");
@@ -188,4 +188,38 @@ test("buildPackModel: menus keep active days with courses; drinks keep sections 
   assert.ok(menus.drinks[0].items.length > 0);
   const inactive = { ...csaba, menus: { menus: [{ ...csaba.menus.menus[0], active: false }] }, guest_drinks: { sections: [] } };
   assert.equal(core.buildPackModel(inactive, pack()).sections.find((s) => s.id === "menus"), undefined);
+});
+
+test("normalizePack keeps a good cover_focus (rounded to three decimals) and centres anything else, like the server", () => {
+  assert.deepEqual(core.normalizePack({ cover_focus: { x: 0.123456, y: 1 } }).cover_focus, { x: 0.123, y: 1 });
+  [null, 0.5, "0.5", [], {}, { x: 0.5 }, { x: "0.5", y: 0.5 }, { x: 1.2, y: 0.5 }, { x: 0.5, y: -1 }, { x: NaN, y: 0.5 }].forEach((bad) => {
+    assert.deepEqual(core.normalizePack({ cover_focus: bad }).cover_focus, { x: 0.5, y: 0.5 }, JSON.stringify(bad));
+  });
+});
+
+test("focusFromPoint: a pointer position on the photo becomes a 0..1 point, clamped and rounded", () => {
+  const rect = { left: 100, top: 50, width: 200, height: 100 };
+  assert.deepEqual(core.focusFromPoint(rect, 200, 100), { x: 0.5, y: 0.5 });
+  assert.deepEqual(core.focusFromPoint(rect, 100, 50), { x: 0, y: 0 });
+  assert.deepEqual(core.focusFromPoint(rect, 300, 150), { x: 1, y: 1 });
+  assert.deepEqual(core.focusFromPoint(rect, 40, 400), { x: 0, y: 1 });
+  assert.deepEqual(core.focusFromPoint(rect, 100 + 200 / 3, 50 + 100 / 7), { x: 0.333, y: 0.143 });
+  assert.deepEqual(core.focusFromPoint({ left: 0, top: 0, width: 0, height: 0 }, 5, 5), { x: 0.5, y: 0.5 });
+});
+
+test("nudgeFocus: moves the point by a step, clamped to the photo", () => {
+  assert.deepEqual(core.nudgeFocus({ x: 0.5, y: 0.5 }, 0.05, 0), { x: 0.55, y: 0.5 });
+  assert.deepEqual(core.nudgeFocus({ x: 0.5, y: 0.5 }, 0, -0.1), { x: 0.5, y: 0.4 });
+  assert.deepEqual(core.nudgeFocus({ x: 0.98, y: 0.02 }, 0.05, -0.05), { x: 1, y: 0 });
+});
+
+test("focusCss: the object-position that keeps the point in view", () => {
+  assert.equal(core.focusCss({ x: 0.5, y: 0.5 }), "50% 50%");
+  assert.equal(core.focusCss({ x: 0.123, y: 1 }), "12.3% 100%");
+  assert.equal(core.focusCss(null), "50% 50%");
+});
+
+test("buildPackModel carries the cover photo's object-position", () => {
+  assert.equal(core.buildPackModel(csaba, pack()).coverPosition, "50% 50%");
+  assert.equal(core.buildPackModel(csaba, pack({ cover_focus: { x: 0.2, y: 0.7 } })).coverPosition, "20% 70%");
 });
