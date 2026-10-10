@@ -32,6 +32,17 @@ function standIn() {
   });
 }
 
+// A banner element: keeps its attributes and innerHTML, and leaves the list of banners when removed.
+function bannerElement(banners) {
+  const attributes = {};
+  const element = keepingElement({
+    setAttribute: (name, value) => { attributes[name] = String(value); },
+    getAttribute: name => (name in attributes ? attributes[name] : null),
+    remove: () => { const at = banners.indexOf(element); if (at >= 0) banners.splice(at, 1); }
+  });
+  return element;
+}
+
 // An element that keeps what is written to it, and every innerHTML in order (drawn). Anything else is a stand-in, except
 // the properties in extras.
 function keepingElement(extras = {}) {
@@ -98,7 +109,7 @@ function clickable(extras = {}) {
 
 // Signs in with bootstrap, which opens its first section on its default page. Each request is answered from answers by
 // its path (anything else gets {}), and replies can be changed later. Returns the requests sent, the workspace, the
-// window, replies, retryButtons (the "Try again" buttons the latest drawing bound), libraryButtons (the "Work on the library routes"
+// window, replies, statuses (a path's HTTP status, 200 unless set), banners (the damaged banners on the open page), retryButtons (the "Try again" buttons the latest drawing bound), libraryButtons (the "Work on the library routes"
 // buttons it bound) and clickNav(panel), which presses
 // that panel's tab in the section's nav and waits for the page to draw.
 async function openAdmin(bootstrap, answers, extraElements = {}) {
@@ -111,8 +122,18 @@ async function openAdmin(bootstrap, answers, extraElements = {}) {
       ? selector => (selector === ".section-nav [data-panel]" ? navButtons : standIn())
       : target[prop])
   });
+  // The open page's .section-content, which showDamagedBanner puts its banner into: the banners now inside it.
+  const banners = [];
+  const sectionContent = keepingElement({
+    children: [],
+    querySelectorAll: selector => (selector === ":scope > .damaged-banner" ? banners.slice() : standIn()),
+    insertBefore: banner => { banners.push(banner); }
+  });
   const workspace = keepingElement({
-    querySelector: selector => (selector.startsWith("[data-section-shell=") ? shell : standIn()),
+    querySelector: selector => {
+      if (selector === ".section-content") return sectionContent;
+      return selector.startsWith("[data-section-shell=") ? shell : standIn();
+    },
     querySelectorAll: selector => {
       if (selector === "[data-damaged-library-routes]") {
         libraryButtons.length = 0;
@@ -133,10 +154,12 @@ async function openAdmin(bootstrap, answers, extraElements = {}) {
         return (type, listener) => { (listeners[type] = listeners[type] || []).push(listener); };
       }
       if (prop === "getElementById") return id => elements[id] || standIn();
+      if (prop === "createElement") return () => bannerElement(banners);
       return target[prop];
     }
   });
   const replies = { "/api/admin/bootstrap": bootstrap, ...answers };
+  const statuses = {};
   const window = {
     document,
     location: { search: "?key=test", origin: "http://admin.test", href: "http://admin.test/admin/?key=test" },
@@ -144,7 +167,8 @@ async function openAdmin(bootstrap, answers, extraElements = {}) {
     fetch: async (url, options = {}) => {
       const { pathname } = new URL(String(url));
       requests.push({ method: options.method || "GET", pathname });
-      return { ok: true, status: 200, headers: { get: () => "application/json" }, json: async () => replies[pathname] || {} };
+      const status = statuses[pathname] || 200;
+      return { ok: status < 400, status, headers: { get: () => "application/json" }, json: async () => replies[pathname] || {} };
     },
     setTimeout: () => 0,
     clearTimeout: () => {},
@@ -163,7 +187,7 @@ async function openAdmin(bootstrap, answers, extraElements = {}) {
     await navButtons.find(button => button.dataset.panel === panel).handler();
     await settleAll();
   };
-  return { requests, workspace, window, replies, retryButtons, libraryButtons, clickNav };
+  return { requests, workspace, window, replies, statuses, banners, retryButtons, libraryButtons, clickNav };
 }
 
 const saves = requests => requests.filter(request => request.method !== "GET");
@@ -414,4 +438,22 @@ test("a save from a copy loaded while its file was damaged is refused before it 
     { message: /^sites\.json can't be read, so your change wasn't saved\./ }
   );
   assert.deepEqual(saves(page.requests), []);
+  assert.equal(page.banners.length, 1);
+  assert.match(page.banners[0].innerHTML, /sites.json can&#39;t be read/);
+});
+
+test("a save the server refuses for a damaged file shows one banner, and the same refusal again leaves it alone", async () => {
+  const page = await openAdmin(CHARTER_ADMIN, charterAnswers(bundleWith(DATED)));
+  page.statuses["/api/admin/sites/save"] = 500;
+  page.replies["/api/admin/sites/save"] = { error: "sites.json is empty", code: "damaged", file: "sites.json", damaged: "is empty" };
+  const library = () => ({ sites: [{ id: "coron", title: "Coron", latitude: 11.9975, longitude: 120.201 }] });
+  await assert.rejects(page.window.IolantheAdmin.saveSitesLibrary(library(), "Site saved."), { status: 500 });
+  assert.equal(page.banners.length, 1);
+  assert.match(page.banners[0].innerHTML, /sites.json can&#39;t be read/);
+  assert.equal(page.banners[0].getAttribute("data-damaged-file"), "sites.json");
+  const first = page.banners[0];
+
+  await assert.rejects(page.window.IolantheAdmin.saveSitesLibrary(library(), "Site saved."), { status: 500 });
+  assert.equal(page.banners.length, 1);
+  assert.equal(page.banners[0], first);
 });
