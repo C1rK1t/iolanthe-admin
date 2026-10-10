@@ -311,7 +311,6 @@ test("Charter Admin with reserved-periods.json marked damaged: new dates wait wi
   const page = await openAdmin(CHARTER_ADMIN, charterAnswers(bundleWith(DATED), {
     "/api/admin/reserved-periods": { revision: 0, periods: [], damaged: PROBLEM }
   }), { "charter-info-start-date": start, "charter-info-end-date": end, "charter-info-overlap": overlap, "charter-info-save": save });
-  const held = window => window.IolantheDamagedCore.DATES_MESSAGE;
   assert.equal(overlap.textContent, "");
   assert.equal(save.disabled, false);
 
