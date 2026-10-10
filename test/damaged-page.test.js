@@ -98,12 +98,14 @@ function clickable(extras = {}) {
 
 // Signs in with bootstrap, which opens its first section on its default page. Each request is answered from answers by
 // its path (anything else gets {}), and replies can be changed later. Returns the requests sent, the workspace, the
-// window, replies, retryButtons (the "Try again" buttons the latest drawing bound) and clickNav(panel), which presses
+// window, replies, retryButtons (the "Try again" buttons the latest drawing bound), libraryButtons (the "Work on the library routes"
+// buttons it bound) and clickNav(panel), which presses
 // that panel's tab in the section's nav and waits for the page to draw.
 async function openAdmin(bootstrap, answers, extraElements = {}) {
   const requests = [];
   const navButtons = ["menus", "guests", "purchased-alcohol"].map(panel => clickable({ dataset: { panel } }));
   const retryButtons = [];
+  const libraryButtons = [];
   const shell = new Proxy(standIn(), {
     get: (target, prop) => (prop === "querySelectorAll"
       ? selector => (selector === ".section-nav [data-panel]" ? navButtons : standIn())
@@ -112,6 +114,11 @@ async function openAdmin(bootstrap, answers, extraElements = {}) {
   const workspace = keepingElement({
     querySelector: selector => (selector.startsWith("[data-section-shell=") ? shell : standIn()),
     querySelectorAll: selector => {
+      if (selector === "[data-damaged-library-routes]") {
+        libraryButtons.length = 0;
+        libraryButtons.push(clickable());
+        return libraryButtons;
+      }
       if (selector !== "[data-damaged-retry]") return standIn();
       retryButtons.length = 0;
       retryButtons.push(clickable());
@@ -156,7 +163,7 @@ async function openAdmin(bootstrap, answers, extraElements = {}) {
     await navButtons.find(button => button.dataset.panel === panel).handler();
     await settleAll();
   };
-  return { requests, workspace, window, replies, retryButtons, clickNav };
+  return { requests, workspace, window, replies, retryButtons, libraryButtons, clickNav };
 }
 
 const saves = requests => requests.filter(request => request.method !== "GET");
@@ -370,4 +377,29 @@ test("this charter's route with itinerary.json and charter.json marked damaged: 
   assert.match(page.workspace.innerHTML, /<h2>itinerary\.json and charter\.json can&#39;t be read<\/h2>/);
   assert.match(page.workspace.innerHTML, /until they&#39;re fixed or restored/);
   assert.match(page.workspace.innerHTML, /data-damaged-library-routes/);
+});
+
+const ROUTES_DAMAGED_BUNDLE = () => ({ ...bundleWith(DAMAGED), "itinerary.json": { version: 2, revision: 0, route: { points: [] }, activities: [], dirty_stop_ids: [], damaged: "is empty" } });
+
+test("this charter's route with itinerary.json and charter.json damaged: the library routes are not blocked", { timeout: 5000 }, async () => {
+  const page = await openAdmin(CHARTER_ADMIN, charterAnswers(ROUTES_DAMAGED_BUNDLE()));
+  await page.window.IolantheAdmin.showCharterPanel("routes", { subject: "library" });
+  await settleAll();
+  assert.equal(page.workspace.innerHTML.includes("can&#39;t be read"), false);
+  assert.equal(page.workspace.innerHTML.includes("data-damaged-library-routes"), false);
+  assert.deepEqual(saves(page.requests), []);
+});
+
+test("the notice's \"Work on the library routes\" button switches to the library and drops the notice", { timeout: 5000 }, async () => {
+  const page = await openAdmin(CHARTER_ADMIN, charterAnswers(ROUTES_DAMAGED_BUNDLE()));
+  await page.window.IolantheAdmin.showCharterPanel("routes");
+  await settleAll();
+  assert.match(page.workspace.innerHTML, /can&#39;t be read/);
+  assert.equal(page.libraryButtons.length, 1);
+
+  await page.libraryButtons[0].handler();
+  await settleAll();
+  assert.equal(page.workspace.innerHTML.includes("can&#39;t be read"), false);
+  assert.equal(page.workspace.innerHTML.includes("data-damaged-library-routes"), false);
+  assert.deepEqual(saves(page.requests), []);
 });
