@@ -102,10 +102,32 @@ white for any body that has it.
   cocktails, drink stocks, sites), never by array index. Coming back to the tab redraws the open page when one of its
   files moved (`checkFreshness`, `GET /api/admin/revisions`, a raw fetch that is not session activity), never over
   unsaved edits or an open dialog.
-- `node --test` runs the tests in `test/` (210 tests), which cover `routes-core`, `itinerary-core`, `charters-core`,
-  `guest-preview-core`, `pack-core`, `pack-render`, `drag-reorder`, `merge-core`, the startup order
-  (`startup-order.test.js` runs `admin.js` alone in a `vm` sandbox) and the refused-access card (`refused-access.test.js`,
-  the same sandbox)
+- `damaged-core.js` — a data file the server can't read (spec C §4.6, SC-D16; design
+  `docs/superpowers/specs/2026-10-10-damaged-file-notice-design.md`), pure, loaded before `admin.js`, also a Node
+  module (`window.IolantheDamaged`): `PAGE_FILES` (the files each page needs, counting the files its saves are worked
+  out from), the readers of the server's `damaged` marker (`damagedIn`, `bundleDamage`, `pageDamage`) and of a refusal
+  (`refusal`: 500 `{code: "damaged", file, damaged}`), and the wording.
+- **A damaged file** (spec C §4.6): each render keeps what its loads said (`state.bundle` holds the bundle's markers,
+  `seenDamage` the library GETs', `noteRevisionDamage` the revisions for Purchased Alcohol). Before it binds any editor
+  or auto-save, a page that needs a damaged file draws the notice card instead (`pageDamage`, `damagedNoticeHtml`: the
+  files, "Nothing has been changed", the server's problem, Try again; Galley and Hotel draw it through
+  `drawDamagedPage`, the Charter pages paint it with the reserved-periods strip). So Galley Menus' day sync can no
+  longer save menus made from a damaged `charter.json`'s missing days. Route & Itinerary blocks only this charter's
+  route ("Work on the library routes"). A damaged `routes.json` puts the card in the planner and `anchorages.json` a
+  strip. The Charter Pack draws the card itself. `reserved-periods.json` gets a strip under the band on every Charter
+  page, the period editor won't open, and Charter Admin and the create dialog hold new dates
+  (`charterDatesHeldMessage`). A save the server refuses for a damaged file shows a banner (`throwAdminApiError` →
+  `showDamagedBanner`) and keeps what was typed. A page never saves a file it loaded damaged: `saveRevisioned`
+  refuses such a base before sending (a repaired file at revision 0 would pass the server's revision check),
+  merge-core never merges the marker, and the anchorages save waits for its load. The crew and menu import pickers
+  refuse a damaged source (`damagedSourceMessage`). Coming back to the tab redraws a page whose file's `damaged`
+  changed (`checkFreshness`, comparing `knownDamageOf`). Against a server without the marker, everything behaves as
+  before.
+- `node --test` runs the tests in `test/` (258 tests), which cover `routes-core`, `itinerary-core`, `charters-core`,
+  `guest-preview-core`, `pack-core`, `pack-render`, `drag-reorder`, `merge-core`, `damaged-core`, the damaged-file
+  pages (`damaged-page.test.js`, `admin.js` in a `vm` sandbox), the anchorages save guard
+  (`routes-places-guard.test.js`), the startup order (`startup-order.test.js` runs `admin.js` alone in a `vm` sandbox)
+  and the refused-access card (`refused-access.test.js`, the same sandbox)
 - `routes.js` / `routes.css` — the Route panel (Charter → Route): state, side panel, header, map, saving and wiring. A
   "Working on" selector gives it two subjects: the library routes (the route library, saved through
   `/api/admin/routes/*`) and this charter's route (the route stored in the charter's `itinerary.json`, saved through
