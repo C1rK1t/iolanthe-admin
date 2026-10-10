@@ -30,6 +30,9 @@ older server refuses any save with a blank field (400), so release the server fi
 become hashes on the first start of that server; to log in, type a plain test password into the data folder's
 `settings.json`.
 
+Settings has Passwords, Display Settings, Route Track and Weather. The OBS Feed panel and Display Settings' OBS fields
+went with the feed itself in 2026-10 (iolanthe-server `docs/superpowers/specs/2026-10-10-remove-obs-feed-design.md`).
+
 The server also checks the network (iolanthe-server `lib/admin-network.js`) and reports it as the bootstrap `role`:
 bridge gets every department, crew Galley and Hotel. Guest, owner and `unknown` (an address in no CIDR) get no admin,
 and the console shows "This network cannot access admin." instead of the login, as a centred error card
@@ -128,11 +131,12 @@ white for any body that has it.
   - A server without the marker simply lacks the marker-driven behaviour above. Three things changed for every server:
     the anchorages save waits for its load, the menu import reads the source before the overwrite question, and the
     pack cover upload goes through `throwAdminApiError` (login handling and the banner).
-- `node --test` runs the tests in `test/` (259 tests), which cover `routes-core`, `itinerary-core`, `charters-core`,
+- `node --test` runs the tests in `test/` (263 tests), which cover `routes-core`, `itinerary-core`, `charters-core`,
   `guest-preview-core`, `pack-core`, `pack-render`, `drag-reorder`, `merge-core`, `damaged-core`, the damaged-file
   pages (`damaged-page.test.js`, `admin.js` in a `vm` sandbox), the anchorages save guard
-  (`routes-places-guard.test.js`), the startup order (`startup-order.test.js` runs `admin.js` alone in a `vm` sandbox)
-  and the refused-access card (`refused-access.test.js`, the same sandbox)
+  (`routes-places-guard.test.js`), the startup order (`startup-order.test.js` runs `admin.js` alone in a `vm` sandbox),
+  the refused-access card (`refused-access.test.js`, the same sandbox) and the Settings panels
+  (`settings-panels.test.js`, the same sandbox)
 - `routes.js` / `routes.css` — the Route panel (Charter → Route): state, side panel, header, map, saving and wiring. A
   "Working on" selector gives it two subjects: the library routes (the route library, saved through
   `/api/admin/routes/*`) and this charter's route (the route stored in the charter's `itinerary.json`, saved through

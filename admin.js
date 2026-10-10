@@ -2343,7 +2343,6 @@
     renderDepartments();
     const panels = [
       { id: "passwords", label: "Passwords" },
-      { id: "navigation-feed", label: "OBS Feed" },
       { id: "display-settings", label: "Display Settings" },
       { id: "route-track", label: "Route Track" },
       { id: "weather", label: "Weather" }
@@ -2361,20 +2360,16 @@
     `, "");
     bindSectionNav("settings", renderSettings);
     try {
-      const content = activePanel === "navigation-feed"
-        ? renderNavigationFeedSettings(await loadNavigationFeedSettings())
-        : (activePanel === "display-settings"
-          ? renderDisplaySettings(await loadDisplaySettings())
-          : (activePanel === "route-track"
-            ? renderRouteTrackSettings(await loadRouteTrackSettings())
-            : (activePanel === "weather"
-              ? renderWeatherSettings(await loadWeatherSettings())
-              : renderPasswordSettings())));
+      const content = activePanel === "display-settings"
+        ? renderDisplaySettings(await loadDisplaySettings())
+        : (activePanel === "route-track"
+          ? renderRouteTrackSettings(await loadRouteTrackSettings())
+          : (activePanel === "weather"
+            ? renderWeatherSettings(await loadWeatherSettings())
+            : renderPasswordSettings()));
       els.workspace.innerHTML = sectionShell("settings", panels, activePanel, content, "");
       bindSectionNav("settings", renderSettings);
-      if (activePanel === "navigation-feed") {
-        bindNavigationFeedSettingsActions();
-      } else if (activePanel === "display-settings") {
+      if (activePanel === "display-settings") {
         bindDisplaySettingsActions();
       } else if (activePanel === "route-track") {
         bindRouteTrackSettingsActions();
@@ -2418,68 +2413,6 @@
     `;
   }
 
-  async function loadNavigationFeedSettings() {
-    const payload = await api("/api/admin/navigation-feed");
-    const navigation = payload && payload.navigation && typeof payload.navigation === "object"
-      ? payload.navigation
-      : {};
-    const idleSettings = payload && payload.idle_screensaver && typeof payload.idle_screensaver === "object"
-      ? payload.idle_screensaver
-      : {};
-    return normalizeNavigationFeedSettings({
-      ...navigation,
-      obsFeedEnabled: navigation.obsFeedEnabled !== undefined
-        ? navigation.obsFeedEnabled
-        : (idleSettings.obsFeedEnabled !== undefined ? idleSettings.obsFeedEnabled : idleSettings.obs_feed_enabled)
-    });
-  }
-
-  function isObsFeedEnabled(settings) {
-    const value = settings && typeof settings === "object" ? settings : {};
-    const raw = value.obsFeedEnabled !== undefined ? value.obsFeedEnabled : value.obs_feed_enabled;
-    return raw !== false;
-  }
-
-  function normalizeNavigationFeedSettings(navigation) {
-    const value = navigation && typeof navigation === "object" ? navigation : {};
-    return {
-      hls_url: typeof value.hls_url === "string" ? value.hls_url : "",
-      stream_key: typeof value.stream_key === "string" ? value.stream_key : "",
-      obsFeedEnabled: isObsFeedEnabled(value)
-    };
-  }
-
-  function renderNavigationFeedSettings(navigation) {
-    return `
-      <section class="card full">
-        <div class="card-header">
-          <h2>OBS Feed</h2>
-          ${settingsActionButtonsHtml({
-            formId: "navigation-feed-form",
-            cancelId: "navigation-feed-cancel",
-            saveLabel: "Save OBS feed settings",
-            cancelLabel: "Discard OBS feed changes"
-          })}
-        </div>
-        <form id="navigation-feed-form" class="form-grid">
-          <div class="full">
-            <label class="inline-check switch-row">
-              <input id="navigation-feed-enabled" type="checkbox" ${navigation.obsFeedEnabled ? "checked" : ""}>
-              Show OBS Feed
-            </label>
-            <p class="muted">Show OBS feed in the Navigation page and idle cycle.</p>
-          </div>
-          <label class="full">HLS Playlist URL
-            <input id="navigation-feed-hls-url" inputmode="url" autocomplete="off" spellcheck="false" value="${escapeAttribute(navigation.hls_url)}">
-          </label>
-          <label>Stream Key
-            <input id="navigation-feed-stream-key" autocomplete="off" spellcheck="false" value="${escapeAttribute(navigation.stream_key)}">
-          </label>
-        </form>
-      </section>
-    `;
-  }
-
   async function loadDisplaySettings() {
     const payload = await api("/api/admin/display-settings");
     return normalizeDisplaySettings(payload.display_settings || payload.idle_screensaver || {});
@@ -2491,11 +2424,6 @@
       enabled: value.enabled !== false,
       timeout_seconds: numberOrDefault(value.timeout_seconds, 60),
       zoom_cycle_seconds: numberOrDefault(value.zoom_cycle_seconds, 15),
-      obsFeedEnabled: isObsFeedEnabled(value),
-      obs_feed_interval_seconds: numberOrDefault(value.obs_feed_interval_seconds, 50),
-      obs_feed_duration_seconds: numberOrDefault(value.obs_feed_duration_seconds, 20),
-      obs_feed_transition_seconds: numberOrDefault(value.obs_feed_transition_seconds, 2),
-      obs_ratio: typeof value.obs_ratio === "string" && value.obs_ratio ? value.obs_ratio : "16:9",
       show_weather: value.show_weather !== false,
       show_itinerary: value.show_itinerary !== false,
       show_telemetry: value.show_telemetry !== false,
@@ -2551,18 +2479,6 @@
               <label>Zoom Cycle Seconds
                 <input id="idle-zoom-cycle" type="number" min="0" step="1" value="${escapeAttribute(settings.zoom_cycle_seconds)}">
               </label>
-              <label>OBS Feed Interval Seconds
-                <input id="idle-obs-interval" type="number" min="0" step="1" value="${escapeAttribute(settings.obs_feed_interval_seconds)}">
-              </label>
-              <label>OBS Feed Duration Seconds
-                <input id="idle-obs-duration" type="number" min="0" step="1" value="${escapeAttribute(settings.obs_feed_duration_seconds)}">
-              </label>
-              <label>OBS Transition Seconds
-                <input id="idle-obs-transition" type="number" min="0" step="1" value="${escapeAttribute(settings.obs_feed_transition_seconds)}">
-              </label>
-              <label>OBS Ratio
-                <input id="idle-obs-ratio" value="${escapeAttribute(settings.obs_ratio)}">
-              </label>
               <label class="switch-row"><input id="idle-show-weather" type="checkbox" ${settings.show_weather ? "checked" : ""}> Show weather</label>
               <label class="switch-row"><input id="idle-show-itinerary" type="checkbox" ${settings.show_itinerary ? "checked" : ""}> Show itinerary</label>
             </div>
@@ -2616,43 +2532,11 @@
     });
   }
 
-  function readNavigationFeedSettingsForm() {
-    return {
-      obsFeedEnabled: document.getElementById("navigation-feed-enabled").checked,
-      hls_url: document.getElementById("navigation-feed-hls-url").value.trim(),
-      stream_key: document.getElementById("navigation-feed-stream-key").value.trim()
-    };
-  }
-
-  async function saveNavigationFeedSettings() {
-    const navigation = readNavigationFeedSettingsForm();
-    await api("/api/admin/navigation-feed/save", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ navigation })
-    });
-    setStatus("OBS feed settings saved.", "ok");
-  }
-
-  function bindNavigationFeedSettingsActions() {
-    bindSettingsFormController({
-      formId: "navigation-feed-form",
-      cancelButtonId: "navigation-feed-cancel",
-      readState: readNavigationFeedSettingsForm,
-      save: saveNavigationFeedSettings,
-      reload: renderSettings
-    });
-  }
-
   function readDisplaySettingsForm() {
     return {
       enabled: document.getElementById("idle-enabled").checked,
       timeout_seconds: Number(document.getElementById("idle-timeout").value),
       zoom_cycle_seconds: Number(document.getElementById("idle-zoom-cycle").value),
-      obs_feed_interval_seconds: Number(document.getElementById("idle-obs-interval").value),
-      obs_feed_duration_seconds: Number(document.getElementById("idle-obs-duration").value),
-      obs_feed_transition_seconds: Number(document.getElementById("idle-obs-transition").value),
-      obs_ratio: document.getElementById("idle-obs-ratio").value.trim(),
       show_weather: document.getElementById("idle-show-weather").checked,
       show_itinerary: document.getElementById("idle-show-itinerary").checked,
       show_telemetry: document.getElementById("idle-show-telemetry").checked,

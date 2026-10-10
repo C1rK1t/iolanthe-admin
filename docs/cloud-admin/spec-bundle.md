@@ -38,8 +38,8 @@ reads today**, so `buildCharterPayload` and the boat admin keep working unchange
   reserved-periods.json
 ```
 
-Never in a bundle: `active-charter.json`, `watches.json`, `track.json`, `drink-stocks.json`, `navigation.json`,
-`settings.admin`, weather, display or screensaver settings. Those are boat-owned (ownership draft §2).
+Never in a bundle: `active-charter.json`, `watches.json`, `track.json`, `drink-stocks.json`, `settings.admin`, weather,
+display or screensaver settings. Those are boat-owned (ownership draft §2).
 
 Module membership of each file is fixed by the ownership draft. A module that is switched off for a vessel simply
 has no files in the bundle and no entry in `manifest.modules`.
