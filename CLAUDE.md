@@ -79,6 +79,13 @@ white for any body that has it.
   `/api/admin/charter/<id>/pack` and prints by moving the live pages into `<body>` (`#pack-print-host`) and back on
   `afterprint`. Data:
   `/api/charter?charter=<id>`. Themes A / B / C are classes `.pack-theme-a/b/c`; assets in `assets/pack/`.
+  The cover photo's crop is the pack's `cover_focus` `{x, y}` (0..1, default the centre; the server's `lib/charter-pack.js` mirrors
+  the rules and keeps the stored point when a save leaves it out). The Cover section shows the whole photo with a dot: click or
+  drag, or the arrow keys (Shift = bigger steps), and the pages follow live; the cover `<img>` gets `object-position` from
+  the model's `coverPosition` (`focusCss`), so the print / PDF crop matches. A new upload or "default cover" resets it to the centre.
+  The preview stage is centred when it is wider than A4 (`.cp-scaler` has `margin: 0 auto`) and takes the keys `pageKeyStep`
+  (pack-core.js) maps: ← ↑ PageUp back, → ↓ PageDown forward, Home / End; they act only while the stage or a page button has
+  focus or the pointer is over the stage, never from a text field, and never with Ctrl / Alt / Meta.
 - The Charter section menu reads **Charter Admin** (the info panel, id `info`), **Route & Itinerary** (`routes`), Crew,
   **Charter Pack** (`pack`), Guest view, Site Editor; the two-line wraps are `<br>`s in the labels (`renderCharter`).
 - Reserved periods (maintenance / unavailable / other) come from `/api/admin/reserved-periods` and save with a
@@ -134,7 +141,7 @@ white for any body that has it.
   - A server without the marker simply lacks the marker-driven behaviour above. Three things changed for every server:
     the anchorages save waits for its load, the menu import reads the source before the overwrite question, and the
     pack cover upload goes through `throwAdminApiError` (login handling and the banner).
-- `node --test` runs the tests in `test/` (263 tests), which cover `routes-core`, `itinerary-core`, `charters-core`,
+- `node --test` runs the tests in `test/` (282 tests), which cover `routes-core`, `itinerary-core`, `charters-core`,
   `guest-preview-core`, `pack-core`, `pack-render`, `drag-reorder`, `merge-core`, `damaged-core`, the damaged-file
   pages (`damaged-page.test.js`, `admin.js` in a `vm` sandbox), the anchorages save guard
   (`routes-places-guard.test.js`), the startup order (`startup-order.test.js` runs `admin.js` alone in a `vm` sandbox),

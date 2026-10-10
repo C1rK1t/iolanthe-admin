@@ -30,7 +30,7 @@
         + `${model.coverNote ? `<p class="pack-note">${lines(model.coverNote)}</p>` : ""}</div>`
       : "<div></div>";
     return `<div class="pack-cover">`
-      + `<img class="pack-cover-photo" src="${esc(opts.coverUrl)}" alt="">`
+      + `<img class="pack-cover-photo" src="${esc(opts.coverUrl)}" style="object-position: ${esc(model.coverPosition || "50% 50%")}" alt="">`
       + `<div class="pack-cover-text">`
       + `<div class="pack-kicker">${esc(model.kicker)}</div>`
       + `<div class="pack-ornament" aria-hidden="true">✦</div>`
