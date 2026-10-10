@@ -99,7 +99,7 @@
       if (!list.length) {
         host.replaceChildren(el("div", { class: "strip-empty" },
           el("span", { class: "empty" }, "No stops yet. Tap an anchorage in Add mode, or"),
-          ctx.getCharter() && !ctx.readOnly() ? iconBtn("start", "Start from an unassigned route or another charter", () => ctx.openStartFrom()) : el("span", { class: "empty" }, " make a waypoint a stop.")));
+          ctx.getCharter() && !ctx.readOnly() ? iconBtn("loadRoute", "Load an existing route (an unassigned route or one from another charter)…", () => ctx.openStartFrom()) : el("span", { class: "empty" }, " make a waypoint a stop.")));
         return;
       }
       const id = selectedIdOf(rec);

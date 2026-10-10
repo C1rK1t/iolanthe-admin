@@ -20,15 +20,20 @@
     anchor: '<circle cx="12" cy="5" r="2"/><path d="M12 7v14M5 13a7 7 0 0 0 14 0M8 10h8"/>',
     erase: '<path d="M7 21h10M5 15l9-9 5 5-9 9H8z"/>',
     join: '<circle cx="5" cy="6" r="2"/><circle cx="5" cy="18" r="2"/><path d="M7 6h3a4 4 0 0 1 4 4v0a4 4 0 0 0 4 4h3M7 18h3a4 4 0 0 0 4-4"/><path d="M18 11l3 3-3 3"/>',
-    import: '<path d="M12 16V4M7 9l5-5 5 5M4 20h16"/>',
-    export: '<path d="M12 4v12M7 11l5 5 5-5M4 20h16"/>',
+    // Route in / out icons (captain, 2026-10-10: the Play button read as "play"). The arrows are the same in every icon:
+    // up = a route comes into the planner, down = it goes out. loadRoute: the route (a wave with a dot at each end) under
+    // an up arrow. importRoute: a globe with the arrow leading out of its top. exportRoute: the same with the arrow down.
+    // assignRoute (library view, "Assign this route to the charter"): the route under a down arrow.
+    loadRoute: '<circle cx="4" cy="18.5" r="1.5"/><circle cx="20" cy="18.5" r="1.5"/><path d="M5.5 18.5c2.2-3.2 4.3-3.2 6.5 0s4.3 3.2 6.5 0"/><path d="M12 13V2M8 6l4-4 4 4"/>',
+    importRoute: '<path d="M7.5 9.6A7 7 0 1 0 16.5 9.6"/><path d="M5 15h5.5M13.5 15h5.5M7.2 19.3c2.8-1.1 6.8-1.1 9.6 0"/><path d="M12 15V2M8 6l4-4 4 4"/>',
+    exportRoute: '<path d="M7.5 9.6A7 7 0 1 0 16.5 9.6"/><path d="M5 15h5.5M13.5 15h5.5M7.2 19.3c2.8-1.1 6.8-1.1 9.6 0"/><path d="M12 2v13M8 11l4 4 4-4"/>',
+    assignRoute: '<circle cx="4" cy="18.5" r="1.5"/><circle cx="20" cy="18.5" r="1.5"/><path d="M5.5 18.5c2.2-3.2 4.3-3.2 6.5 0s4.3 3.2 6.5 0"/><path d="M12 2v11M8 9l4 4 4-4"/>',
     copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>',
     eye: '<path d="M2.8 12s3.4-6 9.2-6 9.2 6 9.2 6-3.4 6-9.2 6-9.2-6-9.2-6z"/><circle cx="12" cy="12" r="3"/>',
     prev: '<path d="M15 6l-6 6 6 6"/>',
     next: '<path d="M9 6l6 6-6 6"/>',
     gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>',
     revert: '<path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/>',
-    start: '<path d="M6 4l14 8-14 8z"/>',
     search: '<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>',
     grip: '<circle cx="9" cy="6" r="1.3"/><circle cx="15" cy="6" r="1.3"/><circle cx="9" cy="12" r="1.3"/><circle cx="15" cy="12" r="1.3"/><circle cx="9" cy="18" r="1.3"/><circle cx="15" cy="18" r="1.3"/>'
   };

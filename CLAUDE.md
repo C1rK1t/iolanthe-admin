@@ -131,12 +131,13 @@ white for any body that has it.
   - A server without the marker simply lacks the marker-driven behaviour above. Three things changed for every server:
     the anchorages save waits for its load, the menu import reads the source before the overwrite question, and the
     pack cover upload goes through `throwAdminApiError` (login handling and the banner).
-- `node --test` runs the tests in `test/` (263 tests), which cover `routes-core`, `itinerary-core`, `charters-core`,
+- `node --test` runs the tests in `test/` (269 tests), which cover `routes-core`, `itinerary-core`, `charters-core`,
   `guest-preview-core`, `pack-core`, `pack-render`, `drag-reorder`, `merge-core`, `damaged-core`, the damaged-file
   pages (`damaged-page.test.js`, `admin.js` in a `vm` sandbox), the anchorages save guard
   (`routes-places-guard.test.js`), the startup order (`startup-order.test.js` runs `admin.js` alone in a `vm` sandbox),
   the refused-access card (`refused-access.test.js`, the same sandbox) and the Settings panels
-  (`settings-panels.test.js`, the same sandbox)
+  (`settings-panels.test.js`, the same sandbox) and the Routes panel icon set (`routes-ui-icons.test.js`: every icon a
+  button asks for exists, and the Load / Import / Export / Assign arrows stay consistent)
 - `routes.js` / `routes.css` — the Route panel (Charter → Route): state, side panel, header, map, saving and wiring. A
   "Working on" selector gives it two subjects: the library routes (the route library, saved through
   `/api/admin/routes/*`) and this charter's route (the route stored in the charter's `itinerary.json`, saved through
@@ -146,7 +147,9 @@ white for any body that has it.
   items and stop settings; Start from… imports a record through `/api/admin/charter/<id>/itinerary/import`. It uses the
   `window.IolantheAdmin` helpers exposed at the end of `admin.js`, and its styles are scoped under `.routes-panel` /
   `.routes-modal`. Helper files, each created per bind with a `ctx` from routes.js:
-  - `routes-ui.js` — `el()`, icons, `fmtPos` and the modal shell (`openModal`)
+  - `routes-ui.js` — `el()`, icons, `fmtPos` and the modal shell (`openModal`). The route in / out icons share one up
+    arrow and one down arrow: `loadRoute` (route line + up), `importRoute` (globe + up), `exportRoute` (globe + down),
+    `assignRoute` (route line + down); there is no Play icon
   - `routes-popup.js` — the point popup (Make stop at / Make stop here / Remove stop, sites served)
   - `routes-lists.js` — the Legs tab list and per-leg speeds
   - `routes-join.js` — Add another route

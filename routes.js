@@ -332,11 +332,11 @@
         b("undo", "Undo (Ctrl+Z)", undo, "", ro || !history.undo.length),
         b("redo", "Redo (Ctrl+Y)", redo, "", ro || !history.redo.length),
         el("span", { class: "icon-sep" }),
-        b("start", "Start from an unassigned route or another charter…", () => openStartFrom(), "", ro || saving),
+        b("loadRoute", "Load an existing route (an unassigned route or one from another charter)…", () => openStartFrom(), "", ro || saving),
         b("trash", "Clear this route (start afresh)", clearRoute, "", ro || saving || !work.route.points.length),
         b("saveAs", "Save as an unassigned route (items kept)", () => saveAs(false), "", work.route.points.length < 2),
-        b("import", "Import KML / GPX", () => io.openImport(), "", ro),
-        b("export", "Export GPX / KML", () => io.openExport(), "", work.route.points.length < 2),
+        b("importRoute", "Import an external route (KML / GPX)", () => io.openImport(), "", ro),
+        b("exportRoute", "Export this route (GPX / KML)", () => io.openExport(), "", work.route.points.length < 2),
         el("span", { class: "icon-sep" }),
         b("eye", "Guest view (the saved version)", () => A().showCharterPanel("preview", { previewDay: cards ? cards.selectedDay() : 0 })));
       return;
@@ -350,10 +350,10 @@
       el("span", { class: "icon-sep" }),
       b("plus", "New route", newRoute),
       b("saveAs", "Save As", () => saveAs(false), "", work.route.points.length < 2),
-      b("start", "Assign this route to the charter (Start from…)", () => assignToCharter(), "", !work.route.id || work.route.points.length < 2),
+      b("assignRoute", "Assign this route to the charter", () => assignToCharter(), "", !work.route.id || work.route.points.length < 2),
       b("join", "Add another route to this one", () => join.openJoin()),
-      b("import", "Import KML / GPX", () => io.openImport()),
-      b("export", "Export GPX / KML", () => io.openExport(), "", work.route.points.length < 2),
+      b("importRoute", "Import an external route (KML / GPX)", () => io.openImport()),
+      b("exportRoute", "Export this route (GPX / KML)", () => io.openExport(), "", work.route.points.length < 2),
       b("trash", "Delete route", deleteRoute, "", !hasId));
   }
 
