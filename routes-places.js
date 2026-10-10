@@ -88,7 +88,6 @@
           body: JSON.stringify({ anchorages: buildNext(anchorageList) })
         });
         anchorageList = Array.isArray(data.anchorages) ? data.anchorages : [];
-        loaded = true;
         return anchorageList;
       });
     }

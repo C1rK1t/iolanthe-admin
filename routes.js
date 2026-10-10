@@ -1109,7 +1109,7 @@
   function showLoadError(error) {
     const planner = panel.querySelector(".planner");
     if (!planner) return;
-    const refused = window.IolantheDamaged ? window.IolantheDamaged.refusal(error) : null;
+    const refused = window.IolantheDamaged.refusal(error);
     if (refused) {
       // Spec C §4.6: routes.json can't be read, so the page can't list its routes.
       const host = el("div", { class: "planner-damaged" });
@@ -1267,10 +1267,11 @@
       loadLibrary(mine);
     }
     myPlaces.load().then(() => {
+      if (!mine.querySelector(".planner")) return;   // the damaged notice replaced the planner: nothing to draw
       if (panel === mine && mine.isConnected && places === myPlaces && work) renderAll();
     }).catch((error) => {
       if (panel !== mine) return;
-      const refused = window.IolantheDamaged ? window.IolantheDamaged.refusal(error) : null;
+      const refused = window.IolantheDamaged.refusal(error);
       // Spec C §4.6: the route works without its anchorages while anchorages.json can't be read, and the strip says so.
       if (refused) A().showDamagedStrip(mine, refused.file, refused.problem);
       else A().setStatus(error.message, "error");
