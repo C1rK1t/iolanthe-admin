@@ -593,3 +593,58 @@ test("menu import from a charter whose menus.json reads fine reads the source fi
   assert.equal(dialog.errorField.textContent, "");
   assert.deepEqual(saves(page.requests), []);
 });
+
+// ---- Spec C 4.6 A8: coming back to the tab -------------------------------------------------------------------------
+
+const comeBack = async page => {
+  (page.listeners.visibilitychange || []).forEach(listener => listener({ type: "visibilitychange" }));
+  await settleAll();
+};
+const stamps = (menus, charter) => ({ library: {}, charter: { "menus.json": menus, "charter.json": charter } });
+const GOOD_STAMPS = stamps({ revision: 3 }, { revision: 4 });
+
+test("coming back to the tab with nothing changed does not redraw the page", async () => {
+  const page = await openAdmin(GALLEY, { "/api/admin/charter/csaba": bundleWith(DATED), "/api/admin/revisions": GOOD_STAMPS });
+  const before = reads(page, "csaba");
+  await comeBack(page);
+  assert.equal(reads(page, "csaba"), before);
+});
+
+test("coming back to the tab after a file broke (same revision) redraws the page, now with the notice", async () => {
+  const page = await openAdmin(GALLEY, { "/api/admin/charter/csaba": bundleWith(DATED), "/api/admin/revisions": GOOD_STAMPS });
+  const before = reads(page, "csaba");
+  page.replies["/api/admin/charter/csaba"] = { ...bundleWith(DATED), "menus.json": { menus: [], revision: 3, ...STAMP, damaged: PROBLEM } };
+  page.replies["/api/admin/revisions"] = stamps({ revision: 3, damaged: PROBLEM }, { revision: 4 });
+  await comeBack(page);
+  assert.equal(reads(page, "csaba"), before + 1);
+  assert.match(page.workspace.innerHTML, /menus\.json can&#39;t be read/);
+});
+
+test("coming back to the tab after a damaged file was fixed redraws the page without the notice", async () => {
+  const page = await openAdmin(GALLEY, { "/api/admin/charter/csaba": bundleWith(DAMAGED), "/api/admin/revisions": stamps({ revision: 3 }, { revision: 0, damaged: PROBLEM }) });
+  assert.match(page.workspace.innerHTML, /charter\.json can&#39;t be read/);
+  const before = reads(page, "csaba");
+
+  // Still damaged: left alone.
+  await comeBack(page);
+  assert.equal(reads(page, "csaba"), before);
+
+  page.replies["/api/admin/charter/csaba"] = bundleWith(DATED);
+  // Fixed at the same revision 0 the damaged stamp carried: only the marker changed.
+  page.replies["/api/admin/revisions"] = stamps({ revision: 3 }, { revision: 0 });
+  await comeBack(page);
+  assert.equal(reads(page, "csaba"), before + 1);
+  assert.match(page.workspace.innerHTML, /id="menu-days"/);
+  assert.equal(page.workspace.innerHTML.includes("can&#39;t be read"), false);
+});
+
+test("coming back to the tab with a different damage problem redraws the page", async () => {
+  const page = await openAdmin(GALLEY, { "/api/admin/charter/csaba": bundleWith(DAMAGED), "/api/admin/revisions": stamps({ revision: 3 }, { revision: 0, damaged: PROBLEM }) });
+  const before = reads(page, "csaba");
+  const other = "is empty";
+  page.replies["/api/admin/charter/csaba"] = bundleWith({ ...DAMAGED, damaged: other });
+  page.replies["/api/admin/revisions"] = stamps({ revision: 3 }, { revision: 0, damaged: other });
+  await comeBack(page);
+  assert.equal(reads(page, "csaba"), before + 1);
+  assert.match(page.workspace.innerHTML, /charter\.json is empty\./);
+});

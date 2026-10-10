@@ -3183,6 +3183,15 @@
     return Object.prototype.hasOwnProperty.call(seenRevisions, file) ? seenRevisions[file] : null;
   }
 
+  // What the page saw of a file's damage (spec C §4.6): its problem, "" when it read fine, null when it has not loaded it.
+  function knownDamageOf(file, charterId) {
+    const bundle = state.bundle && state.bundle.charter_id === charterId ? state.bundle : null;
+    if (bundle && bundle[file]) {
+      return damagedCore().damagedIn(bundle[file]);
+    }
+    return Object.prototype.hasOwnProperty.call(seenDamage, file) ? seenDamage[file] : null;
+  }
+
   async function checkFreshness() {
     const section = state.selectedSection;
     const files = ((FRESHNESS_PANEL_FILES[section] || {})[state.sectionPanels[section]]) || [];
@@ -3199,8 +3208,14 @@
       const stamps = await response.json();
       const served = { ...(stamps.library || {}), ...(stamps.charter || {}) };
       const moved = files.some(file => {
+        const now = served[file];
+        if (!now) {
+          return false;
+        }
         const known = knownRevision(file, charterId);
-        return known !== null && served[file] && served[file].revision !== known;
+        const seen = knownDamageOf(file, charterId);
+        // A revision someone else saved, or a file fixed or broken since the page drew it (SC-D16's damaged on the stamp).
+        return (known !== null && now.revision !== known) || (seen !== null && damagedCore().damagedIn(now) !== seen);
       });
       if (moved && !busy() && state.selectedSection === section && state.selectedCharter === charterId) {
         await ({ charter: renderCharter, galley: renderGalley, hotel: renderHotel })[section]();
