@@ -1165,26 +1165,137 @@ git commit -m "feat(admin): Charter Admin, Crew, Site Editor and this charter's 
 
 ---
 
-### Task 7: A save the server refuses gets a banner
+### Task 7: A refused save gets a banner, and a page never saves a file it loaded damaged
+
+#16's "what the server cannot close" gap is the reason for the guard. A page that loaded a file while it was damaged
+holds the defaults at revision 0. Once the file is repaired, if its revision is 0 too (not saved since migration v7, or
+restored from before spec C), that page's save passes the revision check and replaces the repaired file. The notice
+keeps the blocked pages from saving. Two kinds of view can still save from such a load:
+- views that aren't blocked: the Route page's Edit site saves `sites.json`, and the drink stock picker loads its own copy;
+- a page whose file broke after it loaded.
+
+So `saveRevisioned` refuses a base marked damaged, and merge-core never merges the marker or counts it as a change.
 
 **Files:**
+- Modify: `merge-core.js` (`mergeFields`, `changedFields`)
 - Modify: `admin.js`:
   - `api` and `uploadSiteMedia` (about lines 150-237)
   - `throwAdminApiError` (about line 239)
-  - the helper block (`showDamagedBanner`)
-  - the `window.IolantheAdmin` exports (about line 14835)
+  - `saveRevisioned` (about line 14511) and its four callers: `saveCharterFile`, `saveLibraryCopy`, `saveSitesLibrary`,
+    and the Charter Admin form
+  - the helper block (`showDamagedBanner`, `damagedBaseError`)
+  - the exports
+- Test: `test/merge-core.test.js`, `test/damaged-page.test.js`
 
-No sandbox test: the banner needs a real DOM (`.section-content`, `insertBefore`). Task 13 checks it in the browser.
+- [ ] **Step 1: Write the failing tests**
 
-- [ ] **Step 1: Implement**
+Append to `test/merge-core.test.js`:
 
-**1.** In `api`, replace `throwAdminApiError(response, payload, "Request failed");` with:
+```js
+test("the server's damaged marker is never merged in or counted as a change (SC-D16)", () => {
+  const result = core.merge3({ name: "A" }, { name: "A", damaged: "is empty" }, { name: "A", revision: 2, saved_by: "hotel", saved_at: "2026-11-03T06:02:00.000Z" }, {});
+  assert.equal("damaged" in result.merged, false);
+  assert.equal("damaged" in result.rebased, false);
+  assert.deepEqual(core.changedFields({ name: "A", damaged: "is empty" }, { name: "A" }), []);
+});
+```
+
+Append to `test/damaged-page.test.js`:
+
+```js
+test("a save from a copy loaded while its file was damaged is refused before it is sent, even once the file is repaired", async () => {
+  const page = await openAdmin(CHARTER_ADMIN, charterAnswers(bundleWith(DATED), {
+    "/api/admin/sites": { sites: [], revision: 0, saved_by: "", saved_at: "", damaged: "is empty" }
+  }));
+  // The Route page's Edit site saves through saveSitesLibrary from this load (the Site Editor shows the notice instead).
+  await assert.rejects(
+    page.window.IolantheAdmin.saveSitesLibrary({ sites: [{ id: "coron", title: "Coron", latitude: 11.9975, longitude: 120.201 }] }, "Site saved."),
+    { message: /^sites\.json can't be read, so your change wasn't saved\./ }
+  );
+  assert.deepEqual(saves(page.requests), []);
+});
+```
+
+- [ ] **Step 2: Run them and watch them fail**
+
+Run: `node --test test/merge-core.test.js test/damaged-page.test.js`
+Expected:
+- The merge-core test FAILS: `merged` keeps `damaged`, and `changedFields` gives `["damaged"]`.
+- The sandbox test FAILS with `Missing expected rejection`, because the save was sent.
+
+- [ ] **Step 3: Implement in `merge-core.js`**
+
+Replace:
+
+```js
+  const STAMP_KEYS = ["revision", "saved_by", "saved_at"];
+```
+
+with:
+
+```js
+  const STAMP_KEYS = ["revision", "saved_by", "saved_at"];
+  // The server's mark on a copy made from defaults (SC-D16): never part of a file, so never merged, kept or a change.
+  const MARKER_KEYS = ["damaged"];
+```
+
+In `mergeFields`, replace:
+
+```js
+    const skip = new Set([...STAMP_KEYS, ...(spec.derived || [])]);
+```
+
+with:
+
+```js
+    const skip = new Set([...STAMP_KEYS, ...MARKER_KEYS, ...(spec.derived || [])]);
+```
+
+and, in the same function, replace:
+
+```js
+        if (!STAMP_KEYS.includes(field)) {
+```
+
+with:
+
+```js
+        if (!STAMP_KEYS.includes(field) && !MARKER_KEYS.includes(field)) {
+```
+
+In `changedFields`, replace:
+
+```js
+    const ignore = new Set([...STAMP_KEYS, ...(skip || [])]);
+```
+
+with:
+
+```js
+    const ignore = new Set([...STAMP_KEYS, ...MARKER_KEYS, ...(skip || [])]);
+```
+
+- [ ] **Step 4: Implement the banner in `admin.js`**
+
+**1.** In `api`, replace:
+
+```js
+      throwAdminApiError(response, payload, "Request failed");
+```
+
+with:
 
 ```js
       throwAdminApiError(response, payload, "Request failed", options && options.method);
 ```
 
-**2.** In `uploadSiteMedia`, replace `throwAdminApiError(response, payload, "Image upload failed");` with:
+**2.** In `uploadSiteMedia`, replace:
+
+```js
+      throwAdminApiError(response, payload, "Image upload failed");
+```
+
+with:
 
 ```js
       throwAdminApiError(response, payload, "Image upload failed", "POST");
@@ -1217,9 +1328,10 @@ No sandbox test: the banner needs a real DOM (`.section-content`, `insertBefore`
 
 ```js
 
-  // A save refused because its file can't be read: it broke after the page loaded. The banner goes at the top of the
-  // open page (under the band, the charter selector and any strip), replacing an earlier one. What was typed stays on
-  // screen; Reload draws the page again, after the usual question when there are unsaved changes.
+  // A save refused because its file can't be read: it broke after the page loaded, or the page loaded it damaged. The
+  // banner goes at the top of the open page (under the band, the charter selector and any strip), replacing an earlier
+  // one. What was typed stays on screen; Reload draws the page again, after the usual question when there are unsaved
+  // changes.
   function showDamagedBanner(refused) {
     const content = els.workspace.querySelector(".section-content");
     if (!content) {
@@ -1245,6 +1357,18 @@ No sandbox test: the banner needs a real DOM (`.section-content`, `insertBefore`
       }
     });
   }
+
+  // What a save gets when its page loaded the file damaged (saveRevisioned): the banner, and an error shaped like the
+  // server's 500 for a damaged file.
+  function damagedBaseError(file, problem) {
+    const name = file || "This file";
+    showDamagedBanner({ file: name, problem });
+    const text = damagedCore().bannerText(name, problem);
+    const error = new Error(`${text.lead} ${text.rest}`);
+    error.status = 500;
+    error.payload = { error: error.message, code: "damaged", file: name, damaged: problem };
+    return error;
+  }
 ```
 
 **5.** In the `window.IolantheAdmin` exports, replace:
@@ -1262,16 +1386,98 @@ with:
     throwAdminApiError,
 ```
 
-- [ ] **Step 2: Run the tests**
+- [ ] **Step 5: Implement the guard in `saveRevisioned`**
 
-Run: `node --test`
-Expected: PASS, 229. The sandbox's fetch always answers `ok: true`, so `throwAdminApiError` doesn't run there.
+Replace:
 
-- [ ] **Step 3: Commit**
+```js
+  function saveRevisioned({ path, queue, schema, base, mine, normalize, wrap, unwrap }) {
+    const snapshot = cloneData(mine);
+```
+
+with:
+
+```js
+  // file: the file's name, for the refusal below.
+  function saveRevisioned({ path, queue, schema, base, mine, normalize, wrap, unwrap, file }) {
+    // Spec C §4.6: a page never saves a file it loaded while the file was damaged, not even once it is repaired. A
+    // repaired file at revision 0 would pass the server's revision check, and this page's copy was made from the defaults.
+    const problem = damagedCore().damagedIn(base());
+    if (problem) {
+      return Promise.reject(damagedBaseError(file, problem));
+    }
+    const snapshot = cloneData(mine);
+```
+
+Then give each caller its file. In `saveCharterFile`, replace:
+
+```js
+        queue: `${charterId}/${file}`,
+```
+
+with:
+
+```js
+        queue: `${charterId}/${file}`,
+        file,
+```
+
+In `saveLibraryCopy`, replace:
+
+```js
+      path,
+      schema,
+      base: () => libraryBases.get(workingCopy) || {},
+```
+
+with:
+
+```js
+      path,
+      file,
+      schema,
+      base: () => libraryBases.get(workingCopy) || {},
+```
+
+In `saveSitesLibrary`, replace:
+
+```js
+      path: "/api/admin/sites/save",
+      schema: "sites",
+```
+
+with:
+
+```js
+      path: "/api/admin/sites/save",
+      file: "sites.json",
+      schema: "sites",
+```
+
+In the Charter Admin form's save (`bindCharterInfoPanel`), replace:
+
+```js
+          queue: `${state.selectedCharter}/charter.json`,
+```
+
+with:
+
+```js
+          queue: `${state.selectedCharter}/charter.json`,
+          file: "charter.json",
+```
+
+- [ ] **Step 6: Run the tests**
+
+Run: `node --test test/merge-core.test.js test/damaged-page.test.js`, then `node --test`
+Expected: PASS, 231 in all. A server refusal's banner needs a real DOM (`.section-content`), so Task 13 checks it in
+the browser.
+
+- [ ] **Step 7: Commit**
 
 ```bash
-git add admin.js
-git commit -m "feat(admin): a save refused for a damaged file shows a banner at the top of the page" -m "Spec C 4.6: the file broke after the page loaded. What was typed stays on screen; Reload draws the page again." -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+git add merge-core.js admin.js test/merge-core.test.js test/damaged-page.test.js
+git commit -m "feat(admin): a refused save gets a banner, and a page never saves a file it loaded damaged" -m "Spec C 4.6 and #16's 'what the server cannot close': a copy made from a damaged file's defaults at revision 0 would replace the file once it was repaired at revision 0 too. saveRevisioned refuses such a base before sending; merge-core never merges the damaged marker. A server refusal shows the same banner, and what was typed stays on screen." -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -1281,6 +1487,7 @@ git commit -m "feat(admin): a save refused for a damaged file shows a banner at 
 **Files:**
 - Modify: `admin.js`: the helper block (`showDamagedStrip`) and the exports
 - Modify: `routes.js`: `showLoadError` and `loadLibrary` (about line 1109), and the end of `bind` (about line 1258)
+- Modify: `routes-places.js`: `saveLibrary` (about line 79)
 
 - [ ] **Step 1: Implement in `admin.js`**
 
@@ -1377,17 +1584,42 @@ with:
     });
 ```
 
-- [ ] **Step 3: Check**
+- [ ] **Step 3: The anchorages save waits for its library**
 
-Run: `node --test` (229 pass), then `node -e "require('./routes.js')"`.
-Expected: the tests pass. The `require` throws `ReferenceError: window is not defined`, which is the file parsing
+The anchorages save writes the whole library from the list `load()` filled, and has no revision check. After a failed
+load (a damaged `anchorages.json`, or a dropped connection), adding one anchorage would replace them all once the file
+reads again. In `routes-places.js` `saveLibrary`, replace:
+
+```js
+      return enqueue(async () => {
+        const data = await A.api("/api/admin/anchorages/save", {
+```
+
+with:
+
+```js
+      return enqueue(async () => {
+        // The save writes the whole library from this list: never before load() has filled it (spec C §4.6).
+        if (!loaded) {
+          throw new Error("The anchorages haven't been loaded, so they can't be saved. Reload the page.");
+        }
+        const data = await A.api("/api/admin/anchorages/save", {
+```
+
+Its callers already show a thrown message on the status line.
+
+- [ ] **Step 4: Check**
+
+Run: `node --test` (231 pass), then `node -e "require('./routes.js')"` and
+`node -e "require('./routes-places.js')"`.
+Expected: the tests pass. Each `require` throws `ReferenceError: window is not defined`, which is the file parsing
 fine; a `SyntaxError` means a typo.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add admin.js routes.js
-git commit -m "feat(admin): the Route page shows the notice for a damaged routes.json and a strip for anchorages.json" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+git add admin.js routes.js routes-places.js
+git commit -m "feat(admin): the Route page shows the notice for a damaged routes.json and a strip for anchorages.json" -m "The anchorages save, which writes the whole library, waits for its load." -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -1438,7 +1670,7 @@ with:
 
 - [ ] **Step 2: Check**
 
-Run: `node --test` (229 pass), then `node -e "require('./charter-pack.js')"`.
+Run: `node --test` (231 pass), then `node -e "require('./charter-pack.js')"`.
 Expected: the tests pass, and the `require` throws `ReferenceError: window is not defined` (it parsed).
 
 - [ ] **Step 3: Commit**
@@ -1534,7 +1766,7 @@ with:
 - [ ] **Step 3: Run the tests**
 
 Run: `node --test`
-Expected: PASS, 229.
+Expected: PASS, 231.
 
 - [ ] **Step 4: Commit**
 
@@ -1593,7 +1825,7 @@ with:
 - [ ] **Step 2: Run the tests**
 
 Run: `node --test`
-Expected: PASS, 229.
+Expected: PASS, 231.
 
 - [ ] **Step 3: Commit**
 
@@ -1629,6 +1861,9 @@ dialog.`), insert:
   Pack draws the card itself. `reserved-periods.json` gets a strip under the band on every Charter page, the period
   editor won't open, and Charter Admin and the create dialog hold new dates (`charterDatesHeldMessage`). A save the
   server refuses for a damaged file shows a banner (`throwAdminApiError` → `showDamagedBanner`) and keeps what was typed.
+  A page never saves a file it loaded damaged: `saveRevisioned` refuses such a base before sending (a repaired file at
+  revision 0 would pass the server's revision check), merge-core never merges the marker, and the anchorages save waits
+  for its load.
   The crew and menu import pickers refuse a damaged source. Coming back to the tab redraws a page whose file's
   `damaged` changed (`checkFreshness`). Against a server without the marker, everything behaves as before.
 ```
@@ -1642,7 +1877,7 @@ runs the tests in `test/` (210 tests),
 Replace with:
 
 ```text
-runs the tests in `test/` (229 tests),
+runs the tests in `test/` (231 tests),
 ```
 
 And in the same bullet, find:
@@ -1738,7 +1973,8 @@ card.
 **6.** `library/sites.json`: the Site Editor shows the card.
 **7.** `charters/csaba/pack.json`: the Charter Pack shows the card, and nothing is saved.
 **8.** `library/routes.json`: Route & Itinerary shows the card in the planner.
-**9.** `library/anchorages.json`: Route & Itinerary shows the strip "anchorages.json can't be read."
+**9.** `library/anchorages.json`: Route & Itinerary shows the strip "anchorages.json can't be read." Adding an anchorage
+is refused ("The anchorages haven't been loaded …"), and still is after the file is restored, until the page reloads.
 **10.** `reserved-periods.json`:
  - The strip shows under the band on Charter Admin and Crew.
  - The band's Reserved period button shows the message.
@@ -1773,8 +2009,8 @@ message. Run Step 3's case again.
 
 ### Task 14: Review and hand-back
 
-- [ ] **Step 1:** Run `node --test` (229 pass) and `git log --oneline origin/main..HEAD`.
+- [ ] **Step 1:** Run `node --test` (231 pass) and `git log --oneline origin/main..HEAD`.
 - [ ] **Step 2:** Request a code review (superpowers:requesting-code-review) of `git diff origin/main...HEAD`, and fix
   what it finds.
-- [ ] **Step 3:** Stop. Ask David before pushing or opening the PR. Release order: iolanthe-server#16, then the server
-  part, then this. Merging the admin to `main` deploys it within 5 minutes.
+- [ ] **Step 3:** Stop. Ask David before pushing or opening the PR. Release order: the server part (iolanthe-server#16
+  is already live), then this. Merging the admin to `main` deploys it within 5 minutes.

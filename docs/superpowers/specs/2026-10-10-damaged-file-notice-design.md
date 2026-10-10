@@ -2,8 +2,9 @@
 
 Date: 2026-10-10. Approved by David the same day. This is spec C §4 for SC-D16, which left "what the admin shows for a
 damaged file" open, and the follow-up to iolanthe-server#15 (saves never replace a damaged file). It builds on
-iolanthe-server#16 (open), which marks a damaged spec C file on its GETs and in `GET /api/admin/revisions`. If #16's
-shape changes in review, this follows it.
+iolanthe-server#16 (merged as 8c7a877 and live on 2026-10-10), which marks a damaged spec C file on its GETs and in
+`GET /api/admin/revisions`. #16 leaves one gap to the admin, and A5 closes it: a page that loaded a file while it was
+damaged could replace the file once it is repaired at revision 0.
 
 ## Problem
 
@@ -169,15 +170,34 @@ A strip is the notice as one line at the top of the page content, above an edito
 - **A period save the server refuses** because a charter's `charter.json` is damaged (S4) shows the server's message
   in the period dialog's error field, as any error does today.
 - **Anchorages**, on Route & Itinerary, when `anchorages.json` is damaged (its GET answers 500). Anchorages aren't shown;
-  adding, moving or deleting one is refused by the server and gets A5's banner.
+  adding, moving or deleting one is refused by the server and gets A5's banner. The anchorages save writes the whole
+  library from the list its load filled and has no revision check. So it waits for that load: until the list has
+  loaded, it refuses with "The anchorages haven't been loaded, so they can't be saved. Reload the page." Otherwise, once
+  the file read again, one new anchorage would replace them all.
 
-### A5. A refused save
+### A5. A refused save, and no save from a damaged load
 
 When a request other than a GET comes back as A1's `refusal`, the admin shows the banner (A6) at the top of the open
 page's content, replacing an earlier one. This happens in `throwAdminApiError`, which `api()` and the upload helpers use;
 the Charter Pack's cover upload is changed to use it too. What the crew typed stays on screen, and the caller's own
 handling (status line, dialog error) carries on as today. The banner's Reload button draws the page again, which drops
 the unsaved edits as any reload does.
+
+**A page never saves a file it loaded while the file was damaged.** This is #16's "what the server cannot close". The
+copy such a page holds was made from the defaults at revision 0. If the file is then repaired and its revision is 0 too
+(not saved since migration v7, or restored from before spec C), that page's save passes the server's revision check and
+replaces the repaired file. A3's notice keeps the blocked pages from saving. Two kinds of view can still save from such a
+load:
+
+- views that aren't blocked: the Route page's Edit site saves `sites.json`, and the drink stock picker loads its own copy;
+- a page whose file broke after it loaded.
+
+So the guard sits in the save itself:
+
+- `saveRevisioned` refuses before sending when its base (the copy it loaded) carries `damaged`. It shows the same banner
+  and throws an error shaped like the server's refusal.
+- merge-core never merges the marker or counts it as a change, as for the stamp fields.
+- The freshness check (A8) redraws a page when a file's `damaged` changes.
 
 ### A6. Wording
 
@@ -228,8 +248,12 @@ files comes back by itself when the crew return to the tab after the file is fix
   - the marker readers: the bundle, a single GET, the revisions stamps and a refusal, ignoring a missing, empty or
     non-text `damaged`;
   - the wording for one, two and three files, with the problem lines.
-- A sandbox test, as `refused-access.test.js` runs `admin.js`: Galley → Menus with `charter.json` marked damaged draws
-  the card and sends no save; with nothing marked it draws the menus as today.
+- Sandbox tests, which run `admin.js` as `refused-access.test.js` does:
+  - Galley → Menus with `charter.json` marked damaged draws the card and sends no save; with nothing marked it draws the
+    menus as today.
+  - The Hotel and Charter pages and the reserved-periods strip.
+  - A save from a damaged load (`saveSitesLibrary`) is refused without being sent.
+- `node --test` for merge-core: the marker is never merged in or counted as a change.
 - A browser check on a scratch server (a copy of `data-scratch`, the server from S, the admin from A):
   - each blocked page;
   - both strips, the Reserved period button and a date change;
@@ -240,8 +264,8 @@ files comes back by itself when the crew return to the tab after the file is fix
 
 ## Release
 
-1. Merge and release iolanthe-server#16, then this server change, which is stacked on it. Run `./update.sh` on
-   docker-vm. The admin of the day ignores the new fields.
+1. Merge and release this server change (#16 is already live). Run `./update.sh` on docker-vm. The admin of the day
+   ignores the new fields.
 2. Then merge the admin, which auto-deploys within 5 minutes. Against an older server it behaves as today.
 
 Merge and release only on David's word.
@@ -256,3 +280,6 @@ Merge and release only on David's word.
 - Showing a plain-list `crew_list.json` (DN-4).
 - A known limit: while `routes.json` is damaged, the whole Route page shows the card, this charter's route included,
   because the page lists both subjects from the library.
+- The charter list (the Gantt band, Galley and Hotel's charter selector) takes each charter from `GET /api/admin/charters`,
+  which reads `charter.json` leniently. A damaged one lists as an undated charter named after its id, with no mark. Its
+  own pages show the notice (A3).
