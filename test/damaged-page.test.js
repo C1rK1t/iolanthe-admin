@@ -32,9 +32,10 @@ function standIn() {
   });
 }
 
-// An element that keeps what is written to it, and every innerHTML in order (drawn). Anything else is a stand-in.
-function keepingElement() {
-  const kept = { innerHTML: "", textContent: "", className: "", drawn: [] };
+// An element that keeps what is written to it, and every innerHTML in order (drawn). Anything else is a stand-in, except
+// the properties in extras.
+function keepingElement(extras = {}) {
+  const kept = { innerHTML: "", textContent: "", className: "", drawn: [], ...extras };
   return new Proxy(kept, {
     get: (target, prop) => (Object.prototype.hasOwnProperty.call(target, prop) ? target[prop] : standIn()),
     set: (target, prop, value) => {
@@ -89,11 +90,34 @@ const signedIn = (department, sections) => ({
 });
 const GALLEY = signedIn("galley", ["galley"]);
 
+// A button that records the handler added for "click" (the stand-in's addEventListener would drop it).
+function clickable(extras = {}) {
+  const button = { handler: null, addEventListener: (type, fn) => { if (type === "click") button.handler = fn; }, ...extras };
+  return button;
+}
+
 // Signs in with bootstrap, which opens its first section on its default page. Each request is answered from answers by
-// its path (anything else gets {}). Returns the requests sent, the workspace and the window.
+// its path (anything else gets {}), and replies can be changed later. Returns the requests sent, the workspace, the
+// window, replies, retryButtons (the "Try again" buttons the latest drawing bound) and clickNav(panel), which presses
+// that panel's tab in the section's nav and waits for the page to draw.
 async function openAdmin(bootstrap, answers) {
   const requests = [];
-  const workspace = keepingElement();
+  const navButtons = ["menus", "guests"].map(panel => clickable({ dataset: { panel } }));
+  const retryButtons = [];
+  const shell = new Proxy(standIn(), {
+    get: (target, prop) => (prop === "querySelectorAll"
+      ? selector => (selector === ".section-nav [data-panel]" ? navButtons : standIn())
+      : target[prop])
+  });
+  const workspace = keepingElement({
+    querySelector: selector => (selector === '[data-section-shell="galley"]' ? shell : standIn()),
+    querySelectorAll: selector => {
+      if (selector !== "[data-damaged-retry]") return standIn();
+      retryButtons.length = 0;
+      retryButtons.push(clickable());
+      return retryButtons;
+    }
+  });
   const elements = { workspace, "status-panel": keepingElement() };
   const listeners = {};
   const document = new Proxy(standIn(), {
@@ -128,7 +152,11 @@ async function openAdmin(bootstrap, answers) {
   SCRIPTS.forEach(name => vm.runInContext(fs.readFileSync(path.join(ROOT, name), "utf8"), context, { filename: name }));
   (listeners.DOMContentLoaded || []).forEach(listener => listener({ type: "DOMContentLoaded" }));
   await settleAll();
-  return { requests, workspace, window };
+  const clickNav = async panel => {
+    await navButtons.find(button => button.dataset.panel === panel).handler();
+    await settleAll();
+  };
+  return { requests, workspace, window, replies, retryButtons, clickNav };
 }
 
 const saves = requests => requests.filter(request => request.method !== "GET");
@@ -153,4 +181,58 @@ test("Galley → Menus with a good bundle draws the menus and saves nothing", as
   assert.deepEqual(saves(page.requests), []);
   assert.ok(everDrawn(page, /id="menu-days"/));
   assert.equal(everDrawn(page, /can&#39;t be read/), false);
+});
+
+test("a problem text with markup is drawn escaped, never as an element", async () => {
+  const hostile = "<img src=x onerror=alert(1)>";
+  const page = await openAdmin(GALLEY, { "/api/admin/charter/csaba": bundleWith({ ...DAMAGED, damaged: hostile }) });
+  assert.match(page.workspace.innerHTML, /charter\.json can&#39;t be read/);
+  assert.ok(page.workspace.innerHTML.includes("&lt;img"));
+  assert.equal(page.workspace.innerHTML.includes("<img src=x"), false);
+  assert.deepEqual(saves(page.requests), []);
+});
+
+test("Try again reads the charter again, and shows the page once the file is fixed", async () => {
+  const page = await openAdmin(GALLEY, { "/api/admin/charter/csaba": bundleWith(DAMAGED) });
+  const reads = () => page.requests.filter(request => request.method === "GET" && request.pathname === "/api/admin/charter/csaba").length;
+  assert.equal(page.retryButtons.length, 1);
+  assert.equal(reads(), 1);
+
+  // Still damaged: another read, the notice again.
+  await page.retryButtons[0].handler();
+  await settleAll();
+  assert.equal(reads(), 2);
+  assert.match(page.workspace.innerHTML, /charter\.json can&#39;t be read/);
+
+  // Fixed on the server: the read after Try again draws the menus and the notice is gone.
+  page.replies["/api/admin/charter/csaba"] = bundleWith(DATED);
+  await page.retryButtons[0].handler();
+  await settleAll();
+  assert.equal(reads(), 3);
+  assert.match(page.workspace.innerHTML, /id="menu-days"/);
+  assert.equal(page.workspace.innerHTML.includes("can&#39;t be read"), false);
+  assert.deepEqual(saves(page.requests), []);
+});
+
+test("Galley → Menus with menus.json marked damaged (charter.json fine): the notice names menus.json, nothing saved", async () => {
+  const menus = { menus: [], revision: 0, saved_by: "", saved_at: "", damaged: PROBLEM };
+  const page = await openAdmin(GALLEY, { "/api/admin/charter/csaba": { ...bundleWith(DATED), "menus.json": menus } });
+  assert.deepEqual(saves(page.requests), []);
+  assert.match(page.workspace.innerHTML, /menus\.json can&#39;t be read/);
+  assert.match(page.workspace.innerHTML, /menus\.json is not valid JSON at line 3 column 5\./);
+  assert.equal(page.workspace.innerHTML.includes("charter.json"), false);
+  assert.equal(everDrawn(page, /id="menu-days"/), false);
+});
+
+test("Galley → Guests with guest_list.json marked damaged: the notice, nothing saved (Menus still works)", async () => {
+  const guests = { guests: [], revision: 0, saved_by: "", saved_at: "", damaged: PROBLEM };
+  const page = await openAdmin(GALLEY, { "/api/admin/charter/csaba": { ...bundleWith(DATED), "guest_list.json": guests } });
+  assert.ok(everDrawn(page, /id="menu-days"/), "the Menus panel is not blocked by guest_list.json");
+  assert.equal(page.workspace.innerHTML.includes("can&#39;t be read"), false);
+
+  await page.clickNav("guests");
+  assert.match(page.workspace.innerHTML, /guest_list\.json can&#39;t be read/);
+  assert.match(page.workspace.innerHTML, /guest_list\.json is not valid JSON at line 3 column 5\./);
+  assert.match(page.workspace.innerHTML, /Nothing has been changed\./);
+  assert.deepEqual(saves(page.requests), []);
 });
