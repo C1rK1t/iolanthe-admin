@@ -715,3 +715,12 @@ save could undo it. Spec: [spec-c.md](spec-c.md). Mockup `.superpowers/brainstor
   once create the same days, not twice as many. Known and left: new drink stock ids are slugs (two people adding the
   same product at the same moment could share one); a bare-array `crew_list.json` (none on the boat) would show empty;
   after a bar purchase the freshness check may redraw once needlessly.
+- **SC-D16 A stored file that does not parse is never saved over (2026-10-10, David):** a review after
+  iolanthe-server#13 (settings.json fails closed) and #14 (`lib/data-file.js`: damaged data files are kept) found that
+  the nine spec C files still read their stored copy with `readJsonFileSafe`, which turns a damaged file into its
+  defaults at revision 0. A page loaded from those defaults passes the revision check, so its save replaces the file
+  with what was edited from the defaults. Rule (spec C §2.2): a save of a file that is there but does not parse answers
+  500 "<file> can't be read. Fix or restore it before saving." before the revision check, and writes nothing; its GET
+  still answers with the defaults at revision 0 plus `damaged` (the problem, never the file's text), and
+  `GET /api/admin/revisions` adds `damaged` to the stamp. What the admin shows for a damaged file is not specified
+  yet (§4). Not built yet.
