@@ -14323,6 +14323,18 @@
       const availableDrinkStocks = activePanel === "available-alcohol" ? await loadDrinkStocks() : null;
       const availableAlcohol = activePanel === "available-alcohol" ? await loadAvailableAlcohol(state.selectedCharter) : null;
       const purchases = activePanel === "purchased-alcohol" ? await loadCharterAlcoholPurchases(state.selectedCharter) : null;
+      if (activePanel === "purchased-alcohol") {
+        await noteRevisionDamage(state.selectedCharter, ["drink-stocks.json", "available-alcohol.json"]);
+      }
+      // Spec C §4.6: the notice instead of a page that needs a file the server can't read.
+      const blocked = pageDamage("hotel", activePanel);
+      if (blocked.length) {
+        els.workspace.innerHTML = sectionShell("hotel", panels, activePanel, damagedNoticeHtml(blocked), sectionToolbarHtml("hotel"));
+        bindSectionNav("hotel", renderHotel);
+        bindSectionToolbar("hotel", renderHotel);
+        bindDamagedNotice(els.workspace);
+        return;
+      }
       let content = "";
       if (activePanel === "guests") {
         content = renderGuestsPanel({
@@ -14548,6 +14560,16 @@
   function bindDamagedNotice(container) {
     container.querySelectorAll("[data-damaged-retry]").forEach(button => button.addEventListener("click", () => renderSection()));
     container.querySelectorAll("[data-damaged-library-routes]").forEach(button => button.addEventListener("click", () => showCharterPanel("routes", { subject: "library" })));
+  }
+
+  // Purchased Alcohol loads neither the drink stocks nor Available Alcohol, so it reads their state from the revisions,
+  // whose stamps carry `damaged` (SC-D16).
+  async function noteRevisionDamage(charterId, files) {
+    const stamps = await api(`/api/admin/revisions?charter=${encodeURIComponent(charterId)}`);
+    const served = { ...(stamps && stamps.library), ...(stamps && stamps.charter) };
+    files.forEach(file => {
+      seenDamage[file] = damagedCore().damagedIn(served[file]);
+    });
   }
 
   const saveQueues = new Map();

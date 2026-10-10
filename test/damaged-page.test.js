@@ -236,3 +236,18 @@ test("Galley → Guests with guest_list.json marked damaged: the notice, nothing
   assert.match(page.workspace.innerHTML, /Nothing has been changed\./);
   assert.deepEqual(saves(page.requests), []);
 });
+
+const HOTEL = signedIn("hotel", ["hotel"]);
+
+test("Hotel → Guests with charter.json marked damaged: the notice instead of the guest list", async () => {
+  const page = await openAdmin(HOTEL, { "/api/admin/charter/csaba": bundleWith(DAMAGED) });
+  assert.match(page.workspace.innerHTML, /charter\.json can&#39;t be read/);
+  assert.equal(everDrawn(page, /id="guest-editor-list"/), false);
+  assert.deepEqual(saves(page.requests), []);
+});
+
+test("Hotel → Guests with a good bundle draws the guest list", async () => {
+  const page = await openAdmin(HOTEL, { "/api/admin/charter/csaba": bundleWith(DATED) });
+  assert.ok(everDrawn(page, /id="guest-editor-list"/));
+  assert.equal(everDrawn(page, /can&#39;t be read/), false);
+});
