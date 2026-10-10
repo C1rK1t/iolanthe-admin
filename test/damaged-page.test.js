@@ -100,9 +100,9 @@ function clickable(extras = {}) {
 // its path (anything else gets {}), and replies can be changed later. Returns the requests sent, the workspace, the
 // window, replies, retryButtons (the "Try again" buttons the latest drawing bound) and clickNav(panel), which presses
 // that panel's tab in the section's nav and waits for the page to draw.
-async function openAdmin(bootstrap, answers) {
+async function openAdmin(bootstrap, answers, extraElements = {}) {
   const requests = [];
-  const navButtons = ["menus", "guests"].map(panel => clickable({ dataset: { panel } }));
+  const navButtons = ["menus", "guests", "purchased-alcohol"].map(panel => clickable({ dataset: { panel } }));
   const retryButtons = [];
   const shell = new Proxy(standIn(), {
     get: (target, prop) => (prop === "querySelectorAll"
@@ -110,7 +110,7 @@ async function openAdmin(bootstrap, answers) {
       : target[prop])
   });
   const workspace = keepingElement({
-    querySelector: selector => (selector === '[data-section-shell="galley"]' ? shell : standIn()),
+    querySelector: selector => (selector.startsWith("[data-section-shell=") ? shell : standIn()),
     querySelectorAll: selector => {
       if (selector !== "[data-damaged-retry]") return standIn();
       retryButtons.length = 0;
@@ -118,7 +118,7 @@ async function openAdmin(bootstrap, answers) {
       return retryButtons;
     }
   });
-  const elements = { workspace, "status-panel": keepingElement() };
+  const elements = { workspace, "status-panel": keepingElement(), ...extraElements };
   const listeners = {};
   const document = new Proxy(standIn(), {
     get(target, prop) {
@@ -268,4 +268,63 @@ test("Charter pages with reserved-periods.json marked damaged: the strip under t
     && html.includes("reserved-periods.json can&#39;t be read.")
     && html.includes("reserved-periods.json is not valid JSON at line 2 column 1.")
     && html.includes('id="charter-info-form"')));
+});
+
+test("Charter pages with reserved-periods.json fine: no strip", async () => {
+  const page = await openAdmin(CHARTER_ADMIN, charterAnswers(bundleWith(DATED)));
+  assert.ok(everDrawn(page, /id="charter-info-form"/));
+  assert.equal(everDrawn(page, /damaged-strip/), false);
+});
+
+// The revisions stamps carry `damaged` for the files Purchased Alcohol doesn't load itself (SC-D16).
+const drinkStocksDamaged = { library: { "drink-stocks.json": { revision: 0, damaged: PROBLEM } }, charter: {} };
+
+test("Hotel → Purchased Alcohol with drink-stocks.json marked damaged in the revisions: the notice names it, nothing saved", async () => {
+  const page = await openAdmin(HOTEL, { "/api/admin/charter/csaba": bundleWith(DATED), "/api/admin/revisions": drinkStocksDamaged });
+  await page.clickNav("purchased-alcohol");
+  assert.match(page.workspace.innerHTML, /drink-stocks.json can&#39;t be read/);
+  assert.match(page.workspace.innerHTML, /drink-stocks.json is not valid JSON at line 3 column 5./);
+  assert.deepEqual(saves(page.requests), []);
+});
+
+test("Hotel → Purchased Alcohol when the revisions can't be read: the page still draws, no notice, nothing saved", async () => {
+  const page = await openAdmin(HOTEL, { "/api/admin/charter/csaba": bundleWith(DATED) });
+  const failing = page.window.fetch;
+  page.window.fetch = async (url, options) => {
+    if (new URL(String(url)).pathname === "/api/admin/revisions") throw new Error("network down");
+    return failing(url, options);
+  };
+  await page.clickNav("purchased-alcohol");
+  assert.equal(everDrawn(page, /can&#39;t be read/), false);
+  assert.match(page.workspace.innerHTML, /id="purchased-alcohol-list-shell"/);
+  assert.deepEqual(saves(page.requests), []);
+});
+
+// The Charter Admin dates hold (spec C 4.6): with reserved-periods.json unreadable, dates that differ from the stored ones
+// can't be checked, so Save waits; the stored dates are not held.
+test("Charter Admin with reserved-periods.json marked damaged: new dates wait with the message, the stored dates do not", async () => {
+  const input = value => { const el = { value, handler: null, addEventListener: (type, fn) => { if (type === "input") el.handler = fn; } }; return el; };
+  const start = input(DATED.start_date);
+  const end = input(DATED.end_date);
+  const overlap = keepingElement();
+  const save = keepingElement({ disabled: false });
+  const page = await openAdmin(CHARTER_ADMIN, charterAnswers(bundleWith(DATED), {
+    "/api/admin/reserved-periods": { revision: 0, periods: [], damaged: PROBLEM }
+  }), { "charter-info-start-date": start, "charter-info-end-date": end, "charter-info-overlap": overlap, "charter-info-save": save });
+  const held = window => window.IolantheDamagedCore.DATES_MESSAGE;
+  assert.equal(overlap.textContent, "");
+  assert.equal(save.disabled, false);
+
+  start.value = "2026-12-01";
+  end.value = "2026-12-05";
+  start.handler();
+  assert.equal(overlap.textContent, require("../damaged-core.js").DATES_MESSAGE);
+  assert.equal(save.disabled, true);
+
+  start.value = DATED.start_date;
+  end.value = DATED.end_date;
+  start.handler();
+  assert.equal(overlap.textContent, "");
+  assert.equal(save.disabled, false);
+  assert.deepEqual(saves(page.requests), []);
 });
