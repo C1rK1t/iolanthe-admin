@@ -62,11 +62,14 @@ white for any body that has it.
 - `guest-preview-core.js` / `guest-preview.js` / `guest-preview.css` — **Guest view** (charter rework spec B), a tab in the
   Charter, Galley and Hotel sections (`bindGuestPreview` in admin.js; it opens the guest on Itinerary / Today's Menu /
   Wine & Drinks):
-  the live guest site in a same-origin iframe at `/?preview=<date>&charter=<id>#<tab>`, under a day slider (day before
-  boarding … day after the charter), phone 390 × 844 / tablet 820 × 1180 / PC 1280 × 800 scaled to fit, reload, open full screen. Eye
-  buttons on the Charter Info and Route headers open it (`showCharterPanel("preview", { previewDay })`). The server
+  the live guest site in a same-origin iframe at `/index.html?preview=<date>&charter=<id>#<tab>`, under a day slider (day before
+  boarding … day after the charter), phone 390 × 844 / tablet 820 × 1180 / PC 1280 × 800 scaled to fit, reload, open full screen. The
+  section menu's Guest view button is the only way in: the Charter Info and Route headers' eye buttons went on captain
+  feedback (2026-10-10, item 02), as the menu button beside them made them redundant. The server
   serves `?charter=` only to an admin session; the guest's preview mode lives in `iolanthe-guest/preview-mode.js`.
   Device choice in localStorage `iolanthe-admin.preview.device`.
+  The URL is `/index.html`, never a bare `/`: the boat's nginx block for `iolanthe.admin` answers an exact `/` with a 302 to
+  `/admin/` and drops the query, so from that host the iframe showed the admin's plain "Access denied" (2026-10-10).
 - `pack-core.js` / `pack-render.js` / `charter-pack.js` / `charter-pack.css` — **Charter Pack** (charter rework spec P):
   the charter's details as A4 pages for the client or agent, saved as a PDF with the browser's print dialog.
   `pack-core.js` (pure, Node-tested) holds the preset rules (mirror of the server's `lib/charter-pack.js`) and
@@ -138,7 +141,7 @@ white for any body that has it.
   - A server without the marker simply lacks the marker-driven behaviour above. Three things changed for every server:
     the anchorages save waits for its load, the menu import reads the source before the overwrite question, and the
     pack cover upload goes through `throwAdminApiError` (login handling and the banner).
-- `node --test` runs the tests in `test/` (278 tests), which cover `routes-core`, `itinerary-core`, `charters-core`,
+- `node --test` runs the tests in `test/` (282 tests), which cover `routes-core`, `itinerary-core`, `charters-core`,
   `guest-preview-core`, `pack-core`, `pack-render`, `drag-reorder`, `merge-core`, `damaged-core`, the damaged-file
   pages (`damaged-page.test.js`, `admin.js` in a `vm` sandbox), the anchorages save guard
   (`routes-places-guard.test.js`), the startup order (`startup-order.test.js` runs `admin.js` alone in a `vm` sandbox),

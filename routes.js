@@ -336,9 +336,7 @@
         b("trash", "Clear this route (start afresh)", clearRoute, "", ro || saving || !work.route.points.length),
         b("saveAs", "Save as an unassigned route (items kept)", () => saveAs(false), "", work.route.points.length < 2),
         b("import", "Import KML / GPX", () => io.openImport(), "", ro),
-        b("export", "Export GPX / KML", () => io.openExport(), "", work.route.points.length < 2),
-        el("span", { class: "icon-sep" }),
-        b("eye", "Guest view (the saved version)", () => A().showCharterPanel("preview", { previewDay: cards ? cards.selectedDay() : 0 })));
+        b("export", "Export GPX / KML", () => io.openExport(), "", work.route.points.length < 2));
       return;
     }
     $("actions").replaceChildren(

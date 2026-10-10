@@ -49,23 +49,21 @@ test("previewSteps: no dates, bad dates, end before start", () => {
   assert.equal(core.previewSteps({ start_date: "2026-12-31", end_date: "2026-12-31" }, []).map((s) => s.date).join(","), "2026-12-30,2026-12-31,2027-01-01");
 });
 
-test("defaultStepIndex, stepIndexForDay, stepIndexForDate", () => {
+test("defaultStepIndex, stepIndexForDate", () => {
   const steps = core.previewSteps(charter, points);
   assert.equal(core.defaultStepIndex(steps, "2026-11-03"), 3);
   assert.equal(core.defaultStepIndex(steps, "2026-10-31"), 0);
   assert.equal(core.defaultStepIndex(steps, "2026-12-25"), 1);
   assert.equal(core.defaultStepIndex([], "2026-11-03"), 0);
-  assert.equal(core.stepIndexForDay(steps, 5), 5);
-  assert.equal(core.stepIndexForDay(steps, 12), -1);
   assert.equal(core.stepIndexForDate(steps, "2026-11-10"), 10);
   assert.equal(core.stepIndexForDate(steps, "2027-01-01"), -1);
 });
 
 test("previewUrl: encoded params, only a plain tab id kept", () => {
-  assert.equal(core.previewUrl({ date: "2026-11-03", charterId: "csaba", hash: "#itinerary" }), "/?preview=2026-11-03&charter=csaba#itinerary");
-  assert.equal(core.previewUrl({ date: "2026-11-03", charterId: "csaba", hash: "" }), "/?preview=2026-11-03&charter=csaba");
-  assert.equal(core.previewUrl({ date: "2026-11-03", charterId: "a b", hash: "#x\"><img" }), "/?preview=2026-11-03&charter=a%20b");
-  assert.equal(core.previewUrl({ date: "2026-11-03", charterId: "csaba", hash: "#custom_tab-2" }), "/?preview=2026-11-03&charter=csaba#custom_tab-2");
+  assert.equal(core.previewUrl({ date: "2026-11-03", charterId: "csaba", hash: "#itinerary" }), "/index.html?preview=2026-11-03&charter=csaba#itinerary");
+  assert.equal(core.previewUrl({ date: "2026-11-03", charterId: "csaba", hash: "" }), "/index.html?preview=2026-11-03&charter=csaba");
+  assert.equal(core.previewUrl({ date: "2026-11-03", charterId: "a b", hash: "#x\"><img" }), "/index.html?preview=2026-11-03&charter=a%20b");
+  assert.equal(core.previewUrl({ date: "2026-11-03", charterId: "csaba", hash: "#custom_tab-2" }), "/index.html?preview=2026-11-03&charter=csaba#custom_tab-2");
 });
 
 test("fitScale: fits width and height, never above 1, phone by default", () => {
