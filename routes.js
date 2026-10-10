@@ -410,7 +410,9 @@
     if (!h) {
       const strip = $("strip");
       const stripH = strip && strip.offsetHeight ? strip.offsetHeight : 260;
-      const top = panel.querySelector(".planner").getBoundingClientRect().top + window.scrollY;
+      const planner = panel.querySelector(".planner");
+      if (!planner) return;   // the planner was replaced by the "file can't be read" card: no map to fit
+      const top = planner.getBoundingClientRect().top + window.scrollY;
       const headerH = Math.max(0, top);   // everything above the planner (admin header, department bar, Route page header)
       h = window.innerHeight - headerH - stripH - MAP_GAP_PX;
     }
