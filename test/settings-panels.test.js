@@ -49,7 +49,9 @@ function fakeWorkspace() {
   workspace.element = new Proxy(standIn(), {
     get(target, prop) {
       if (prop === "innerHTML") return workspace.html;
-      if (prop === "querySelector") return selector => (String(selector).startsWith("[data-section-shell") ? shell : null);
+      if (prop === "querySelector") {
+        return selector => (String(selector).startsWith("[data-section-shell") ? shell : null);
+      }
       if (prop === "querySelectorAll") return () => [];
       return target[prop];
     },
@@ -88,8 +90,8 @@ const SIGNED_IN = {
   settings: { sessionTimeoutMinutes: 30, isDevelopment: false }
 };
 
-// Loads admin.js signed in with the Settings section and fires DOMContentLoaded. Timers never fire. lookedUp lists every
-// id admin.js asks document.getElementById for, in order.
+// Loads admin.js signed in with the Settings section and fires DOMContentLoaded. Timers never fire. lookedUp lists
+// every id admin.js asks document.getElementById for, in order.
 async function bootSettings() {
   const workspace = fakeWorkspace();
   const requested = [];
@@ -185,7 +187,10 @@ test("no shipped admin file asks for a navigation-feed endpoint or keeps an OBS 
   for (const name of shipped) {
     // Without the ?v= release tags: this release's, admin-no-obs, names the removal itself.
     const source = fs.readFileSync(path.join(ROOT, name), "utf8").replace(/\?v=[\w.-]+/g, "");
-    for (const text of ["navigation-feed", "NavigationFeed", "obsFeed", "ObsFeed", "obs_feed", "obs_ratio", "OBS_Ratio", "idle-obs", "hls_url", "stream_key"]) {
+    for (const text of [
+      "navigation-feed", "NavigationFeed", "obsFeed", "ObsFeed", "obs_feed", "obs_ratio", "OBS_Ratio", "idle-obs",
+      "hls_url", "stream_key"
+    ]) {
       assert.equal(source.includes(text), false, `${name}: ${text}`);
     }
     assert.equal(/\bOBS\b/i.test(source), false, `${name}: OBS`);
