@@ -4074,6 +4074,15 @@
     return charter && (charter.name || charter.id) ? (charter.name || charter.id) : "Charter";
   }
 
+  // Spec C 4.6: "" when the source charter's file reads fine, else the picker's refusal text for it.
+  function damagedSourceMessage(bundle, file, sourceCharters, id) {
+    if (!damagedCore().damagedIn(bundle[file])) {
+      return "";
+    }
+    const source = sourceCharters.find(charter => charter.id === id);
+    return damagedCore().pickerMessage(charterDisplayLabel(source || { id }), file);
+  }
+
   function suggestionValuesFrom(value, splitList) {
     if (Array.isArray(value)) {
       return value.flatMap(entry => suggestionValuesFrom(entry, splitList));
@@ -4466,10 +4475,11 @@
       errorField.textContent = "";
       try {
         const bundle = await api(`/api/admin/charter/${encodeURIComponent(selected.value)}`);
-        // Spec C §4.6: a source crew list the server can't read is not taken for an empty one.
-        if (damagedCore().damagedIn(bundle["crew_list.json"])) {
-          const source = sourceCharters.find(charter => charter.id === selected.value);
-          errorField.textContent = damagedCore().pickerMessage(charterDisplayLabel(source || { id: selected.value }), "crew_list.json");
+        // Spec C §4.6: a source crew list the server can't read is not taken for an empty one. The refusal goes to the
+        // modal's error field only: a status line behind a modal is noise, so don't "fix" the asymmetry with the catch block.
+        const refused = damagedSourceMessage(bundle, "crew_list.json", sourceCharters, selected.value);
+        if (refused) {
+          errorField.textContent = refused;
           importButton.disabled = false;
           return;
         }
@@ -8323,8 +8333,9 @@
         // Spec C §4.6: the source is read before the overwrite question, and one whose menus.json the server can't read
         // is refused (it used to replace this charter's menus with blank days).
         const bundle = await api(`/api/admin/charter/${encodeURIComponent(selected.value)}`);
-        if (damagedCore().damagedIn(bundle["menus.json"])) {
-          errorField.textContent = damagedCore().pickerMessage(charterDisplayLabel(sourceCharter || { id: selected.value }), "menus.json");
+        const refused = damagedSourceMessage(bundle, "menus.json", sourceCharters, selected.value);
+        if (refused) {
+          errorField.textContent = refused;
           importButton.disabled = false;
           return;
         }
