@@ -38,7 +38,7 @@ defaults of a damaged one without a word.
 | DN-3 | The marker is SC-D16's `damaged` (#16): on each file's object in the charter bundle, at the top level of a single-file GET. This change adds it where #16 does not reach. |
 | DN-4 | A `crew_list.json` kept as a plain list (an old format; none on the boat) counts as damaged, as #16 already marks it. No conversion. |
 | DN-5 | The crew and menu import pickers refuse a damaged source file and say so. |
-| DN-6 | The overlap check never runs blind. Charter dates are refused while `reserved-periods.json` is damaged, and a reserved-period save is refused while any charter's `charter.json` is damaged. |
+| DN-6 | The overlap check never runs blind. Charter dates are refused while `reserved-periods.json` is damaged, and a reserved-period save is refused while any charter's `charter.json` is damaged. Added after review (David, 2026-10-10): charter dates are also refused while another charter's `charter.json` is damaged, since that charter reads as undated. |
 | DN-7 | Charter create refuses to copy a damaged file from another charter. |
 | DN-8 | The OBS Feed (`navigation.json`) is left out: David plans to remove it. |
 
@@ -82,6 +82,12 @@ When the candidate has a start and an end date, `assertNoCharterOverlap` reads t
 `reserved-periods.json` answers S2's 500 (`file: "reserved-periods.json"`). That covers a `charter.json` save that
 changes the dates (the only one that runs the check) and a charter created with dates. A charter created without dates
 goes ahead. `lib/reserved-periods.js` gets the strict read; the GET keeps its lenient one (S1).
+
+With dates, the check also answers 500 while any **other** charter's `charter.json` is damaged. That charter would
+read as undated, so these dates could overlap it unseen. Its message names that charter only: "`<Charter>`'s
+charter.json can't be read, so these dates can't be checked against its dates. Fix or restore it first." It is a plain
+message with no `code`, like S4, because it is another charter's file. The admin shows it as any save error: in Charter
+Admin's form message, or in the create dialog's error field. (David, 2026-10-10, after the code review of S3 to S5.)
 
 ### S4. Reserved periods while a `charter.json` is damaged
 
