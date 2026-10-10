@@ -7141,6 +7141,16 @@
       // The same guest-count adjustment as Hotel → Guests, so both show the same active guests
       const guestList = normalizeGuestListForCount(bundle["guest_list.json"], charterInfo.guest_count);
       const itinerary = bundle["itinerary.json"] || {};
+      // Spec C §4.6: the notice instead of the page, before the menu sync. 0 days from a damaged charter.json would make
+      // every filled day inactive and save that.
+      const blocked = pageDamage("galley", activePanel);
+      if (blocked.length) {
+        els.workspace.innerHTML = sectionShell("galley", galleyPanelsForGuestList(guestList), activePanel, damagedNoticeHtml(blocked), sectionToolbarHtml("galley"));
+        bindSectionNav("galley", renderGalley);
+        bindSectionToolbar("galley", renderGalley);
+        bindDamagedNotice(els.workspace);
+        return;
+      }
       const activeItineraryDayCount = window.IolantheItineraryCore
         ? window.IolantheItineraryCore.charterDayCount(charterInfo)
         : charterDurationDays(charterInfo);
@@ -14470,6 +14480,7 @@
   // base is kept per working copy (libraryBases): the drink stock picker loads its own copy while a page holds an older
   // one. After a clash the working copy holds theirs, so a stale copy is never sent with the new revision.
   const mergeCore = () => window.IolantheMerge;
+  const damagedCore = () => window.IolantheDamaged;
   const CHARTER_FILE_SCHEMAS = Object.freeze({
     "charter.json": "charter",
     "crew_list.json": "crew",
@@ -14495,11 +14506,48 @@
   // The revision of each library file (and available-alcohol.json, which is not in the bundle) last loaded or saved,
   // for the freshness check on tab focus (§4.4).
   const seenRevisions = {};
+  // Spec C §4.6: what each library file's (and Available Alcohol's) last load said of its damage: the problem, or "".
+  const seenDamage = {};
 
   function rememberLibraryBase(workingCopy, served, file) {
     libraryBases.set(workingCopy, cloneData(served));
     seenRevisions[file] = mergeCore().revisionOf(served);
+    seenDamage[file] = damagedCore().damagedIn(served);
     return workingCopy;
+  }
+
+  // ---- A file the server can't read (spec C §4.6, SC-D16) ---------------------------------------------------------
+  // Its GET marks it `damaged` (the bundle on each file's object, a single-file GET at its top level), and a save over it
+  // is refused with {code: "damaged", file, damaged}. A page that needs such a file (damaged-core.js PAGE_FILES) draws
+  // the notice instead of its editor, before any editor or auto-save is bound.
+
+  // The files the open page needs that this render's loads found damaged: [{file, problem}] in the page's order.
+  function pageDamage(section, panel) {
+    return damagedCore().pageDamage(section, panel, { ...seenDamage, ...damagedCore().bundleDamage(state.bundle) });
+  }
+
+  // The card a page shows instead of its editor. options.embedded: inside another card (the Route planner, the Charter
+  // Pack). options.libraryRoutes: the Route page's way to the library routes, which don't use this charter's files.
+  function damagedNoticeHtml(list, options = {}) {
+    const text = damagedCore().noticeText(list);
+    const tag = options.embedded ? "div" : "section";
+    return `
+      <${tag} class="${options.embedded ? "" : "card full "}damaged-notice" role="alert">
+        <h2>${escapeHtml(text.heading)}</h2>
+        <p>${escapeHtml(text.body)}</p>
+        ${text.details.length ? `<ul class="damaged-details">${text.details.map(line => `<li>${escapeHtml(line)}</li>`).join("")}</ul>` : ""}
+        <div class="button-row">
+          ${iconButtonHtml("refresh", "Try again", " data-damaged-retry")}
+          ${options.libraryRoutes ? `<button type="button" data-damaged-library-routes>Work on the library routes</button>` : ""}
+        </div>
+      </${tag}>
+    `;
+  }
+
+  // Try again draws the page again; "Work on the library routes" opens the Route page's library subject.
+  function bindDamagedNotice(container) {
+    container.querySelectorAll("[data-damaged-retry]").forEach(button => button.addEventListener("click", () => renderSection()));
+    container.querySelectorAll("[data-damaged-library-routes]").forEach(button => button.addEventListener("click", () => showCharterPanel("routes", { subject: "library" })));
   }
 
   const saveQueues = new Map();
