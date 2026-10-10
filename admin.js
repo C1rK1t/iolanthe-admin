@@ -248,7 +248,7 @@
     const error = new Error(message);
     error.status = response.status;
     error.payload = payload;
-    const refused = String(method).toUpperCase() !== "GET" && damagedCore() ? damagedCore().refusal(error) : null;
+    const refused = String(method || "GET").toUpperCase() !== "GET" ? damagedCore().refusal(error) : null;
     if (refused) {
       showDamagedBanner(refused);
     }
@@ -14604,17 +14604,26 @@
 
   // A save refused because its file can't be read: it broke after the page loaded, or the page loaded it damaged. The
   // banner goes at the top of the open page (under the band, the charter selector and any strip), replacing an earlier
-  // one. What was typed stays on screen; Reload draws the page again, after the usual question when there are unsaved
-  // changes.
+  // one for a different refusal (the same refusal again, as an autosaving page makes on every keystroke, leaves the
+  // banner alone). What was typed stays on screen; Reload draws the page again, after the usual question when there are
+  // unsaved changes.
   function showDamagedBanner(refused) {
     const content = els.workspace.querySelector(".section-content");
     if (!content) {
       return;
     }
-    content.querySelectorAll(":scope > .damaged-banner").forEach(old => old.remove());
+    const file = String(refused.file);
+    const problem = String(refused.problem);
+    const earlier = Array.from(content.querySelectorAll(":scope > .damaged-banner"));
+    if (earlier.some(old => old.getAttribute("data-damaged-file") === file && old.getAttribute("data-damaged-problem") === problem)) {
+      return;
+    }
+    earlier.forEach(old => old.remove());
     const text = damagedCore().bannerText(refused.file, refused.problem);
     const banner = document.createElement("div");
     banner.className = "damaged-banner";
+    banner.setAttribute("data-damaged-file", file);
+    banner.setAttribute("data-damaged-problem", problem);
     banner.setAttribute("role", "alert");
     banner.innerHTML = `
       <div class="damaged-text">
@@ -14635,12 +14644,11 @@
   // What a save gets when its page loaded the file damaged (saveRevisioned): the banner, and an error shaped like the
   // server's 500 for a damaged file.
   function damagedBaseError(file, problem) {
-    const name = file || "This file";
-    showDamagedBanner({ file: name, problem });
-    const text = damagedCore().bannerText(name, problem);
+    showDamagedBanner({ file, problem });
+    const text = damagedCore().bannerText(file, problem);
     const error = new Error(`${text.lead} ${text.rest}`);
     error.status = 500;
-    error.payload = { error: error.message, code: "damaged", file: name, damaged: problem };
+    error.payload = { error: error.message, code: "damaged", file, damaged: problem };
     return error;
   }
 
@@ -14686,7 +14694,7 @@
   // merged, rebased, savedBy, savedAt }. Any other error is thrown. Saves of one file (queue) run one at a time, so a
   // second quick save (two drags) starts from the first one's result instead of clashing with it: base is a function,
   // read when this save's turn comes, and mine is copied now.
-  // file: the file's name, for the refusal below.
+  // file is the file's name, for the damaged-copy refusal below.
   function saveRevisioned({ path, queue, schema, base, mine, normalize, wrap, unwrap, file }) {
     // Spec C §4.6: a page never saves a file it loaded while the file was damaged, not even once it is repaired. A
     // repaired file at revision 0 would pass the server's revision check, and this page's copy was made from the defaults.
@@ -15021,7 +15029,7 @@ ${text}` : text;
   window.IolantheAdmin = Object.freeze({
     api,
     apiUrl,
-    throwAdminApiError,
+    throwAdminApiError, // used by charter-pack.js (Task 9)
     setStatus,
     escapeHtml,
     showAdminConfirm,

@@ -15,6 +15,8 @@
   const STAMP_KEYS = ["revision", "saved_by", "saved_at"];
   // The server's mark on a copy made from defaults (SC-D16): never part of a file, so never merged, kept or a change.
   const MARKER_KEYS = ["damaged"];
+  // Fields the server owns: never merged, kept or counted as a change.
+  const SERVER_KEYS = [...STAMP_KEYS, ...MARKER_KEYS];
   const MAX_ROUNDS = 3;
   const DEPARTMENT_LABELS = { charter: "Charter Admin", galley: "Galley", hotel: "Hotel", system: "The server" };
   const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -83,7 +85,7 @@
     const m = isRecord(mine) ? mine : {};
     const t = isRecord(theirs) ? theirs : {};
     const lists = spec.lists || {};
-    const skip = new Set([...STAMP_KEYS, ...MARKER_KEYS, ...(spec.derived || [])]);
+    const skip = new Set([...SERVER_KEYS, ...(spec.derived || [])]);
     const merged = {};
     const rebased = {};
     const fields = [...new Set([...Object.keys(t), ...Object.keys(m), ...Object.keys(b)])];
@@ -91,7 +93,7 @@
       if (skip.has(field)) {
         // Derived fields (a menu's day number) follow the side whose order won, so they match the positions.
         const kept = spec.derivedFrom === "mine" ? (field in m ? m[field] : t[field]) : (field in t ? t[field] : m[field]);
-        if (!STAMP_KEYS.includes(field) && !MARKER_KEYS.includes(field)) {
+        if (!SERVER_KEYS.includes(field)) {
           setField(merged, field, kept);
           setField(rebased, field, kept);
         }
@@ -240,7 +242,7 @@
   function changedFields(base, mine, skip) {
     const b = isRecord(base) ? base : {};
     const m = isRecord(mine) ? mine : {};
-    const ignore = new Set([...STAMP_KEYS, ...MARKER_KEYS, ...(skip || [])]);
+    const ignore = new Set([...SERVER_KEYS, ...(skip || [])]);
     return [...new Set([...Object.keys(b), ...Object.keys(m)])].filter((field) => !ignore.has(field) && !same(b[field], m[field]));
   }
 
