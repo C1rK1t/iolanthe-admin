@@ -607,3 +607,62 @@ test("unlinkStop: an anchorage stop dropped elsewhere becomes a plain stop at th
   assert.deepEqual(pts[1].anchorage_id, "capones");   // input untouched
   assert.equal(core.unlinkStop(pts, 0, { lat: 0, lng: 0 })[0].stop, true);   // a plain stop just moves
 });
+
+// ---- Dropping a stop on an anchorage (captain item 10): the snap decision and the link ----
+
+test("SNAP_PX is wide enough that a stop and an anchorage marker that overlap on screen snap", () => {
+  // A stop disc (28 px, 34 px when selected) overlaps an anchorage disc (26 px) when the centres are under about 30 px.
+  assert.ok(core.SNAP_PX >= 30);
+  assert.ok(core.SNAP_PX <= 40, "stay under the 40 px sticky radius a linked stop keeps");
+});
+
+test("nearestWithin picks the closest anchorage inside the radius, or null", () => {
+  const a = { id: "a" }, b = { id: "b" };
+  assert.equal(core.nearestWithin([{ anchorage: a, px: 30 }, { anchorage: b, px: 12 }]), b);
+  assert.equal(core.nearestWithin([{ anchorage: a, px: core.SNAP_PX }]), a, "exactly on the radius still snaps");
+  assert.equal(core.nearestWithin([{ anchorage: a, px: core.SNAP_PX + 0.5 }]), null);
+  assert.equal(core.nearestWithin([]), null);
+  assert.equal(core.nearestWithin(null), null);
+});
+
+test("nearestWithin takes a radius override", () => {
+  const a = { id: "a" };
+  assert.equal(core.nearestWithin([{ anchorage: a, px: 50 }], 60), a);
+  assert.equal(core.nearestWithin([{ anchorage: a, px: 50 }], 40), null);
+});
+
+test("dropping the last stop within the snap radius of the first stop's anchorage links it to that anchorage", () => {
+  const start = { id: "coron-town", name: "Coron Town", latitude: 11.9975, longitude: 120.201 };
+  const end = { id: "lusong", name: "Lusong Island", latitude: 12.036, longitude: 120.096 };
+  const points = [
+    { ...core.stopAt(start, []), id: "stp_a", depart: { day: 2 } },
+    P(12.004, 120.165),
+    { ...core.stopAt(end, []), id: "stp_b", arrive: { day: 2 }, leg_speed_kn: 6 }
+  ];
+  // The drop lands 30 px from the start anchorage: a snap, because the radius is wider than the icons' overlap.
+  const hit = core.nearestWithin([{ anchorage: start, px: 30 }, { anchorage: end, px: 400 }]);
+  assert.equal(hit, start);
+  const { points: out, merged } = core.makeStopAt(points, 2, hit, []);
+  assert.equal(merged, false);
+  assert.equal(out.length, 3);
+  const last = out[2];
+  assert.equal(last.anchorage_id, "coron-town");
+  assert.equal(last.name, "Coron Town");
+  assert.equal(last.latitude, start.latitude);
+  assert.equal(last.longitude, start.longitude);
+  assert.equal(last.stop, undefined);
+  assert.equal(last.id, "stp_b", "it is still the same stop: id, days and leg speed carry over");
+  assert.deepEqual(last.arrive, { day: 2 });
+  assert.equal(last.leg_speed_kn, 6);
+  assert.equal(core.isStop(last), true);
+});
+
+test("dropping a plain last stop on the first stop's anchorage links it and drops the stop flag", () => {
+  const start = { id: "coron-town", name: "Coron Town", latitude: 11.9975, longitude: 120.201 };
+  const points = [{ ...core.stopAt(start, []), id: "stp_a" }, P(12.004, 120.165), P(12.0, 120.2, { stop: true, id: "stp_c", name: "Stop" })];
+  const { points: out } = core.makeStopAt(points, 2, core.nearestWithin([{ anchorage: start, px: 28 }]), []);
+  assert.equal(out[2].anchorage_id, "coron-town");
+  assert.equal(out[2].name, "Coron Town");
+  assert.equal(out[2].stop, undefined);
+  assert.equal(out[2].id, "stp_c");
+});

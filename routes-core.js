@@ -137,6 +137,11 @@
 
   const AUTO_LINK_NM = 2;    // spec §7 Q4: anchorage stops auto-link sites within 2 nm
   const MOVED_WARN_M = 50;   // a stop more than this from its anchorage shows "moved"
+  // A point dropped within this screen distance of an anchorage marker snaps to it (spec §7 Q4, widened from 24 px on
+  // 2026-10-10 for captain item 10). The stop marker is a 28 px disc (34 px selected) and the anchorage marker 26 px,
+  // so overlapping icons have centres under about 30 px apart; the radius must cover that. Keep it under the 40 px
+  // sticky radius of routes.js, which a stop already linked to an anchorage keeps.
+  const SNAP_PX = 32;
 
   function sitesWithin(sites, pos, nm) {
     return (sites || []).filter((site) => distNm(pos, site) <= nm).map((site) => site.id);
@@ -147,6 +152,14 @@
       .map((anchorage) => ({ anchorage, nm: distNm(pos, anchorage) }))
       .filter((x) => x.nm <= nm)
       .sort((x, y) => x.nm - y.nm);
+  }
+
+  // entries: [{ anchorage, px }], the screen distance from the drop to each visible anchorage marker.
+  // Returns the nearest anchorage within radiusPx, or null.
+  function nearestWithin(entries, radiusPx) {
+    const limit = Number.isFinite(radiusPx) ? radiusPx : SNAP_PX;
+    const hits = (entries || []).filter((e) => e && e.anchorage && e.px <= limit).sort((a, b) => a.px - b.px);
+    return hits.length ? hits[0].anchorage : null;
   }
 
   function stopAt(anchorage, sites) {
@@ -447,7 +460,7 @@
   return {
     METRES_PER_NM, distM, distNm, routeNm, fmtHm, isStop, replaceAt, insertAt, removeAt,
     stopLegs, totalHours, legsTsv, setLegSpeed, joinPoints, joinGapNm, routeSnapshot,
-    sitesWithin, nearbyAnchorages, stopAt, makeStopAt, appendStop, anchorageMovedM, routesUsingAnchorage, uniqueName,
+    SNAP_PX, nearestWithin, sitesWithin, nearbyAnchorages, stopAt, makeStopAt, appendStop, anchorageMovedM, routesUsingAnchorage, uniqueName,
     makePlainStop, removeStop, unlinkStop,
     IMPORT_TARGET_POINTS, MAX_TOLERANCE_M, TOLERANCE_STEP_M, PIN_MATCH_NM, validPos, parseKmlCoordinates, htmlToText,
     extractGeo, simplify, defaultTolerance, joinLines, chosenLinePoints, importPoints, pinMatch, xmlEscape, slugify,
