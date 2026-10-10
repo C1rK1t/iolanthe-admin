@@ -33,9 +33,10 @@ function standIn() {
 }
 
 // A banner element: keeps its attributes and innerHTML, and leaves the list of banners when removed.
-function bannerElement(banners) {
+function bannerElement(banners, queries = {}) {
   const attributes = {};
   const element = keepingElement({
+    querySelector: selector => (selector in queries ? queries[selector] : standIn()),
     setAttribute: (name, value) => { attributes[name] = String(value); },
     getAttribute: name => (name in attributes ? attributes[name] : null),
     remove: () => { const at = banners.indexOf(element); if (at >= 0) banners.splice(at, 1); }
@@ -111,7 +112,8 @@ function clickable(extras = {}) {
 // its path (anything else gets {}), and replies can be changed later. Returns the requests sent, the workspace, the
 // window, replies, statuses (a path's HTTP status, 200 unless set), banners (the damaged banners on the open page), retryButtons (the "Try again" buttons the latest drawing bound), libraryButtons (the "Work on the library routes"
 // buttons it bound) and clickNav(panel), which presses
-// that panel's tab in the section's nav and waits for the page to draw.
+// that panel's tab in the section's nav and waits for the page to draw. Also listeners (the document's), created (every
+// element admin.js made) and queries (what a created element's querySelector answers, by selector).
 async function openAdmin(bootstrap, answers, extraElements = {}) {
   const requests = [];
   const navButtons = ["menus", "guests", "purchased-alcohol"].map(panel => clickable({ dataset: { panel } }));
@@ -148,13 +150,22 @@ async function openAdmin(bootstrap, answers, extraElements = {}) {
   });
   const elements = { workspace, "status-panel": keepingElement(), ...extraElements };
   const listeners = {};
+  // Every element admin.js created (the dialogs among them), and what a created element's querySelector answers.
+  const created = [];
+  const queries = {};
+  const body = new Proxy(standIn(), {
+    get: (target, prop) => (prop === "classList" ? new Proxy(standIn(), { get: (inner, name) => (name === "contains" ? () => false : inner[name]) }) : target[prop])
+  });
   const document = new Proxy(standIn(), {
     get(target, prop) {
       if (prop === "addEventListener") {
         return (type, listener) => { (listeners[type] = listeners[type] || []).push(listener); };
       }
       if (prop === "getElementById") return id => elements[id] || standIn();
-      if (prop === "createElement") return () => bannerElement(banners);
+      if (prop === "createElement") return () => { const element = bannerElement(banners, queries); created.push(element); return element; };
+      // The tab is visible, and no dialog is open (checkFreshness reads both).
+      if (prop === "visibilityState") return "visible";
+      if (prop === "body") return body;
       return target[prop];
     }
   });
@@ -187,7 +198,7 @@ async function openAdmin(bootstrap, answers, extraElements = {}) {
     await navButtons.find(button => button.dataset.panel === panel).handler();
     await settleAll();
   };
-  return { requests, workspace, window, replies, statuses, banners, retryButtons, libraryButtons, clickNav };
+  return { requests, workspace, window, replies, statuses, banners, retryButtons, libraryButtons, clickNav, listeners, created, queries };
 }
 
 const saves = requests => requests.filter(request => request.method !== "GET");
@@ -485,4 +496,100 @@ test("a different refusal replaces the banner: still exactly one, and a new elem
   assert.equal(page.banners.length, 1);
   assert.notEqual(page.banners[0], first);
   assert.match(page.banners[0].innerHTML, /not valid JSON/);
+});
+
+// ---- Spec C 4.6 A7: the import pickers refuse a damaged source -----------------------------------------------------
+
+const LARRY_SUMMARY = { id: "larry", name: "Larry", charter: { start_date: "2026-12-01", end_date: "2026-12-03" }, stops: 0, nights: 2, status: "upcoming" };
+const TWO_CHARTERS = { ...CHARTER_ADMIN, charters: [CHARTER_SUMMARY, LARRY_SUMMARY] };
+const GALLEY_TWO = { ...GALLEY, charters: [CHARTER_SUMMARY, LARRY_SUMMARY] };
+const larryBundle = overrides => ({ ...bundleWith(DATED), charter_id: "larry", ...overrides });
+const damagedFile = (key, extra) => ({ [key]: { ...extra, revision: 0, saved_by: "", saved_at: "", damaged: PROBLEM } });
+
+// The dialog openDialogModal builds: the picker's radio, button and error field, which the handlers read.
+function pickerDialog(page, button, errorId, radioName) {
+  const importButton = clickable({ disabled: false });
+  const errorField = keepingElement();
+  page.queries[button] = importButton;
+  page.queries[`input[name='${radioName}']:checked`] = { value: "larry" };
+  page.queries[errorId] = errorField;
+  return { importButton, errorField };
+}
+
+const decisionDialogs = page => page.created.filter(element => String(element.className).includes("admin-decision-backdrop"));
+const reads = (page, charter) => page.requests.filter(request => request.method === "GET" && request.pathname === `/api/admin/charter/${charter}`).length;
+
+test("crew import from a charter whose crew_list.json is marked damaged: the picker message, nothing saved", async () => {
+  const importCrew = clickable();
+  const page = await openAdmin(TWO_CHARTERS, charterAnswers(bundleWith(DATED), { "/api/admin/charter/larry": larryBundle(damagedFile("crew_list.json", { crew: [] })) }), { "import-crew-list": importCrew });
+  await page.window.IolantheAdmin.showCharterPanel("crew");
+  await settleAll();
+  assert.equal(typeof importCrew.handler, "function");
+  const dialog = pickerDialog(page, "#confirm-crew-import", "#crew-import-error", "crew-import-source");
+
+  importCrew.handler();
+  await settleAll();
+  await dialog.importButton.handler();
+  await settleAll();
+
+  assert.equal(dialog.errorField.textContent, "Larry's crew_list.json can't be read, so its crew can't be imported. Fix or restore it first.");
+  assert.equal(dialog.importButton.disabled, false);
+  assert.equal(reads(page, "larry"), 1);
+  assert.deepEqual(saves(page.requests), []);
+});
+
+test("crew import from a charter whose crew_list.json reads fine goes on to import (no refusal)", async () => {
+  const importCrew = clickable();
+  const member = { id: "c-1", name: "Ana", role: "Deckhand" };
+  const page = await openAdmin(TWO_CHARTERS, charterAnswers(bundleWith(DATED), { "/api/admin/charter/larry": larryBundle({ "crew_list.json": { crew: [member], revision: 2, ...STAMP } }) }), { "import-crew-list": importCrew });
+  await page.window.IolantheAdmin.showCharterPanel("crew");
+  await settleAll();
+  const dialog = pickerDialog(page, "#confirm-crew-import", "#crew-import-error", "crew-import-source");
+
+  importCrew.handler();
+  await settleAll();
+  await dialog.importButton.handler();
+  await settleAll();
+
+  assert.equal(dialog.errorField.textContent, "");
+  assert.deepEqual(saves(page.requests).map(request => request.pathname), ["/api/admin/charter/csaba/save"]);
+});
+
+test("menu import from a charter whose menus.json is marked damaged: the picker message, no overwrite question, nothing saved", { timeout: 5000 }, async () => {
+  const importMenu = clickable();
+  const page = await openAdmin(GALLEY_TWO, { "/api/admin/charter/csaba": bundleWith(DATED), "/api/admin/charter/larry": larryBundle(damagedFile("menus.json", { menus: [] })) }, { "import-menu": importMenu });
+  assert.equal(typeof importMenu.handler, "function");
+  const form = clickable();
+  form.addEventListener = (type, fn) => { if (type === "submit") form.handler = fn; };
+  page.queries["#menu-import-form"] = form;
+  const dialog = pickerDialog(page, "button[form='menu-import-form']", "#menu-import-error", "menu-import-source");
+
+  importMenu.handler();
+  await settleAll();
+  await form.handler({ preventDefault() {} });
+  await settleAll();
+
+  assert.equal(dialog.errorField.textContent, "Larry's menus.json can't be read, so its menus can't be imported. Fix or restore it first.");
+  assert.equal(dialog.importButton.disabled, false);
+  assert.equal(decisionDialogs(page).length, 0, "no overwrite question for an import that is refused");
+  assert.deepEqual(saves(page.requests), []);
+});
+
+test("menu import from a charter whose menus.json reads fine reads the source first, then asks the overwrite question", async () => {
+  const importMenu = clickable();
+  const page = await openAdmin(GALLEY_TWO, { "/api/admin/charter/csaba": bundleWith(DATED), "/api/admin/charter/larry": larryBundle({}) }, { "import-menu": importMenu });
+  const form = clickable();
+  form.addEventListener = (type, fn) => { if (type === "submit") form.handler = fn; };
+  page.queries["#menu-import-form"] = form;
+  const dialog = pickerDialog(page, "button[form='menu-import-form']", "#menu-import-error", "menu-import-source");
+
+  importMenu.handler();
+  await settleAll();
+  form.handler({ preventDefault() {} }); // waits on the question, which nobody answers here
+  await settleAll();
+
+  assert.equal(reads(page, "larry"), 1);
+  assert.equal(decisionDialogs(page).length, 1);
+  assert.equal(dialog.errorField.textContent, "");
+  assert.deepEqual(saves(page.requests), []);
 });

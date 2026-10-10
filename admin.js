@@ -4451,6 +4451,13 @@
       errorField.textContent = "";
       try {
         const bundle = await api(`/api/admin/charter/${encodeURIComponent(selected.value)}`);
+        // Spec C §4.6: a source crew list the server can't read is not taken for an empty one.
+        if (damagedCore().damagedIn(bundle["crew_list.json"])) {
+          const source = sourceCharters.find(charter => charter.id === selected.value);
+          errorField.textContent = damagedCore().pickerMessage(charterDisplayLabel(source || { id: selected.value }), "crew_list.json");
+          importButton.disabled = false;
+          return;
+        }
         const sourceCrewList = normalizeCrewEditorList(bundle["crew_list.json"]);
         const imported = importedCrewMembers(crewList, sourceCrewList);
         if (!imported.length) {
@@ -8295,19 +8302,27 @@
         return;
       }
       const sourceCharter = sourceCharters.find(charter => charter.id === selected.value);
-      if (!await showAdminConfirm({
-        title: "Import Menu",
-        message: "Importing this menu will overwrite the current charter menu data.",
-        confirmLabel: "Import",
-        cancelLabel: "Cancel",
-        tone: "warning"
-      })) {
-        return;
-      }
       importButton.disabled = true;
       errorField.textContent = "";
       try {
+        // Spec C §4.6: the source is read before the overwrite question, and one whose menus.json the server can't read
+        // is refused (it used to replace this charter's menus with blank days).
         const bundle = await api(`/api/admin/charter/${encodeURIComponent(selected.value)}`);
+        if (damagedCore().damagedIn(bundle["menus.json"])) {
+          errorField.textContent = damagedCore().pickerMessage(charterDisplayLabel(sourceCharter || { id: selected.value }), "menus.json");
+          importButton.disabled = false;
+          return;
+        }
+        if (!await showAdminConfirm({
+          title: "Import Menu",
+          message: "Importing this menu will overwrite the current charter menu data.",
+          confirmLabel: "Import",
+          cancelLabel: "Cancel",
+          tone: "warning"
+        })) {
+          importButton.disabled = false;
+          return;
+        }
         const nextMenus = importedMenusForItinerary(bundle["menus.json"], itineraryDayCount);
         const saved = await saveMenusAndRender(
           nextMenus,
