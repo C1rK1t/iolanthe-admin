@@ -251,3 +251,21 @@ test("Hotel → Guests with a good bundle draws the guest list", async () => {
   assert.ok(everDrawn(page, /id="guest-editor-list"/));
   assert.equal(everDrawn(page, /can&#39;t be read/), false);
 });
+
+const CHARTER_ADMIN = signedIn("charter", ["charter", "galley", "hotel", "settings"]);
+const charterAnswers = (bundle, extra = {}) => ({
+  "/api/admin/charter/csaba": bundle,
+  "/api/admin/sites": { sites: [], revision: 2, ...STAMP },
+  "/api/admin/reserved-periods": { revision: 1, periods: [] },
+  ...extra
+});
+
+test("Charter pages with reserved-periods.json marked damaged: the strip under the band, above a page that still works", async () => {
+  const page = await openAdmin(CHARTER_ADMIN, charterAnswers(bundleWith(DATED), {
+    "/api/admin/reserved-periods": { revision: 0, periods: [], damaged: "is not valid JSON at line 2 column 1" }
+  }));
+  assert.ok(page.workspace.drawn.some(html => html.includes('class="damaged-strip"')
+    && html.includes("reserved-periods.json can&#39;t be read.")
+    && html.includes("reserved-periods.json is not valid JSON at line 2 column 1.")
+    && html.includes('id="charter-info-form"')));
+});

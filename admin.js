@@ -9,7 +9,7 @@
     storedActiveCharter: "",
     forcedCharter: "",
     todayOffsetDays: 0,
-    reservedPeriods: { revision: 0, periods: [] },
+    reservedPeriods: { revision: 0, periods: [], damaged: "" },   // damaged: spec C §4.6, the server's problem or ""
     ganttZoom: "quarter",   // captain R3-3: three months by default
     gantt: null,
     ganttOpen: false,       // R3-5: the band has been expanded over a page other than Charter Admin (reset on every charter render)
@@ -1660,7 +1660,8 @@
       const data = await api("/api/admin/reserved-periods");
       state.reservedPeriods = {
         revision: Number.isInteger(data && data.revision) ? data.revision : 0,
-        periods: Array.isArray(data && data.periods) ? data.periods : []
+        periods: Array.isArray(data && data.periods) ? data.periods : [],
+        damaged: damagedCore().damagedIn(data)
       };
     } catch (error) {
       setStatus(error.message, "error");
@@ -5143,7 +5144,9 @@
       const nights = core.nights({ start_date: startInput.value, end_date: endInput.value });
       modal.querySelector("#new-charter-nights").textContent = nights === null ? "" : `${nights} ${nights === 1 ? "night" : "nights"}`;
       const clashes = core.findOverlaps({ id: "", start_date: startInput.value, end_date: endInput.value }, core.overlapEntries(state.charters, state.reservedPeriods.periods), "charter");
-      const message = dateOrderMessage(core, { start_date: startInput.value, end_date: endInput.value }) || (clashes.length ? `${core.overlapMessage(clashes)}. Choose other dates.` : "");
+      const range = { start_date: startInput.value, end_date: endInput.value };
+      const message = dateOrderMessage(core, range) || charterDatesHeldMessage(core, range, {})
+        || (clashes.length ? `${core.overlapMessage(clashes)}. Choose other dates.` : "");
       modal.querySelector("#new-charter-overlap").textContent = message;
       modal.querySelector("#create-charter-submit").disabled = Boolean(message);
     };
@@ -5271,6 +5274,12 @@
       setStatus("Only Charter Admin on Bridge can edit reserved periods.", "error");
       return;
     }
+    if (state.reservedPeriods.damaged) {
+      // Spec C §4.6: the editor would start from no periods, and its save would be refused.
+      const text = damagedCore().stripText("reserved-periods.json", state.reservedPeriods.damaged);
+      showAdminMessage({ title: "Reserved periods", message: `${text.lead} ${text.rest}`, tone: "danger" });
+      return;
+    }
     const core = window.IolantheChartersCore;
     const existing = periodId ? state.reservedPeriods.periods.find(period => period.id === periodId) : null;
     const period = existing || { id: "", type: "maintenance", title: "", start_date: "", end_date: "", description: "" };
@@ -5371,7 +5380,7 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ periods, base_revision: state.reservedPeriods.revision })
       });
-      state.reservedPeriods = { revision: saved.revision, periods: Array.isArray(saved.periods) ? saved.periods : [] };
+      state.reservedPeriods = { revision: saved.revision, periods: Array.isArray(saved.periods) ? saved.periods : [], damaged: "" };
       refreshCharterGantt();
       return true;
     } catch (error) {
@@ -6734,6 +6743,14 @@
       : "";
   }
 
+  // Spec C §4.6, the server's rule (S3) ahead of it: while reserved-periods.json can't be read, dates that differ from
+  // the stored ones can't be checked against the periods, so they wait with this message. "" otherwise.
+  function charterDatesHeldMessage(core, candidate, stored) {
+    const changed = String(candidate.start_date || "") !== String(stored.start_date || "")
+      || String(candidate.end_date || "") !== String(stored.end_date || "");
+    return state.reservedPeriods.damaged && changed && core.nights(candidate) !== null ? damagedCore().DATES_MESSAGE : "";
+  }
+
   // Spec-charters §4: the live overlap check. Returns the message ("" when clear) and toggles Save.
   function syncCharterInfoOverlap() {
     const core = window.IolantheChartersCore;
@@ -6744,7 +6761,9 @@
     }
     const candidate = { id: state.selectedCharter, start_date: document.getElementById("charter-info-start-date").value, end_date: document.getElementById("charter-info-end-date").value };
     const clashes = core.findOverlaps(candidate, core.overlapEntries(state.charters, state.reservedPeriods.periods), "charter");
-    const message = dateOrderMessage(core, candidate) || (clashes.length ? `${core.overlapMessage(clashes)}. Choose other dates.` : "");
+    const stored = state.bundle && state.bundle["charter.json"] ? state.bundle["charter.json"] : {};
+    const message = dateOrderMessage(core, candidate) || charterDatesHeldMessage(core, candidate, stored)
+      || (clashes.length ? `${core.overlapMessage(clashes)}. Choose other dates.` : "");
     warning.textContent = message;
     if (save) {
       save.disabled = Boolean(message);
@@ -6812,8 +6831,9 @@
       startDirty: Boolean(infoClash),
       readState: () => readCharterInfoForm(charterInfo),
       save: async () => {
-        if (syncCharterInfoOverlap()) {
-          throw new Error("These dates overlap another charter or a reserved period.");
+        const overlap = syncCharterInfoOverlap();
+        if (overlap) {
+          throw new Error(overlap === damagedCore().DATES_MESSAGE ? overlap : "These dates overlap another charter or a reserved period.");
         }
         Object.assign(charterInfo, readCharterInfoForm(charterInfo));
         // Not saveCharterFile(): its catch would swallow the server's message, and the controller needs the throw to keep the form dirty.
@@ -7101,7 +7121,7 @@
       const guestList = normalizeGuestList(bundle["guest_list.json"]);
       const crewList = normalizeCrewEditorList(bundle["crew_list.json"]);
       const content = charterPanelContent(activePanel, charterInfo, itinerary, guestList, crewList, siteLibrary);
-      paint(content);
+      paint(reservedPeriodsStripHtml() + content);
       bindCharterPanel(activePanel, charterInfo, itinerary, guestList, crewList, siteLibrary);
     } catch (error) {
       setStatus(error.message, "error");
@@ -14560,6 +14580,24 @@
   function bindDamagedNotice(container) {
     container.querySelectorAll("[data-damaged-retry]").forEach(button => button.addEventListener("click", () => renderSection()));
     container.querySelectorAll("[data-damaged-library-routes]").forEach(button => button.addEventListener("click", () => showCharterPanel("routes", { subject: "library" })));
+  }
+
+  // A one-line notice above a page that otherwise works (spec C §4.6): reserved periods, anchorages.
+  function damagedStripHtml(file, problem) {
+    const text = damagedCore().stripText(file, problem);
+    return `
+      <div class="damaged-strip" role="status">
+        <div class="damaged-text">
+          <p><strong>${escapeHtml(text.lead)}</strong> ${escapeHtml(text.rest)}</p>
+          ${text.detail ? `<p class="damaged-detail">${escapeHtml(text.detail)}</p>` : ""}
+        </div>
+      </div>
+    `;
+  }
+
+  // Under the Gantt band on every Charter page while reserved-periods.json can't be read.
+  function reservedPeriodsStripHtml() {
+    return state.reservedPeriods.damaged ? damagedStripHtml("reserved-periods.json", state.reservedPeriods.damaged) : "";
   }
 
   // Purchased Alcohol loads neither the drink stocks nor Available Alcohol, so it reads their state from the revisions,
