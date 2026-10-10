@@ -116,7 +116,7 @@ function clickable(extras = {}) {
 // element admin.js made) and queries (what a created element's querySelector answers, by selector).
 async function openAdmin(bootstrap, answers, extraElements = {}) {
   const requests = [];
-  const navButtons = ["menus", "guests", "purchased-alcohol"].map(panel => clickable({ dataset: { panel } }));
+  const navButtons = ["menus", "guests", "drink-stocks", "purchased-alcohol"].map(panel => clickable({ dataset: { panel } }));
   const retryButtons = [];
   const libraryButtons = [];
   const shell = new Proxy(standIn(), {
@@ -339,6 +339,24 @@ test("Hotel → Purchased Alcohol when the revisions can't be read: the page sti
   };
   await page.clickNav("purchased-alcohol");
   assert.equal(everDrawn(page, /can&#39;t be read/), false);
+  assert.match(page.workspace.innerHTML, /id="purchased-alcohol-list-shell"/);
+  assert.deepEqual(saves(page.requests), []);
+});
+
+test("Hotel → Purchased Alcohol when the revisions can't be read: an earlier Drink Stocks load's damage mark is dropped", async () => {
+  const page = await openAdmin(HOTEL, { "/api/admin/charter/csaba": bundleWith(DATED), "/api/admin/drink-stocks": { revision: 0, damaged: PROBLEM } });
+  await page.clickNav("drink-stocks");
+  assert.match(page.workspace.innerHTML, /drink-stocks.json can&#39;t be read/);
+
+  page.replies["/api/admin/drink-stocks"] = { revision: 3, ...STAMP };
+  const working = page.window.fetch;
+  page.window.fetch = async (url, options) => {
+    if (new URL(String(url)).pathname === "/api/admin/revisions") throw new Error("network down");
+    return working(url, options);
+  };
+  const drawn = page.workspace.drawn.length;
+  await page.clickNav("purchased-alcohol");
+  assert.equal(page.workspace.drawn.slice(drawn).some(html => html.includes("can&#39;t be read")), false);
   assert.match(page.workspace.innerHTML, /id="purchased-alcohol-list-shell"/);
   assert.deepEqual(saves(page.requests), []);
 });

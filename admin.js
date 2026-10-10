@@ -14713,14 +14713,18 @@
 
   // Purchased Alcohol loads neither the drink stocks nor Available Alcohol, so it reads their state from the revisions,
   // whose stamps carry `damaged` (SC-D16).
-  // Fails open, like checkFreshness: if the revisions can't be read, seenDamage stays as it was and the page draws as it
-  // did before this check existed; the server refuses a save over a damaged file anyway.
+  // Fails open, like checkFreshness: if the revisions can't be read, the entries for these files are dropped (an earlier
+  // load's "damaged" must not keep blocking the page) and it draws as it did before this check existed; the server
+  // refuses a save over a damaged file anyway.
   async function noteRevisionDamage(charterId, files) {
     let stamps;
     try {
       stamps = await api(`/api/admin/revisions?charter=${encodeURIComponent(charterId)}`);
     } catch (error) {
       console.warn("Could not read the file revisions to check for damaged files:", error);
+      files.forEach(file => {
+        delete seenDamage[file];
+      });
       return;
     }
     const served = { ...(stamps && stamps.library), ...(stamps && stamps.charter) };
@@ -15080,7 +15084,8 @@ ${text}` : text;
     }
   }
 
-  // Helpers for panels that live in their own files (routes.js). Read-only; add to it only what those files need.
+  // Helpers for panels that live in their own files (routes.js); add only what they need. Not all are read-only:
+  // throwAdminApiError shows the banner and handles the login redirect.
   window.IolantheAdmin = Object.freeze({
     api,
     apiUrl,
