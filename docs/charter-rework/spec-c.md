@@ -30,6 +30,7 @@ first**, then **A**.
 | SC-D10 | **Merge in the admin, one helper.** A pure `merge-core.js` (Node-tested) and one save helper replace every whole-file save path. |
 | SC-D11 | **Server-side writers bump the revision too** (bar purchase / reverse, the guest-count sync, charter create / clone, migration v7). |
 | SC-D12 | **No wait on the style rollout.** Phase B has merged for every page spec C touches (only Settings and the login screen remain). |
+| SC-D16 | **A stored file that does not parse is never saved over** (added 2026-10-10). A save of it answers 500 before the revision check; its GET marks it `damaged` instead of passing its defaults off as the data (§2.2). |
 
 ---
 
@@ -79,6 +80,19 @@ file's object; `drink-stocks`, `cocktails`, `sites` and `charter/<id>/available-
 `{ charter: { "charter.json": {revision, saved_by, saved_at}, … six files }, library: { "drink-stocks.json": …,
 "cocktails.json": …, "sites.json": … } }`. Without `charter=`, only `library`. It reads the files and returns no data,
 so it is cheap enough to call on every page open and tab focus (SC-D8).
+
+**A stored file that does not parse (SC-D16).** Only a missing file stands for its defaults at revision 0 (§2.3). One
+that is there but cannot be read, is not valid JSON or is not a JSON object is never saved over:
+
+- A save of it answers **500** `{error: "<file> can't be read. Fix or restore it before saving."}` and writes nothing.
+  This is checked first, before the revision: the server reads the stored copy through `lib/data-file.js`
+  (`dataFiles.readForWrite`, as for the data files in iolanthe-server#14), not `readJsonFileSafe`. That one turns a
+  damaged file into its defaults at revision 0, so a page loaded from those defaults would pass the revision check and
+  replace the file with what was edited from them.
+- Its GET still answers, so the page opens: the file's object (or the top level, for the library files) holds the
+  defaults at revision 0 and `damaged`, the problem in words that follow the file's name (`"is not valid JSON at line 3
+  column 5"`, never the file's text), so the admin can say so instead of showing the defaults as the data.
+  `GET /api/admin/revisions` adds the same `damaged` to that file's stamp.
 
 ### 2.3 Server-side writers (SC-D11)
 
