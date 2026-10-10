@@ -1926,6 +1926,7 @@ button.site-row:focus-visible {
 .galley-guest-row.inactive {
   background: transparent;
   border-style: dashed;
+  border-color: rgba(95, 107, 115, 0.5);
   color: var(--muted);
 }
 
