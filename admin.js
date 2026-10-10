@@ -6743,8 +6743,9 @@
       : "";
   }
 
-  // Spec C §4.6, the server's rule (S3) ahead of it: while reserved-periods.json can't be read, dates that differ from
-  // the stored ones can't be checked against the periods, so they wait with this message. "" otherwise.
+  // Spec C §4.6: while reserved-periods.json can't be read, dates that differ from the stored ones can't be checked
+  // against the periods, so they wait with this message. Mirrors the server's S3 refusal, so the form says it before
+  // the save does. "" otherwise.
   function charterDatesHeldMessage(core, candidate, stored) {
     const changed = String(candidate.start_date || "") !== String(stored.start_date || "")
       || String(candidate.end_date || "") !== String(stored.end_date || "");
@@ -7164,13 +7165,7 @@
       // Spec C §4.6: the notice instead of the page, before the menu sync. 0 days from a damaged charter.json would make
       // every filled day inactive and save that.
       const blocked = pageDamage("galley", activePanel);
-      if (blocked.length) {
-        els.workspace.innerHTML = sectionShell("galley", galleyPanelsForGuestList(guestList), activePanel, damagedNoticeHtml(blocked), sectionToolbarHtml("galley"));
-        bindSectionNav("galley", renderGalley);
-        bindSectionToolbar("galley", renderGalley);
-        bindDamagedNotice(els.workspace);
-        return;
-      }
+      if (drawDamagedPage("galley", galleyPanelsForGuestList(guestList), activePanel, blocked, renderGalley)) return;
       const activeItineraryDayCount = window.IolantheItineraryCore
         ? window.IolantheItineraryCore.charterDayCount(charterInfo)
         : charterDurationDays(charterInfo);
@@ -14348,13 +14343,7 @@
       }
       // Spec C §4.6: the notice instead of a page that needs a file the server can't read.
       const blocked = pageDamage("hotel", activePanel);
-      if (blocked.length) {
-        els.workspace.innerHTML = sectionShell("hotel", panels, activePanel, damagedNoticeHtml(blocked), sectionToolbarHtml("hotel"));
-        bindSectionNav("hotel", renderHotel);
-        bindSectionToolbar("hotel", renderHotel);
-        bindDamagedNotice(els.workspace);
-        return;
-      }
+      if (drawDamagedPage("hotel", panels, activePanel, blocked, renderHotel)) return;
       let content = "";
       if (activePanel === "guests") {
         content = renderGuestsPanel({
@@ -14582,6 +14571,18 @@
     container.querySelectorAll("[data-damaged-library-routes]").forEach(button => button.addEventListener("click", () => showCharterPanel("routes", { subject: "library" })));
   }
 
+  // Draws the notice instead of the page when one of its files can't be read; true when it did, so the renderer returns.
+  function drawDamagedPage(section, panels, activePanel, blocked, rerender) {
+    if (!blocked.length) {
+      return false;
+    }
+    els.workspace.innerHTML = sectionShell(section, panels, activePanel, damagedNoticeHtml(blocked), sectionToolbarHtml(section));
+    bindSectionNav(section, rerender);
+    bindSectionToolbar(section, rerender);
+    bindDamagedNotice(els.workspace);
+    return true;
+  }
+
   // A one-line notice above a page that otherwise works (spec C §4.6): reserved periods, anchorages.
   function damagedStripHtml(file, problem) {
     const text = damagedCore().stripText(file, problem);
@@ -14602,8 +14603,16 @@
 
   // Purchased Alcohol loads neither the drink stocks nor Available Alcohol, so it reads their state from the revisions,
   // whose stamps carry `damaged` (SC-D16).
+  // Fails open, like checkFreshness: if the revisions can't be read, seenDamage stays as it was and the page draws as it
+  // did before this check existed; the server refuses a save over a damaged file anyway.
   async function noteRevisionDamage(charterId, files) {
-    const stamps = await api(`/api/admin/revisions?charter=${encodeURIComponent(charterId)}`);
+    let stamps;
+    try {
+      stamps = await api(`/api/admin/revisions?charter=${encodeURIComponent(charterId)}`);
+    } catch (error) {
+      console.warn("Could not read the file revisions to check for damaged files:", error);
+      return;
+    }
     const served = { ...(stamps && stamps.library), ...(stamps && stamps.charter) };
     files.forEach(file => {
       seenDamage[file] = damagedCore().damagedIn(served[file]);
