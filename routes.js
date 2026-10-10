@@ -1106,8 +1106,19 @@
     });
   }
 
-  function showLoadError(message) {
-    panel.querySelector(".planner").replaceWith(el("p", { class: "empty" }, `Routes could not be loaded: ${message}`));
+  function showLoadError(error) {
+    const planner = panel.querySelector(".planner");
+    if (!planner) return;
+    const refused = window.IolantheDamaged ? window.IolantheDamaged.refusal(error) : null;
+    if (refused) {
+      // Spec C §4.6: routes.json can't be read, so the page can't list its routes.
+      const host = el("div", { class: "planner-damaged" });
+      host.innerHTML = A().damagedNoticeHtml([refused], { embedded: true });
+      planner.replaceWith(host);
+      A().bindDamagedNotice(host);
+      return;
+    }
+    planner.replaceWith(el("p", { class: "empty" }, `Routes could not be loaded: ${error.message}`));
   }
 
   async function loadLibrary(mine) {
@@ -1119,7 +1130,7 @@
       else renderSubject();
     } catch (error) {
       A().setStatus(error.message, "error");
-      if (panel === mine && mine.isConnected) showLoadError(error.message);
+      if (panel === mine && mine.isConnected) showLoadError(error);
     }
   }
 
@@ -1258,7 +1269,11 @@
     myPlaces.load().then(() => {
       if (panel === mine && mine.isConnected && places === myPlaces && work) renderAll();
     }).catch((error) => {
-      if (panel === mine) A().setStatus(error.message, "error");
+      if (panel !== mine) return;
+      const refused = window.IolantheDamaged ? window.IolantheDamaged.refusal(error) : null;
+      // Spec C §4.6: the route works without its anchorages while anchorages.json can't be read, and the strip says so.
+      if (refused) A().showDamagedStrip(mine, refused.file, refused.problem);
+      else A().setStatus(error.message, "error");
     });
   }
 

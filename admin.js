@@ -15025,11 +15025,25 @@ ${text}` : text;
   });
   els.resetSessionButton.addEventListener("click", resetSessionForDevelopment);
 
+  // A strip at the top of a part of the page that otherwise works (the Route panel while anchorages.json can't be read),
+  // after its header, replacing an earlier one.
+  function showDamagedStrip(container, file, problem) {
+    container.querySelectorAll(":scope > .damaged-strip").forEach(old => old.remove());
+    const holder = document.createElement("div");
+    holder.innerHTML = damagedStripHtml(file, problem);
+    const header = container.querySelector(":scope > .card-header");
+    if (header) {
+      header.after(holder.firstElementChild);
+    } else {
+      container.prepend(holder.firstElementChild);
+    }
+  }
+
   // Helpers for panels that live in their own files (routes.js). Read-only; add to it only what those files need.
   window.IolantheAdmin = Object.freeze({
     api,
     apiUrl,
-    throwAdminApiError, // used by charter-pack.js (Task 9)
+    throwAdminApiError, // used by charter-pack.js
     setStatus,
     escapeHtml,
     showAdminConfirm,
@@ -15041,7 +15055,10 @@ ${text}` : text;
     saveSitesLibrary,
     normalizeSiteLibrary,
     showCharterPanel,
-    getCharterContext
+    getCharterContext,
+    damagedNoticeHtml,
+    bindDamagedNotice,
+    showDamagedStrip
   });
 
   // Start on DOMContentLoaded, once every deferred script has run: the first render reads modules that load after this

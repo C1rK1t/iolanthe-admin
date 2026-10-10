@@ -78,6 +78,10 @@
     // from its name. Replaces the local list; rejects to the caller on failure.
     function saveLibrary(buildNext) {
       return enqueue(async () => {
+        // The save writes the whole library from this list: never before load() has filled it (spec C §4.6).
+        if (!loaded) {
+          throw new Error("The anchorages haven't been loaded, so they can't be saved. Reload the page.");
+        }
         const data = await A.api("/api/admin/anchorages/save", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
