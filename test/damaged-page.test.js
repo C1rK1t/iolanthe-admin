@@ -175,6 +175,7 @@ async function openAdmin(bootstrap, answers, extraElements = {}) {
     document,
     location: { search: "?key=test", origin: "http://admin.test", href: "http://admin.test/admin/?key=test" },
     addEventListener: () => {},
+    removeEventListener: () => {},
     fetch: async (url, options = {}) => {
       const { pathname } = new URL(String(url));
       requests.push({ method: options.method || "GET", pathname });
@@ -555,6 +556,7 @@ test("crew import from a charter whose crew_list.json reads fine goes on to impo
   assert.deepEqual(saves(page.requests).map(request => request.pathname), ["/api/admin/charter/csaba/save"]);
 });
 
+// a regression would wait forever on the overwrite question
 test("menu import from a charter whose menus.json is marked damaged: the picker message, no overwrite question, nothing saved", { timeout: 5000 }, async () => {
   const importMenu = clickable();
   const page = await openAdmin(GALLEY_TWO, { "/api/admin/charter/csaba": bundleWith(DATED), "/api/admin/charter/larry": larryBundle(damagedFile("menus.json", { menus: [] })) }, { "import-menu": importMenu });
@@ -588,15 +590,66 @@ test("menu import from a charter whose menus.json reads fine reads the source fi
   form.handler({ preventDefault() {} }); // waits on the question, which nobody answers here
   await settleAll();
 
+  // The button stays disabled while the question is open: a second press can't start a second import.
+  assert.equal(dialog.importButton.disabled, true);
   assert.equal(reads(page, "larry"), 1);
   assert.equal(decisionDialogs(page).length, 1);
   assert.equal(dialog.errorField.textContent, "");
   assert.deepEqual(saves(page.requests), []);
 });
 
+test("menu import where the overwrite question is declined: the button is enabled again and nothing is saved", { timeout: 5000 }, async () => {
+  const importMenu = clickable();
+  const page = await openAdmin(GALLEY_TWO, { "/api/admin/charter/csaba": bundleWith(DATED), "/api/admin/charter/larry": larryBundle({}) }, { "import-menu": importMenu });
+  const form = clickable();
+  form.addEventListener = (type, fn) => { if (type === "submit") form.handler = fn; };
+  page.queries["#menu-import-form"] = form;
+  const dialog = pickerDialog(page, "button[form='menu-import-form']", "#menu-import-error", "menu-import-source");
+  const cancel = clickable();
+  page.queries["[data-admin-decision-cancel]"] = cancel;
+
+  importMenu.handler();
+  await settleAll();
+  const submitted = form.handler({ preventDefault() {} });
+  await settleAll();
+  assert.equal(decisionDialogs(page).length, 1);
+  assert.equal(dialog.importButton.disabled, true);
+  assert.equal(typeof cancel.handler, "function", "the question's Cancel button is bound");
+
+  cancel.handler();
+  await submitted;
+  await settleAll();
+
+  assert.equal(dialog.importButton.disabled, false);
+  assert.equal(dialog.errorField.textContent, "");
+  assert.deepEqual(saves(page.requests), []);
+});
+
+test("menu import where reading the source charter fails: the error field says so, the button is enabled again, nothing is saved", { timeout: 5000 }, async () => {
+  const importMenu = clickable();
+  const page = await openAdmin(GALLEY_TWO, { "/api/admin/charter/csaba": bundleWith(DATED), "/api/admin/charter/larry": larryBundle({}) }, { "import-menu": importMenu });
+  const form = clickable();
+  form.addEventListener = (type, fn) => { if (type === "submit") form.handler = fn; };
+  page.queries["#menu-import-form"] = form;
+  const dialog = pickerDialog(page, "button[form='menu-import-form']", "#menu-import-error", "menu-import-source");
+  page.statuses["/api/admin/charter/larry"] = 500;
+  page.replies["/api/admin/charter/larry"] = { error: "The server is busy" };
+
+  importMenu.handler();
+  await settleAll();
+  await form.handler({ preventDefault() {} });
+  await settleAll();
+
+  assert.notEqual(dialog.errorField.textContent, "");
+  assert.equal(dialog.importButton.disabled, false);
+  assert.equal(decisionDialogs(page).length, 0, "no overwrite question when the source can't be read");
+  assert.deepEqual(saves(page.requests), []);
+});
+
 // ---- Spec C 4.6 A8: coming back to the tab -------------------------------------------------------------------------
 
 const comeBack = async page => {
+  assert.ok((page.listeners.visibilitychange || []).length, "visibilitychange listener registered");
   (page.listeners.visibilitychange || []).forEach(listener => listener({ type: "visibilitychange" }));
   await settleAll();
 };
