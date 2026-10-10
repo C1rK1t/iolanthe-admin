@@ -49,14 +49,12 @@ test("previewSteps: no dates, bad dates, end before start", () => {
   assert.equal(core.previewSteps({ start_date: "2026-12-31", end_date: "2026-12-31" }, []).map((s) => s.date).join(","), "2026-12-30,2026-12-31,2027-01-01");
 });
 
-test("defaultStepIndex, stepIndexForDay, stepIndexForDate", () => {
+test("defaultStepIndex, stepIndexForDate", () => {
   const steps = core.previewSteps(charter, points);
   assert.equal(core.defaultStepIndex(steps, "2026-11-03"), 3);
   assert.equal(core.defaultStepIndex(steps, "2026-10-31"), 0);
   assert.equal(core.defaultStepIndex(steps, "2026-12-25"), 1);
   assert.equal(core.defaultStepIndex([], "2026-11-03"), 0);
-  assert.equal(core.stepIndexForDay(steps, 5), 5);
-  assert.equal(core.stepIndexForDay(steps, 12), -1);
   assert.equal(core.stepIndexForDate(steps, "2026-11-10"), 10);
   assert.equal(core.stepIndexForDate(steps, "2027-01-01"), -1);
 });

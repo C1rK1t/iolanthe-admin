@@ -23,7 +23,6 @@
     import: '<path d="M12 16V4M7 9l5-5 5 5M4 20h16"/>',
     export: '<path d="M12 4v12M7 11l5 5 5-5M4 20h16"/>',
     copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>',
-    eye: '<path d="M2.8 12s3.4-6 9.2-6 9.2 6 9.2 6-3.4 6-9.2 6-9.2-6-9.2-6z"/><circle cx="12" cy="12" r="3"/>',
     prev: '<path d="M15 6l-6 6 6 6"/>',
     next: '<path d="M9 6l6 6-6 6"/>',
     gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>',

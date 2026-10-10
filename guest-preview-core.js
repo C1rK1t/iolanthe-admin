@@ -79,10 +79,6 @@
     return first >= 0 ? first : 0;
   }
 
-  function stepIndexForDay(steps, day) {
-    return (steps || []).findIndex((s) => s.kind === "day" && s.day === day);
-  }
-
   function stepIndexForDate(steps, date) {
     return (steps || []).findIndex((s) => s.date === date);
   }
@@ -102,5 +98,5 @@
     return Number.isFinite(k) && k > 0 ? k : 1;
   }
 
-  return { DEVICES, overnightName, previewSteps, defaultStepIndex, stepIndexForDay, stepIndexForDate, previewUrl, fitScale };
+  return { DEVICES, overnightName, previewSteps, defaultStepIndex, stepIndexForDate, previewUrl, fitScale };
 });
