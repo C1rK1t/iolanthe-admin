@@ -18,7 +18,7 @@ a module, so we can see how clean the split is before designing the bundle.
 | **Galley** | menus, dietary annotations on guests | optional |
 | **Hotel** (today really "Bar & Drinks") | drink stocks, guest alcohol, available/purchased alcohol, cocktails | optional |
 | **Crew** (later) | watches, roster, hours of rest | not yet |
-| **Vessel** | live nav, weather, OBS feed, display, route track, local auth | never: stays on the boat, not part of the product |
+| **Vessel** | live nav, weather, display, route track, local auth | never: stays on the boat, not part of the product |
 
 Rules: core never depends on a module; modules never depend on each other;
 shared entities (guest, cabin, charter) live in core and modules only annotate
@@ -72,7 +72,6 @@ cloud before the charter, boat during it, cloud again after.
 | `settings.idle_screensaver`, `display` | Vessel | Boat | hardware-specific |
 | `settings.weather` | Vessel | Boat | provider keys and failover |
 | `settings.admin` (urlKey, passwords, CIDRs, timeout) | Vessel | Boat | replaced by cloud identity for the cloud admin; still needed for the boat-local Vessel admin |
-| `navigation.json` (OBS feed) | Vessel | Boat | |
 | `schema-version.json` | both | each side | per-module schema versions in the bundle manifest |
 
 ## 3. Admin screens mapped
@@ -88,7 +87,7 @@ cloud before the charter, boat during it, cloud again after.
 | Galley | Menus, Guests | Cloud |
 | Hotel | Guests, Guest Alcohol, Available Alcohol, Purchased Alcohol, Cocktails | Cloud |
 | Hotel | Drink Stocks | Boat (or boat-first with return package) |
-| Settings | Passwords, OBS Feed, Display Settings, Route Track, Weather | **Stays on the boat** as a slim Vessel admin |
+| Settings | Passwords, Display Settings, Route Track, Weather | **Stays on the boat** as a slim Vessel admin |
 
 So the boat keeps a small admin: Settings department, drink stocks, watches,
 and the handover switch. Everything else moves.
