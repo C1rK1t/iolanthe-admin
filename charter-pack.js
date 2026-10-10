@@ -80,6 +80,14 @@
       return;
     }
     if (!host.isConnected) return;
+    // Spec C §4.6: a pack.json the server can't read shows the notice instead of the settings and the preview, so no
+    // change auto-saves over it.
+    const blocked = window.IolantheDamaged.pageDamage("charter", "pack", { "pack.json": window.IolantheDamaged.damagedIn(preset) });
+    if (blocked.length) {
+      host.innerHTML = A().damagedNoticeHtml(blocked, { embedded: true });
+      A().bindDamagedNotice(host);
+      return;
+    }
 
     let alive = true;
     let revision = preset.revision;
@@ -415,7 +423,8 @@
           method: "POST", credentials: "same-origin", headers: { "Content-Type": file.type || "application/octet-stream" }, body: file
         });
         const result = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(result.error || "The cover photo could not be uploaded.");
+        // throwAdminApiError: the server's message, and the banner when pack.json can't be read (spec C §4.6)
+        if (!response.ok) A().throwAdminApiError(response, result && result.error ? result : "", "The cover photo could not be uploaded.", "POST");
         update({ cover_image: result.cover_image });
         await save();
       } catch (error) {
