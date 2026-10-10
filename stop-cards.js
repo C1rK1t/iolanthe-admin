@@ -433,7 +433,7 @@
         el("div", { class: "settings-foot" }, remove, el("span", { class: "muted" }, "The point stays as a waypoint; its items go.")));
     }
 
-    return { render, select, step, selectedId: () => selectedId, selectedDay: () => (selectedId && activeDay.get(selectedId)) || 0, destroy: closeMenu };
+    return { render, select, step, selectedId: () => selectedId, destroy: closeMenu };
   }
 
   window.IolantheStopCards = Object.freeze({ create });

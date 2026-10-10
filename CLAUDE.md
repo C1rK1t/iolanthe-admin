@@ -63,8 +63,9 @@ white for any body that has it.
   Charter, Galley and Hotel sections (`bindGuestPreview` in admin.js; it opens the guest on Itinerary / Today's Menu /
   Wine & Drinks):
   the live guest site in a same-origin iframe at `/?preview=<date>&charter=<id>#<tab>`, under a day slider (day before
-  boarding … day after the charter), phone 390 × 844 / tablet 820 × 1180 / PC 1280 × 800 scaled to fit, reload, open full screen. Eye
-  buttons on the Charter Info and Route headers open it (`showCharterPanel("preview", { previewDay })`). The server
+  boarding … day after the charter), phone 390 × 844 / tablet 820 × 1180 / PC 1280 × 800 scaled to fit, reload, open full screen. The
+  section menu's Guest view button is the only way in: the Charter Info and Route headers' eye buttons went on captain
+  feedback (2026-10-10, item 02), as the menu button beside them made them redundant. The server
   serves `?charter=` only to an admin session; the guest's preview mode lives in `iolanthe-guest/preview-mode.js`.
   Device choice in localStorage `iolanthe-admin.preview.device`.
 - `pack-core.js` / `pack-render.js` / `charter-pack.js` / `charter-pack.css` — **Charter Pack** (charter rework spec P):
