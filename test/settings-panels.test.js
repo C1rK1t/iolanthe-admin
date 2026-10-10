@@ -88,17 +88,24 @@ const SIGNED_IN = {
   settings: { sessionTimeoutMinutes: 30, isDevelopment: false }
 };
 
-// Loads admin.js signed in with the Settings section and fires DOMContentLoaded. Timers never fire.
+// Loads admin.js signed in with the Settings section and fires DOMContentLoaded. Timers never fire. lookedUp lists every
+// id admin.js asks document.getElementById for, in order.
 async function bootSettings() {
   const workspace = fakeWorkspace();
   const requested = [];
+  const lookedUp = [];
   const listeners = {};
   const document = new Proxy(standIn(), {
     get(target, prop) {
       if (prop === "addEventListener") {
         return (type, listener) => { (listeners[type] = listeners[type] || []).push(listener); };
       }
-      if (prop === "getElementById") return id => (id === "workspace" ? workspace.element : standIn());
+      if (prop === "getElementById") {
+        return id => {
+          lookedUp.push(String(id));
+          return id === "workspace" ? workspace.element : standIn();
+        };
+      }
       return target[prop];
     }
   });
@@ -115,7 +122,6 @@ async function bootSettings() {
     },
     setTimeout: () => 0,
     clearTimeout: () => {},
-    requestAnimationFrame: () => 0,
     URL,
     URLSearchParams
   };
@@ -123,29 +129,65 @@ async function bootSettings() {
   vm.runInNewContext(ADMIN_SOURCE, window, { filename: "admin.js" });
   (listeners.DOMContentLoaded || []).forEach(listener => listener({ type: "DOMContentLoaded" }));
   await settle();
-  return { workspace, requested };
+  return { workspace, requested, lookedUp };
+}
+
+// Opens a panel the way a click on its menu button does.
+async function openPanel(workspace, panel) {
+  workspace.buttons.find(button => button.dataset.panel === panel).click();
+  await settle();
 }
 
 test("the Settings menu is Passwords, Display Settings, Route Track and Weather, with no OBS Feed", async () => {
   const { workspace, requested } = await bootSettings();
   const panels = [...workspace.html.matchAll(/data-panel="([^"]+)"/g)].map(([, panel]) => panel);
   assert.deepEqual(panels, ["passwords", "display-settings", "route-track", "weather"]);
-  assert.equal(/OBS/i.test(workspace.html), false);
+  assert.equal(/\bOBS\b/i.test(workspace.html), false);
   assert.equal(requested.some(url => url.includes("navigation-feed")), false);
 });
 
-test("Display Settings shows no OBS field, even when an older server still sends them", async () => {
-  const { workspace, requested } = await bootSettings();
-  workspace.buttons.find(button => button.dataset.panel === "display-settings").click();
-  await settle();
-  assert.ok(requested.some(url => url.includes("/api/admin/display-settings")));
-  assert.match(workspace.html, /id="display-settings-form"/);
-  assert.match(workspace.html, /Zoom Cycle Seconds/);
-  assert.equal(/OBS|idle-obs-/i.test(workspace.html), false);
+test("each Settings menu button opens its own panel", async () => {
+  const { workspace } = await bootSettings();
+  const expected = {
+    passwords: ["Passwords", "passwords-form"],
+    "display-settings": ["Display Settings", "display-settings-form"],
+    "route-track": ["Route Track", "route-track-form"],
+    weather: ["Weather", "weather-settings-form"]
+  };
+  for (const [panel, [heading, formId]] of Object.entries(expected)) {
+    if (panel !== "passwords") {
+      await openPanel(workspace, panel);
+    }
+    assert.match(workspace.html, new RegExp(`<h2>${heading}</h2>`), panel);
+    assert.match(workspace.html, new RegExp(`id="${formId}"`), panel);
+  }
 });
 
-test("admin.js asks for no navigation-feed endpoint and keeps no OBS setting", () => {
-  for (const text of ["navigation-feed", "NavigationFeed", "obsFeed", "ObsFeed", "obs_feed", "obs_ratio", "hls_url", "stream_key"]) {
-    assert.equal(ADMIN_SOURCE.includes(text), false, text);
+test("Display Settings shows no OBS field, even when an older server still sends them", async () => {
+  const { workspace, requested, lookedUp } = await bootSettings();
+  const before = lookedUp.length;
+  await openPanel(workspace, "display-settings");
+  assert.ok(requested.some(url => url.includes("/api/admin/display-settings")));
+  assert.match(workspace.html, /id="display-settings-form"/);
+  assert.equal(/\bOBS\b|idle-obs-/i.test(workspace.html), false);
+  assert.deepEqual([...workspace.html.matchAll(/id="(idle-[^"]+)"/g)].map(([, id]) => id), [
+    "idle-enabled", "idle-timeout", "idle-zoom-cycle", "idle-show-weather", "idle-show-itinerary", "idle-show-telemetry"
+  ]);
+  // The form's change tracking reads the panel when it binds: it must ask only for fields the panel has.
+  const formReads = lookedUp.slice(before).filter(id => id.startsWith("idle-"));
+  assert.ok(formReads.includes("idle-zoom-cycle"), "the Display Settings form was not read");
+  assert.deepEqual(formReads.filter(id => !workspace.html.includes(`id="${id}"`)), []);
+});
+
+test("no shipped admin file asks for a navigation-feed endpoint or keeps an OBS setting", () => {
+  const shipped = fs.readdirSync(ROOT).filter(name => /\.(js|css|html)$/.test(name));
+  assert.ok(shipped.includes("admin.js") && shipped.includes("index.html"));
+  for (const name of shipped) {
+    // Without the ?v= release tags: this release's, admin-no-obs, names the removal itself.
+    const source = fs.readFileSync(path.join(ROOT, name), "utf8").replace(/\?v=[\w.-]+/g, "");
+    for (const text of ["navigation-feed", "NavigationFeed", "obsFeed", "ObsFeed", "obs_feed", "obs_ratio", "OBS_Ratio", "idle-obs", "hls_url", "stream_key"]) {
+      assert.equal(source.includes(text), false, `${name}: ${text}`);
+    }
+    assert.equal(/\bOBS\b/i.test(source), false, `${name}: OBS`);
   }
 });
